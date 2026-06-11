@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell(cd \"E:\\\\ipasc_iqa\"; .\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src/ tests/ 2>&1 | Select-Object -Last 6; Write-Output \"=== tests ===\"; $env:PYTHONIOENCODING=\"utf-8\"; .\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/ -q 2>&1 | Select-Object -Last 6)"
-    ]
-  }
-}
