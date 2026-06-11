@@ -11,10 +11,10 @@ except ImportError:  # pragma: no cover - running from a source tree without ins
         __version__ = _pkg_version("ipasc_iqa")
     except PackageNotFoundError:
         __version__ = "0.0.0+unknown"
-from ipasc_iqa.core.measure import BaseMeasure, EvaluationInput, MeasureMetadata
 from ipasc_iqa.core.dataset import Dataset, ImageRecord
-from ipasc_iqa.core.result import ResultRecord, RunResults
+from ipasc_iqa.core.measure import BaseMeasure, EvaluationInput, MeasureMetadata
 from ipasc_iqa.core.registry import MeasureRegistry
+from ipasc_iqa.core.result import ResultRecord, RunResults
 from ipasc_iqa.core.runner import run_evaluation
 
 __all__ = [

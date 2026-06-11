@@ -1,0 +1,5 @@
+{% if error %}
+  <p class="notice notice--warn">{{ error }}</p>
+{% else %}
+  <p class="notice notice--ok">Run <strong>{{ run_id }}</strong> complete — redirecting to results…</p>
+{% endif %}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ipasc_iqa.core.roi import hash_file
@@ -103,7 +103,7 @@ def generate_manifest(
         "dataset_name": dataset_name or folder.name,
         "dataset_version": dataset_version,
         "description": description,
-        "created": datetime.now(timezone.utc).isoformat(),
+        "created": datetime.now(UTC).isoformat(),
         "images": entries,
     }
 

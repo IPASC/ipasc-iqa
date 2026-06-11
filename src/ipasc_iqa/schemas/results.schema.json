@@ -54,6 +54,7 @@
           "measure":           { "type": "string" },
           "measure_version":   { "type": "string" },
           "reference_type":    { "type": ["string", "null"] },
+          "reference_sha256":  { "type": ["string", "null"] },
           "signal_roi_sha256": { "type": ["string", "null"] },
           "noise_roi_sha256":  { "type": ["string", "null"] },
           "value":             { "type": ["number", "null"] },

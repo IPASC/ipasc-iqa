@@ -90,7 +90,9 @@ def list_datasets(
 @manifest_app.command("generate")
 def manifest_generate(
     folder: str = typer.Argument(..., help="Dataset folder containing images/."),
-    output: str = typer.Option("", "--output", help="Output path (default: <folder>/manifest.json)."),
+    output: str = typer.Option(
+        "", "--output", help="Output path (default: <folder>/manifest.json)."
+    ),
     dataset_name: str = typer.Option("", "--name", help="Dataset name."),
     dataset_version: str = typer.Option("1.0.0", "--version", help="Dataset version string."),
 ) -> None:

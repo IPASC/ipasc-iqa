@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Detailed analysis{% endblock %}
+{% block content %}
+<h1 class="page-title">Detailed analysis</h1>
+
+{% if not datasets %}
+  <p class="empty">No datasets found in the workspace.</p>
+{% else %}
+<div class="analysis-layout">
+  <form class="controls"
+        hx-get="/api/correlation"
+        hx-target="#correlation-result"
+        hx-trigger="load, change"
+        hx-swap="innerHTML">
+
+    <label class="field">
+      <span class="field__label">Dataset</span>
+      <select name="dataset" class="select">
+        {% for ds in datasets %}
+        <option value="{{ ds.name }}" {{ 'selected' if ds.name == selected_dataset }}>
+          {{ ds.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="field">
+      <span class="field__label">Quality task</span>
+      <select name="task" class="select">
+        {% set tasks = datasets[0].annotation_tasks or [default_task] %}
+        {% for t in tasks %}
+        <option value="{{ t }}" {{ 'selected' if t == default_task }}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <fieldset class="field field--measures">
+      <legend class="field__label">Measures</legend>
+      <div class="measure-chips">
+        {% for m in measures %}
+        <label class="chip">
+          <input type="checkbox" name="measures" value="{{ m.name }}" checked>
+          <span>{{ m.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+  </form>
+
+  <div id="correlation-result" class="result-area">
+    <p class="muted">Loading…</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

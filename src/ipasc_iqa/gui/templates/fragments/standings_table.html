@@ -1,0 +1,22 @@
+{% if not table.rows %}
+  <p class="muted">No annotated datasets found — standings need expert ratings.</p>
+{% else %}
+  {% set medals = {1: '🥇', 2: '🥈', 3: '🥉'} %}
+  <div class="standings-grid">
+    {% for dataset in table.datasets %}
+    <div class="standings-card">
+      <h2 class="standings-card__title">{{ dataset }}</h2>
+      <span class="badge">task: {{ table.task }}</span>
+      <ol class="ranking">
+        {% for row in table.rows if row.dataset == dataset %}
+        <li class="ranking__row ranking__row--{{ row.rank }}">
+          <span class="ranking__medal">{{ medals.get(row.rank, '#' ~ row.rank) }}</span>
+          <span class="ranking__group mono">{{ row.group }}</span>
+          <span class="ranking__score">{{ '%+.3f'|format(row.score) }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Welcome{% endblock %}
+{% block content %}
+<section class="hero">
+  <img class="hero__logo" src="/static/img/logo.svg" alt="IPASC">
+  <h1 class="hero__title">IQA benchmarking</h1>
+  <p class="hero__lead">
+    Benchmark image quality assessment measures on standardized
+    photoacoustic reconstruction datasets.
+  </p>
+</section>
+
+<section class="cards">
+  <a class="card" href="/run">
+    <div class="card__icon">▶</div>
+    <h2 class="card__title">Run benchmark</h2>
+    <p class="card__text">Pick datasets and measures, then evaluate.</p>
+  </a>
+  <a class="card card--accent" href="/results">
+    <div class="card__icon">▤</div>
+    <h2 class="card__title">Detailed analysis</h2>
+    <p class="card__text">Correlate measures against expert ratings (SRCC / KRCC).</p>
+  </a>
+  <a class="card" href="/standings">
+    <div class="card__icon">★</div>
+    <h2 class="card__title">Standings</h2>
+    <p class="card__text">Rank reconstruction algorithms per dataset.</p>
+  </a>
+</section>
+{% endblock %}

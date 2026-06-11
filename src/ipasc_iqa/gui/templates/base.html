@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}IPASC IQA{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img src="/static/img/logo.svg" alt="IPASC" height="28">
+      <span class="brand__sub">IQA benchmarking</span>
+    </a>
+    <nav class="nav">
+      <a href="/run"        class="nav__link {{ 'is-active' if active == 'run' }}">Run benchmark</a>
+      <a href="/results"    class="nav__link {{ 'is-active' if active == 'results' }}">Detailed analysis</a>
+      <a href="/standings"  class="nav__link {{ 'is-active' if active == 'standings' }}">Standings</a>
+    </nav>
+  </header>
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>ipasc_iqa</span>
+  </footer>
+</body>
+</html>

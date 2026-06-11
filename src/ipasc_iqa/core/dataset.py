@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import numpy as np
 
@@ -61,7 +62,7 @@ class Dataset:
     def __len__(self) -> int:
         raise NotImplementedError
 
-    def verify(self) -> "VerificationReport":
+    def verify(self) -> VerificationReport:
         from ipasc_iqa.core.roi import hash_file
 
         errors: list[str] = []

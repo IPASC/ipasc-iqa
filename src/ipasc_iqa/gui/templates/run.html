@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Run benchmark{% endblock %}
+{% block content %}
+<h1 class="page-title">Run benchmark</h1>
+
+<form hx-post="/run" hx-target="#run-status" hx-swap="innerHTML" hx-indicator="#run-indicator">
+  <div class="panel-grid">
+
+    <section class="panel">
+      <h2 class="panel__title">Datasets</h2>
+      <p class="panel__hint">Select one or more (multi-select).</p>
+      {% if datasets %}
+        <ul class="checklist">
+          {% for ds in datasets %}
+          <li>
+            <label class="check">
+              <input type="checkbox" name="datasets" value="{{ ds.name }}">
+              <span class="check__label">{{ ds.name }}
+                <small>v{{ ds.version }} · {{ ds.n_images }} images
+                  {%- if ds.has_annotations %} · annotated{% endif %}</small>
+              </span>
+            </label>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No datasets found in the workspace.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2 class="panel__title">Measures</h2>
+      <p class="panel__hint">Select one or more (multi-select).</p>
+      <ul class="checklist">
+        {% for m in measures %}
+        <li>
+          <label class="check">
+            <input type="checkbox" name="measures" value="{{ m.name }}">
+            <span class="check__label">{{ m.name }}
+              <small>v{{ m.version }}
+                {%- if m.full_reference %} · full-reference{% else %} · no-reference{% endif %}</small>
+            </span>
+          </label>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+  </div>
+
+  <div class="actions">
+    <button type="submit" class="btn btn--primary">Run ▶</button>
+    <span id="run-indicator" class="htmx-indicator spinner">Running…</span>
+  </div>
+  <div id="run-status" class="status" aria-live="polite"></div>
+</form>
+{% endblock %}

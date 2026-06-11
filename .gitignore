@@ -44,6 +44,8 @@ results/
 # --- IDE / editor ---
 .idea/
 .vscode/
+# Claude preview launch config — machine-specific (absolute venv path)
+.claude/launch.json
 *.iml
 *.swp
 .DS_Store

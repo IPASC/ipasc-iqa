@@ -6,7 +6,7 @@ import platform
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 def _make_run_id() -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
     short = uuid.uuid4().hex[:6]
     return f"{ts}_{short}"
 
@@ -91,7 +91,7 @@ def run_evaluation(
     from ipasc_iqa.core.registry import registry
 
     run_id = _make_run_id()
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
 
     dataset_metas = []
     for ds in datasets:
@@ -206,6 +206,7 @@ def run_evaluation(
                         measure=measure.metadata.name,
                         measure_version=measure.metadata.version,
                         reference_type=reference_type,
+                        reference_sha256=ref_sha,
                         signal_roi_sha256=record.hashes.signal_roi,
                         noise_roi_sha256=record.hashes.noise_roi,
                         value=value,
@@ -216,7 +217,7 @@ def run_evaluation(
                 )
 
     pbar.close()
-    finished = datetime.now(timezone.utc)
+    finished = datetime.now(UTC)
 
     run = RunResults(
         run_id=run_id,

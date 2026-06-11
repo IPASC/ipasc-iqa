@@ -33,14 +33,12 @@ from __future__ import annotations
 import json
 import re
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 
 import numpy as np
 
-from ipasc_iqa.core.dataset import Dataset, ImageHashes, ImageRecord
-from ipasc_iqa.core.roi import hash_array, hash_file
+from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
 
 ZENODO_BASE = "https://zenodo.org/records/13325196/files"
@@ -130,10 +128,10 @@ class PhotIQADataset(LocalDataset):
     # ------------------------------------------------------------------
 
     def _convert(self, converted_dir: Path) -> None:
-        try:
-            from PIL import Image as PILImage
-        except ImportError as exc:
-            raise ImportError("Pillow is required to convert PhotIQA images.") from exc
+        import importlib.util
+
+        if importlib.util.find_spec("PIL") is None:
+            raise ImportError("Pillow is required to convert PhotIQA images.")
 
         images_out = converted_dir / "images"
         images_out.mkdir(parents=True, exist_ok=True)
@@ -166,6 +164,9 @@ class PhotIQADataset(LocalDataset):
             if m := _ALG_FILE_RE.match(p.name):
                 stem, alg_idx = m.group(1), int(m.group(2))
                 alg_map.setdefault(stem, {})[alg_idx] = p
+
+        # Load expert annotations (keyed by source stem, e.g. "image0_0")
+        annotations = self._load_annotations(src_root)
 
         print(f"Converting {sum(len(v) for v in alg_map.values())} algorithm images …")
 
@@ -207,6 +208,11 @@ class PhotIQADataset(LocalDataset):
                     },
                 }
 
+                # Attach expert annotations keyed by the source stem (e.g. "image0_0")
+                ann_for_image = annotations.get(alg_path.stem)
+                if ann_for_image:
+                    entry["metadata"]["annotations"] = ann_for_image
+
                 if ref_npy_relpath:
                     ref_abs = converted_dir / ref_npy_relpath
                     entry["references"] = {
@@ -232,13 +238,40 @@ class PhotIQADataset(LocalDataset):
                 "image quality ratings. https://zenodo.org/records/13325196"
             ),
             "license": "CC-BY-4.0",
-            "created": datetime.now(timezone.utc).isoformat(),
+            "created": datetime.now(UTC).isoformat(),
             "images": manifest_entries,
         }
 
         manifest_path = converted_dir / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         print(f"Manifest written to {manifest_path} ({len(manifest_entries)} images)")
+
+    @staticmethod
+    def _load_annotations(src_root: Path) -> dict[str, dict[str, dict[str, float]]]:
+        """Load expert annotation CSVs into ``{source_stem: {task: {mos, zscore_mos}}}``.
+
+        Returns an empty mapping if no annotation directory is found (annotations
+        are optional — the dataset is still usable for raw measure evaluation).
+        """
+        from ipasc_iqa.analysis.annotations import load_annotation_dir
+
+        # Locate a directory containing annotations_*.csv (handles annotations/<modality>/).
+        candidates = list(src_root.rglob("annotations_overall_quality.csv"))
+        if not candidates:
+            return {}
+        ann_dir = candidates[0].parent
+
+        tables = load_annotation_dir(ann_dir)
+        per_image: dict[str, dict[str, dict[str, float]]] = {}
+        for task, table in tables.items():
+            for key in table.image_keys():
+                slot = per_image.setdefault(key, {})
+                slot[task] = {}
+                if key in table.mos:
+                    slot[task]["mos"] = table.mos[key]
+                if key in table.zscore_mos:
+                    slot[task]["zscore_mos"] = table.zscore_mos[key]
+        return per_image
 
     @staticmethod
     def _unzip_sources(root: Path) -> None:

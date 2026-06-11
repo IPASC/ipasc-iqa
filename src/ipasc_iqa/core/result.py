@@ -22,6 +22,7 @@ class ResultRecord(BaseModel):
     measure: str
     measure_version: str
     reference_type: str | None
+    reference_sha256: str | None = None
     signal_roi_sha256: str | None
     noise_roi_sha256: str | None
     value: float | None

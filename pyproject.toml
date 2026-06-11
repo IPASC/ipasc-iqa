@@ -25,13 +25,14 @@ dependencies = [
 
 [project.optional-dependencies]
 deep  = ["torch>=2.2", "torchvision>=0.17"]
-gui   = ["streamlit>=1.32", "plotly>=5.20"]
-dev   = ["pytest", "pytest-cov", "ruff", "mypy", "hypothesis", "pre-commit"]
+gui   = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "jinja2>=3.1", "python-multipart>=0.0.9"]
+dev   = ["pytest", "pytest-cov", "ruff", "mypy", "hypothesis", "pre-commit", "httpx>=0.27"]
 docs  = ["mkdocs-material", "mkdocstrings[python]"]
 all   = ["ipasc_iqa[deep,gui]"]
 
 [project.scripts]
 ipasc_iqa = "ipasc_iqa.cli.main:app"
+ipasc_iqa-gui = "ipasc_iqa.gui.server:main"
 
 [project.entry-points."ipasc_iqa.measures"]
 psnr = "ipasc_iqa.measures.classical.psnr:PSNRMeasure"
@@ -56,6 +57,12 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI and Typer use function calls (Form/Query/Depends/Option) in argument
+# defaults by design.
+"src/ipasc_iqa/gui/routes/*" = ["B008"]
+"src/ipasc_iqa/cli/*" = ["B008"]
 
 [tool.mypy]
 strict = true
