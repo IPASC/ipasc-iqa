@@ -24,6 +24,7 @@ from ipasc_iqa.core.result import (
 )
 
 if TYPE_CHECKING:
+    from ipasc_iqa.core.cache import ResultStore
     from ipasc_iqa.core.dataset import Dataset
 
 
@@ -85,9 +86,11 @@ def run_evaluation(
     *,
     reference_preference: list[str] | None = None,
     output_path: Path | None = None,
+    cache: ResultStore | None = None,
     progress: bool = True,
 ) -> RunResults:
     from ipasc_iqa import __version__
+    from ipasc_iqa.core.cache import make_cache_key
     from ipasc_iqa.core.registry import registry
 
     run_id = _make_run_id()
@@ -168,6 +171,26 @@ def run_evaluation(
                     )
                     continue
 
+                ref_sha = record.hashes.references.get(reference_type) if reference_type else None
+
+                # Cache lookup: skip recomputation when inputs are unchanged.
+                cache_key = make_cache_key(
+                    measure_name=measure.metadata.name,
+                    measure_version=measure.metadata.version,
+                    image_sha256=record.hashes.image,
+                    reference_type=reference_type,
+                    reference_sha256=ref_sha,
+                    signal_roi_sha256=record.hashes.signal_roi,
+                    noise_roi_sha256=record.hashes.noise_roi,
+                    measure_config_json=measure.config_canonical_json(),
+                )
+                if cache is not None:
+                    cached = cache.get(cache_key)
+                    if cached is not None:
+                        cached.from_cache = True
+                        results.append(cached)
+                        continue
+
                 t0 = time.perf_counter()
                 try:
                     result = measure.evaluate(
@@ -189,8 +212,6 @@ def run_evaluation(
                     continue
                 wall_time = time.perf_counter() - t0
 
-                ref_sha = record.hashes.references.get(reference_type) if reference_type else None
-
                 if isinstance(result, dict):
                     value = None
                     sub_scores = result
@@ -198,23 +219,24 @@ def run_evaluation(
                     value = float(result)
                     sub_scores = None
 
-                results.append(
-                    ResultRecord(
-                        dataset=ds.name,
-                        image_id=record.id,
-                        image_sha256=record.hashes.image,
-                        measure=measure.metadata.name,
-                        measure_version=measure.metadata.version,
-                        reference_type=reference_type,
-                        reference_sha256=ref_sha,
-                        signal_roi_sha256=record.hashes.signal_roi,
-                        noise_roi_sha256=record.hashes.noise_roi,
-                        value=value,
-                        sub_scores=sub_scores,
-                        wall_time_s=wall_time,
-                        device=measure.device,
-                    )
+                record_out = ResultRecord(
+                    dataset=ds.name,
+                    image_id=record.id,
+                    image_sha256=record.hashes.image,
+                    measure=measure.metadata.name,
+                    measure_version=measure.metadata.version,
+                    reference_type=reference_type,
+                    reference_sha256=ref_sha,
+                    signal_roi_sha256=record.hashes.signal_roi,
+                    noise_roi_sha256=record.hashes.noise_roi,
+                    value=value,
+                    sub_scores=sub_scores,
+                    wall_time_s=wall_time,
+                    device=measure.device,
                 )
+                if cache is not None:
+                    cache.set(cache_key, record_out)
+                results.append(record_out)
 
     pbar.close()
     finished = datetime.now(UTC)
@@ -227,7 +249,7 @@ def run_evaluation(
         finished=finished,
         config=RunConfig(
             reference_preference=reference_preference,
-            cache_enabled=False,
+            cache_enabled=cache is not None,
         ),
         datasets=dataset_metas,
         measures=measure_metas,

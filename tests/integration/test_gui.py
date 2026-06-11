@@ -137,6 +137,18 @@ def test_measure_options_reflect_capabilities(client: TestClient) -> None:
     assert opts["snr"]["usable"] is False
 
 
+def test_partial_runs_merge_in_analysis(client: TestClient) -> None:
+    # Run only psnr, then only ssim — analysis should show BOTH (merged store).
+    client.post("/run", data={"datasets": ["mini"], "measures": ["psnr"]})
+    client.post("/run", data={"datasets": ["mini"], "measures": ["ssim"]})
+
+    frag = client.get("/api/analysis", params={"dataset": "mini"})
+    assert frag.status_code == 200
+    assert "psnr" in frag.text
+    assert "ssim" in frag.text
+    assert "merged results" in frag.text
+
+
 def test_run_requires_selection(client: TestClient) -> None:
     resp = client.post("/run", data={"datasets": [], "measures": []})
     assert resp.status_code == 400

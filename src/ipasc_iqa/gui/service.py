@@ -12,6 +12,7 @@ run outputs (``<run_id>.json``).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
@@ -19,7 +20,9 @@ from ipasc_iqa.analysis.manifest_query import (
     annotation_tasks_in_manifest,
     annotation_values_from_manifest,
 )
+from ipasc_iqa.core.cache import ResultStore
 from ipasc_iqa.core.registry import registry as measure_registry
+from ipasc_iqa.core.result import EnvironmentInfo, RunConfig, RunResults
 from ipasc_iqa.core.runner import run_evaluation
 from ipasc_iqa.datasets.registry import default_data_dir
 from ipasc_iqa.datasets.registry import registry as dataset_registry
@@ -37,6 +40,11 @@ class Workspace:
     @property
     def results_dir(self) -> Path:
         return self.root / "results"
+
+    @property
+    def store_path(self) -> Path:
+        """Persistent, newest-wins result store (also the run cache)."""
+        return self.results_dir / "store.json"
 
     def ensure(self) -> None:
         self.results_dir.mkdir(parents=True, exist_ok=True)
@@ -183,7 +191,12 @@ def run_benchmark(
     reference_preference: list[str] | None = None,
     device: str = "auto",
 ) -> str:
-    """Download/prepare datasets as needed, run evaluation, persist results."""
+    """Download/prepare datasets as needed, run evaluation, persist results.
+
+    Results are written through a persistent, newest-wins store that also serves
+    as the cache: already-computed (dataset, image, measure) pairs are reused
+    rather than recomputed, and partial runs accumulate instead of overwriting.
+    """
     workspace.ensure()
     datasets = [
         dataset_registry.instantiate(name, workspace.data_dir, download=True)
@@ -193,9 +206,16 @@ def run_benchmark(
     if reference_preference is None:
         reference_preference = ["ground_truth", "pseudo_reference"]
 
+    store = ResultStore(workspace.store_path)
     run = run_evaluation(
-        datasets, measures, reference_preference=reference_preference, progress=False
+        datasets,
+        measures,
+        reference_preference=reference_preference,
+        cache=store,
+        progress=False,
     )
+    store.save()
+    # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
     return run.run_id
@@ -222,17 +242,26 @@ def list_runs(workspace: Workspace) -> list[dict]:
     return runs
 
 
-def _latest_run_for_dataset(workspace: Workspace, dataset_name: str):
-    if not workspace.results_dir.exists():
+def _merged_run(workspace: Workspace, dataset_name: str) -> RunResults | None:
+    """Build a RunResults view from the merged store (newest result per key).
+
+    This is what the analysis views read, so running only a subset of measures
+    still shows the union of everything computed for the dataset so far.
+    """
+    if not workspace.store_path.exists():
         return None
-    for p in sorted(workspace.results_dir.glob("*.json"), reverse=True):
-        try:
-            run = load_results(p)
-        except Exception:
-            continue
-        if any(d.name == dataset_name for d in run.datasets):
-            return run
-    return None
+    store = ResultStore(workspace.store_path)
+    records = store.records_for_dataset(dataset_name)
+    if not records:
+        return None
+    return RunResults(
+        run_id="merged",
+        environment=EnvironmentInfo(python="", platform="merged-store"),
+        started=datetime.now(UTC),
+        finished=datetime.now(UTC),
+        config=RunConfig(cache_enabled=True),
+        results=records,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +294,7 @@ def analysis_for_dataset(
     run = (
         load_results(workspace.results_dir / f"{run_id}.json")
         if run_id is not None
-        else _latest_run_for_dataset(workspace, dataset_name)
+        else _merged_run(workspace, dataset_name)
     )
     if run is None:
         return {
@@ -315,7 +344,7 @@ def standings(workspace: Workspace) -> dict:
     for ds in discover_datasets(workspace):
         if not ds["prepared"] or not ds["has_annotations"]:
             continue
-        run = _latest_run_for_dataset(workspace, ds["name"])
+        run = _merged_run(workspace, ds["name"])
         if run is None:
             continue
         manifest = load_manifest(dataset_registry.manifest_path(ds["name"], workspace.data_dir))

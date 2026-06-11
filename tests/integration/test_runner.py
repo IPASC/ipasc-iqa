@@ -58,3 +58,36 @@ def test_results_json_roundtrip(synthetic_dataset: Path, tmp_path: Path) -> None
     loaded = load_results(out)
     assert loaded.run_id == run.run_id
     assert len(loaded.results) == len(run.results)
+
+
+def test_cache_skips_recomputation(synthetic_dataset: Path, tmp_path: Path) -> None:
+    from ipasc_iqa.core.cache import ResultStore
+
+    ds = LocalDataset(synthetic_dataset)
+    store = ResultStore(tmp_path / "store.json")
+
+    first = run_evaluation([ds], [PSNRMeasure()], reference_preference=["ground_truth"],
+                           cache=store, progress=False)
+    assert all(not r.from_cache for r in first.results)
+
+    # Second run with the same inputs: every result should come from cache.
+    second = run_evaluation([ds], [PSNRMeasure()], reference_preference=["ground_truth"],
+                            cache=store, progress=False)
+    assert second.results
+    assert all(r.from_cache for r in second.results)
+
+
+def test_partial_runs_accumulate_in_store(synthetic_dataset: Path, tmp_path: Path) -> None:
+    from ipasc_iqa.core.cache import ResultStore
+
+    ds = LocalDataset(synthetic_dataset)
+    store = ResultStore(tmp_path / "store.json")
+
+    run_evaluation([ds], [PSNRMeasure()], reference_preference=["ground_truth"],
+                   cache=store, progress=False)
+    run_evaluation([ds], [SSIMMeasure()], reference_preference=["ground_truth"],
+                   cache=store, progress=False)
+
+    # The store holds both measures even though each run computed only one.
+    measures = {r.measure for r in store.records_for_dataset()}
+    assert measures == {"psnr", "ssim"}

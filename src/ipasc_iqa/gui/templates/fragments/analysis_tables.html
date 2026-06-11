@@ -5,7 +5,11 @@
 {% else %}
   <div class="result-head">
     <h2 class="result-head__title">{{ result.dataset }}</h2>
-    {% if result.run_id %}<span class="badge badge--muted">run: {{ result.run_id }}</span>{% endif %}
+    {% if result.run_id == 'merged' %}
+      <span class="badge badge--muted">merged results (newest per image)</span>
+    {% elif result.run_id %}
+      <span class="badge badge--muted">run: {{ result.run_id }}</span>
+    {% endif %}
   </div>
 
   {% for task in result.tasks %}

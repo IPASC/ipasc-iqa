@@ -58,6 +58,15 @@ class BaseMeasure:
         from ipasc_iqa.core.device import resolve
 
         self.device = resolve(device)
+        # Hyperparameters that affect the *result value* (device does not). Captured
+        # so the cache key changes when a measure is reconfigured.
+        self._config: dict[str, Any] = dict(kwargs)
+
+    def config_canonical_json(self) -> str:
+        """Canonical JSON of the measure's configuration (for cache keying)."""
+        import json
+
+        return json.dumps(self._config, sort_keys=True, separators=(",", ":"), default=str)
 
     def evaluate(
         self,
