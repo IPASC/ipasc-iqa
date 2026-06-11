@@ -79,11 +79,40 @@ def list_measures() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+def _capabilities_from_manifest(manifest: dict) -> dict:
+    """What sibling data the dataset provides (drives which measures are usable)."""
+    has_references = has_signal_roi = has_noise_roi = False
+    for entry in manifest.get("images", []):
+        if entry.get("references"):
+            has_references = True
+        if entry.get("signal_roi"):
+            has_signal_roi = True
+        if entry.get("noise_roi"):
+            has_noise_roi = True
+        if has_references and has_signal_roi and has_noise_roi:
+            break
+    return {
+        "has_references": has_references,
+        "has_signal_roi": has_signal_roi,
+        "has_noise_roi": has_noise_roi,
+    }
+
+
+def _measure_usable(measure_meta: dict, caps: dict) -> bool:
+    """True if the dataset can satisfy a measure's requirements."""
+    if measure_meta["full_reference"] and not caps.get("has_references"):
+        return False
+    if measure_meta["requires_signal_roi"] and not caps.get("has_signal_roi"):
+        return False
+    return not (measure_meta["requires_noise_roi"] and not caps.get("has_noise_roi"))
+
+
 def discover_datasets(workspace: Workspace) -> list[dict]:
     """List datasets that have a registered adapter.
 
-    Datasets already downloaded/converted report their image count and annotation
-    tasks; others are still listed (so they can be selected to trigger a download).
+    Datasets already downloaded/converted report their image count, annotation
+    tasks, and capabilities (references / ROI masks); others are still listed (so
+    they can be selected to trigger a download).
     """
     out: list[dict] = []
     for spec in dataset_registry.list_datasets():
@@ -91,11 +120,13 @@ def discover_datasets(workspace: Workspace) -> list[dict]:
         prepared = dataset_registry.is_prepared(name, workspace.data_dir)
         tasks: list[str] = []
         n_images: int | None = None
+        caps = {"has_references": False, "has_signal_roi": False, "has_noise_roi": False}
         if prepared:
             try:
                 manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
                 tasks = annotation_tasks_in_manifest(manifest)
                 n_images = len(manifest.get("images", []))
+                caps = _capabilities_from_manifest(manifest)
             except Exception:
                 prepared = False
         out.append(
@@ -105,9 +136,31 @@ def discover_datasets(workspace: Workspace) -> list[dict]:
                 "n_images": n_images,
                 "annotation_tasks": tasks,
                 "has_annotations": bool(tasks),
+                **caps,
             }
         )
     return out
+
+
+def measure_options(
+    workspace: Workspace,
+    dataset_name: str | None,
+    *,
+    selected: list[str] | None = None,
+) -> list[dict]:
+    """Measures annotated with ``usable``/``checked`` for a given dataset.
+
+    A measure is *unusable* when the dataset cannot satisfy its requirements
+    (no reference, or missing ROI mask). On first load (``selected is None``) all
+    usable measures are checked; unusable ones are never checked.
+    """
+    ds = get_dataset(workspace, dataset_name) if dataset_name else None
+    options = []
+    for m in list_measures():
+        usable = _measure_usable(m, ds) if ds and ds["prepared"] else True
+        checked = usable if selected is None else (usable and m["name"] in selected)
+        options.append({"name": m["name"], "usable": usable, "checked": checked})
+    return options
 
 
 def get_dataset(workspace: Workspace, name: str) -> dict | None:
@@ -230,11 +283,17 @@ def analysis_for_dataset(
             "error": "dataset has no expert annotations",
         }
 
+    # Only correlate measures the dataset can actually support, intersected with
+    # the user's selection — so unusable measures never produce empty rows.
+    caps = _capabilities_from_manifest(manifest)
+    usable = [m["name"] for m in list_measures() if _measure_usable(m, caps)]
+    chosen = [m for m in (measures or usable) if m in usable]
+
     tasks = []
     for task in task_names:
         values = annotation_values_from_manifest(manifest, task, "zscore_mos")
         rows = correlate_measures_with_annotations(
-            run, values, measures=measures, dataset=dataset_name
+            run, values, measures=chosen, dataset=dataset_name
         )
         tasks.append({"task": task, "rows": [r.as_dict() for r in rows]})
 

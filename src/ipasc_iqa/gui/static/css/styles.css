@@ -138,6 +138,9 @@ body {
 .chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.6rem;
         border: 1px solid var(--border); border-radius: 999px; font-size: 0.85rem; cursor: pointer; }
 .chip input { accent-color: var(--navy); }
+.chip--disabled { opacity: 0.45; cursor: not-allowed; background: var(--bg);
+                  text-decoration: line-through; }
+.chip--disabled input { cursor: not-allowed; }
 
 .result-area { min-height: 4rem; }
 .task-block { margin-bottom: 1.5rem; }

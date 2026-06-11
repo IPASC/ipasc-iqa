@@ -38,7 +38,6 @@ def run_page(request: Request) -> HTMLResponse:
 def results_page(request: Request) -> HTMLResponse:
     ws = _ws(request)
     datasets = service.discover_datasets(ws)
-    measures = service.list_measures()
     # Prefer a prepared dataset as the initial selection.
     prepared = [d for d in datasets if d["prepared"]]
     selected = (prepared or datasets or [{"name": None}])[0]["name"]
@@ -48,7 +47,7 @@ def results_page(request: Request) -> HTMLResponse:
         {
             "active": "results",
             "datasets": datasets,
-            "measures": measures,
+            "measure_options": service.measure_options(ws, selected),
             "selected_dataset": selected,
         },
     )

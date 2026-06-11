@@ -1,0 +1,7 @@
+{# Response for /api/analysis. The analysis tables become the main swap target
+   (#correlation-result); the chips are swapped out-of-band so the dataset change
+   updates which measures are usable. #}
+<div id="measure-chips" class="measure-chips" hx-swap-oob="true">
+  {% include "fragments/measure_chips.html" %}
+</div>
+{% include "fragments/analysis_tables.html" %}

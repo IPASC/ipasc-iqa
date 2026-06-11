@@ -9,9 +9,10 @@
   </div>
 
   {% for task in result.tasks %}
+  {% set rows = task.rows | selectattr('n', 'gt', 0) | list %}
   <section class="task-block">
     <h3 class="task-block__title">{{ task.task }}</h3>
-    {% if not task.rows %}
+    {% if not rows %}
       <p class="muted">No measures to correlate.</p>
     {% else %}
     <table class="data-table">
@@ -19,7 +20,7 @@
         <tr><th>Measure</th><th class="num">n</th><th class="num">SRCC</th><th class="num">KRCC</th></tr>
       </thead>
       <tbody>
-        {% for row in task.rows %}
+        {% for row in rows %}
         <tr>
           <td class="mono">{{ row.measure }}</td>
           <td class="num">{{ row.n }}</td>

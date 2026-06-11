@@ -26,16 +26,13 @@
 
     <fieldset class="field field--measures">
       <legend class="field__label">Measures</legend>
-      <div class="measure-chips">
-        {% for m in measures %}
-        <label class="chip">
-          <input type="checkbox" name="measures" value="{{ m.name }}" checked>
-          <span>{{ m.name }}</span>
-        </label>
-        {% endfor %}
+      <div id="measure-chips" class="measure-chips">
+        {% include "fragments/measure_chips.html" %}
       </div>
     </fieldset>
-    <p class="panel__hint">All quality tasks for the dataset are shown below.</p>
+    <p class="panel__hint">
+      Greyed-out measures aren't usable with this dataset. All quality tasks are shown below.
+    </p>
   </form>
 
   <div id="correlation-result" class="result-area">

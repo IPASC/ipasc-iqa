@@ -62,8 +62,13 @@ def analysis_fragment(
 ) -> HTMLResponse:
     ws = _ws(request)
     result = service.analysis_for_dataset(ws, dataset, measures=measures)
+    # Re-render the measure checkboxes (disabled/checked for this dataset) and
+    # swap them out-of-band, so changing the dataset updates which are usable.
+    options = service.measure_options(ws, dataset, selected=measures)
     return templates.TemplateResponse(
-        request, "fragments/analysis_tables.html", {"result": result}
+        request,
+        "fragments/analysis_response.html",
+        {"result": result, "measure_options": options},
     )
 
 

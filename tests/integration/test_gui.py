@@ -118,6 +118,23 @@ def test_run_then_analysis_all_tasks(client: TestClient) -> None:
     assert "overall_quality" in frag.text
     assert "edge_visibility" in frag.text
     assert "SRCC" in frag.text and "psnr" in frag.text
+    # 'mini' has references but no ROI masks -> cnr/snr are disabled, not shown.
+    assert 'value="cnr"' in frag.text  # present as a disabled chip (oob)
+    assert "disabled" in frag.text
+
+
+def test_measure_options_reflect_capabilities(client: TestClient) -> None:
+    from ipasc_iqa.gui import service
+
+    ws = service.Workspace.resolve(
+        client.app.state.workspace.root, client.app.state.workspace.data_dir
+    )
+    opts = {o["name"]: o for o in service.measure_options(ws, "mini")}
+    # 'mini' has references (psnr/ssim usable) but no ROIs (cnr/snr unusable).
+    assert opts["psnr"]["usable"] is True
+    assert opts["ssim"]["usable"] is True
+    assert opts["cnr"]["usable"] is False
+    assert opts["snr"]["usable"] is False
 
 
 def test_run_requires_selection(client: TestClient) -> None:
