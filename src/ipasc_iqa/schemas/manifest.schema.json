@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ipasc.org/ipasc_iqa/manifest.schema.json",
+  "title": "ipasc_iqa dataset manifest",
+  "type": "object",
+  "required": ["schema_version", "dataset_name", "dataset_version", "images"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "dataset_name":   { "type": "string" },
+    "dataset_version":{ "type": "string" },
+    "description":    { "type": "string" },
+    "citation":       { "type": "string" },
+    "license":        { "type": "string" },
+    "created":        { "type": "string", "format": "date-time" },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "sha256", "shape", "dtype"],
+        "properties": {
+          "id":    { "type": "string" },
+          "path":  { "type": "string" },
+          "sha256":{ "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "shape": { "type": "array", "items": { "type": "integer" } },
+          "dtype": { "type": "string" },
+          "signal_roi": { "$ref": "#/$defs/file_ref" },
+          "noise_roi":  { "$ref": "#/$defs/file_ref" },
+          "references": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/file_ref" }
+          },
+          "metadata": { "type": "object" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "file_ref": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path":   { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

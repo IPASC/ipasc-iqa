@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ipasc_iqa"
+dynamic = ["version"]
+description = "Benchmarking framework for Image Quality Assessment of photoacoustic image reconstructions"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+authors = [{ name = "IPASC" }]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "scikit-image>=0.22",
+    "pydantic>=2.6",
+    "typer>=0.12",
+    "jsonschema>=4.21",
+    "diskcache>=5.6",
+    "platformdirs>=4.2",
+    "tqdm>=4.66",
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+deep  = ["torch>=2.2", "torchvision>=0.17"]
+gui   = ["streamlit>=1.32", "plotly>=5.20"]
+dev   = ["pytest", "pytest-cov", "ruff", "mypy", "hypothesis", "pre-commit"]
+docs  = ["mkdocs-material", "mkdocstrings[python]"]
+all   = ["ipasc_iqa[deep,gui]"]
+
+[project.scripts]
+ipasc_iqa = "ipasc_iqa.cli.main:app"
+
+[project.entry-points."ipasc_iqa.measures"]
+psnr = "ipasc_iqa.measures.classical.psnr:PSNRMeasure"
+ssim = "ipasc_iqa.measures.classical.ssim:SSIMMeasure"
+cnr  = "ipasc_iqa.measures.classical.cnr:CNRMeasure"
+snr  = "ipasc_iqa.measures.classical.snr:SNRMeasure"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.1.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/ipasc_iqa/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ipasc_iqa"]
+
+[tool.ruff]
+src = ["src"]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+strict = true
+files = ["src/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

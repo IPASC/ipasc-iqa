@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ipasc.org/ipasc_iqa/results.schema.json",
+  "title": "ipasc_iqa run results",
+  "type": "object",
+  "required": ["schema_version", "run_id", "results"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "run_id":         { "type": "string" },
+    "tool":           { "type": "object" },
+    "environment":    { "type": "object" },
+    "started":        { "type": "string", "format": "date-time" },
+    "finished":       { "type": ["string", "null"], "format": "date-time" },
+    "config":         { "type": "object" },
+    "datasets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version", "manifest_sha256", "n_images"],
+        "properties": {
+          "name":            { "type": "string" },
+          "version":         { "type": "string" },
+          "manifest_sha256": { "type": "string" },
+          "n_images":        { "type": "integer" }
+        }
+      }
+    },
+    "measures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version", "plugin_distribution"],
+        "properties": {
+          "name":                { "type": "string" },
+          "version":             { "type": "string" },
+          "plugin_distribution": { "type": "string" },
+          "metadata":            { "type": "object" }
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "dataset", "image_id", "image_sha256",
+          "measure", "measure_version",
+          "value", "wall_time_s", "device", "from_cache"
+        ],
+        "properties": {
+          "dataset":           { "type": "string" },
+          "image_id":          { "type": "string" },
+          "image_sha256":      { "type": "string" },
+          "measure":           { "type": "string" },
+          "measure_version":   { "type": "string" },
+          "reference_type":    { "type": ["string", "null"] },
+          "signal_roi_sha256": { "type": ["string", "null"] },
+          "noise_roi_sha256":  { "type": ["string", "null"] },
+          "value":             { "type": ["number", "null"] },
+          "sub_scores":        { "type": ["object", "null"] },
+          "wall_time_s":       { "type": "number" },
+          "device":            { "type": "string" },
+          "from_cache":        { "type": "boolean" }
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dataset", "image_id", "measure", "reason"],
+        "properties": {
+          "dataset":  { "type": "string" },
+          "image_id": { "type": "string" },
+          "measure":  { "type": "string" },
+          "reason":   { "type": "string" }
+        }
+      }
+    }
+  }
+}
