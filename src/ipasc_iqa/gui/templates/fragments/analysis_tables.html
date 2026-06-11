@@ -1,0 +1,51 @@
+{% if result.error %}
+  <p class="notice notice--warn">{{ result.error }}</p>
+{% elif not result.tasks %}
+  <p class="muted">No annotation tasks to analyse.</p>
+{% else %}
+  <div class="result-head">
+    <h2 class="result-head__title">{{ result.dataset }}</h2>
+    {% if result.run_id %}<span class="badge badge--muted">run: {{ result.run_id }}</span>{% endif %}
+  </div>
+
+  {% for task in result.tasks %}
+  <section class="task-block">
+    <h3 class="task-block__title">{{ task.task }}</h3>
+    {% if not task.rows %}
+      <p class="muted">No measures to correlate.</p>
+    {% else %}
+    <table class="data-table">
+      <thead>
+        <tr><th>Measure</th><th class="num">n</th><th class="num">SRCC</th><th class="num">KRCC</th></tr>
+      </thead>
+      <tbody>
+        {% for row in task.rows %}
+        <tr>
+          <td class="mono">{{ row.measure }}</td>
+          <td class="num">{{ row.n }}</td>
+          {% for key in ['srcc', 'krcc'] %}
+            {% set val = row[key] %}
+            {% if val is none %}
+              <td class="num muted">—</td>
+            {% else %}
+              {% set hue = (val|abs * 120)|round(0, 'floor')|int %}
+              <td class="num corr-cell" style="background: hsl({{ hue }}, 70%, 90%);">
+                {{ '%+.3f'|format(val) }}
+              </td>
+            {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  <p class="legend">
+    Cells shaded by correlation strength:
+    <span class="legend__swatch" style="background:hsl(0,70%,90%)"></span> weak
+    →
+    <span class="legend__swatch" style="background:hsl(120,70%,90%)"></span> strong.
+  </p>
+{% endif %}

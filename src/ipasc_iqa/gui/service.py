@@ -1,14 +1,12 @@
 """Function layer for the GUI — pure logic, no web framework.
 
-Everything the UI needs is expressed here as functions over a :class:`Workspace`
-returning plain dicts / dataclasses. Routes are thin adapters over these; tests
-exercise these directly without spinning up a server.
+Everything the UI needs is expressed here as functions returning plain dicts /
+dataclasses. Routes are thin adapters over these; tests exercise these directly.
 
-A *workspace* is a directory containing:
-
-- one or more dataset folders (each with a ``manifest.json``, possibly under a
-  ``converted/`` sub-folder), and
-- a ``results/`` folder where run outputs (``<run_id>.json``) are written.
+Datasets are *adapter-driven* (see :mod:`ipasc_iqa.datasets.registry`): only
+datasets with a registered adapter are offered, and they are downloaded/converted
+on demand into a managed ``data_dir``. The workspace's ``results/`` folder stores
+run outputs (``<run_id>.json``).
 """
 
 from __future__ import annotations
@@ -20,21 +18,21 @@ from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
 from ipasc_iqa.analysis.manifest_query import (
     annotation_tasks_in_manifest,
     annotation_values_from_manifest,
-    groups_from_manifest,
 )
-from ipasc_iqa.analysis.standings import compute_standings
-from ipasc_iqa.core.registry import registry
+from ipasc_iqa.core.registry import registry as measure_registry
 from ipasc_iqa.core.runner import run_evaluation
-from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.registry import default_data_dir
+from ipasc_iqa.datasets.registry import registry as dataset_registry
 from ipasc_iqa.io.manifest import load_manifest
 from ipasc_iqa.io.results import load_results
-
-DEFAULT_TASK = "overall_quality"
 
 
 @dataclass(frozen=True)
 class Workspace:
+    """Where results are written (``root``) and datasets are managed (``data_dir``)."""
+
     root: Path
+    data_dir: Path
 
     @property
     def results_dir(self) -> Path:
@@ -42,6 +40,14 @@ class Workspace:
 
     def ensure(self) -> None:
         self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def resolve(root: Path | str, data_dir: Path | str | None = None) -> Workspace:
+        return Workspace(
+            root=Path(root).resolve(),
+            data_dir=Path(data_dir).resolve() if data_dir else default_data_dir(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -50,11 +56,9 @@ class Workspace:
 
 
 def list_measures() -> list[dict]:
-    """All registered measures with display metadata."""
     out = []
-    for name in registry.list_measures():
-        cls = registry.get(name)
-        m = cls.metadata
+    for name in measure_registry.list_measures():
+        m = measure_registry.get(name).metadata
         out.append(
             {
                 "name": name,
@@ -64,60 +68,43 @@ def list_measures() -> list[dict]:
                 "requires_noise_roi": m.requires_noise_roi,
                 "higher_is_better": m.higher_is_better,
                 "description": m.description,
-                "distribution": registry.distribution_for(name),
+                "distribution": measure_registry.distribution_for(name),
             }
         )
     return out
 
 
 # ---------------------------------------------------------------------------
-# Datasets
+# Datasets (adapter-driven)
 # ---------------------------------------------------------------------------
 
 
-def _find_manifest(folder: Path) -> Path | None:
-    direct = folder / "manifest.json"
-    if direct.exists():
-        return direct
-    converted = folder / "converted" / "manifest.json"
-    if converted.exists():
-        return converted
-    return None
-
-
 def discover_datasets(workspace: Workspace) -> list[dict]:
-    """Scan the workspace for datasets (folders with a manifest)."""
+    """List datasets that have a registered adapter.
+
+    Datasets already downloaded/converted report their image count and annotation
+    tasks; others are still listed (so they can be selected to trigger a download).
+    """
     out: list[dict] = []
-    seen: set[Path] = set()
-    if not workspace.root.exists():
-        return out
-
-    for manifest_path in sorted(workspace.root.rglob("manifest.json")):
-        # Skip results/ and avoid double-counting converted/ under a parent.
-        if workspace.results_dir in manifest_path.parents:
-            continue
-        manifest_path = manifest_path.resolve()
-        if manifest_path in seen:
-            continue
-        seen.add(manifest_path)
-
-        try:
-            manifest = load_manifest(manifest_path)
-        except Exception:
-            continue
-
-        tasks = annotation_tasks_in_manifest(manifest)
-        groups = sorted(set(groups_from_manifest(manifest, "algorithm").values()))
+    for spec in dataset_registry.list_datasets():
+        name = spec["name"]
+        prepared = dataset_registry.is_prepared(name, workspace.data_dir)
+        tasks: list[str] = []
+        n_images: int | None = None
+        if prepared:
+            try:
+                manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+                tasks = annotation_tasks_in_manifest(manifest)
+                n_images = len(manifest.get("images", []))
+            except Exception:
+                prepared = False
         out.append(
             {
-                "name": manifest.get("dataset_name", manifest_path.parent.name),
-                "version": manifest.get("dataset_version", "unknown"),
-                "root": str(manifest_path.parent),
-                "manifest_path": str(manifest_path),
-                "n_images": len(manifest.get("images", [])),
+                **spec,
+                "prepared": prepared,
+                "n_images": n_images,
                 "annotation_tasks": tasks,
                 "has_annotations": bool(tasks),
-                "groups": groups,
             }
         )
     return out
@@ -143,24 +130,18 @@ def run_benchmark(
     reference_preference: list[str] | None = None,
     device: str = "auto",
 ) -> str:
-    """Run an evaluation and persist results. Returns the run_id."""
+    """Download/prepare datasets as needed, run evaluation, persist results."""
     workspace.ensure()
-    available = {d["name"]: d for d in discover_datasets(workspace)}
-    datasets = []
-    for name in dataset_names:
-        if name not in available:
-            raise ValueError(f"Unknown dataset: {name}")
-        datasets.append(LocalDataset(Path(available[name]["root"])))
-
-    measures = [registry.instantiate(m, device=device) for m in measure_names]
+    datasets = [
+        dataset_registry.instantiate(name, workspace.data_dir, download=True)
+        for name in dataset_names
+    ]
+    measures = [measure_registry.instantiate(m, device=device) for m in measure_names]
     if reference_preference is None:
         reference_preference = ["ground_truth", "pseudo_reference"]
 
     run = run_evaluation(
-        datasets,
-        measures,
-        reference_preference=reference_preference,
-        progress=False,
+        datasets, measures, reference_preference=reference_preference, progress=False
     )
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
@@ -189,7 +170,6 @@ def list_runs(workspace: Workspace) -> list[dict]:
 
 
 def _latest_run_for_dataset(workspace: Workspace, dataset_name: str):
-    """Return the most recent RunResults that contains the given dataset."""
     if not workspace.results_dir.exists():
         return None
     for p in sorted(workspace.results_dir.glob("*.json"), reverse=True):
@@ -203,80 +183,92 @@ def _latest_run_for_dataset(workspace: Workspace, dataset_name: str):
 
 
 # ---------------------------------------------------------------------------
-# Detailed analysis (correlation table)
+# Detailed analysis — one correlation table per available task
 # ---------------------------------------------------------------------------
 
 
-def correlation_table(
+def analysis_for_dataset(
     workspace: Workspace,
     dataset_name: str,
     *,
     measures: list[str] | None = None,
-    task: str = DEFAULT_TASK,
     run_id: str | None = None,
 ) -> dict:
-    """Build the Detailed Analysis table: measures x {SRCC, KRCC} vs annotation MOS."""
+    """Correlate measures against expert MOS, one table per annotation task.
+
+    Tasks are not selectable — every task the dataset provides is shown, since
+    different datasets expose different sub-tasks.
+    """
     ds = get_dataset(workspace, dataset_name)
     if ds is None:
-        return {"dataset": dataset_name, "task": task, "rows": [], "error": "dataset not found"}
+        return {"dataset": dataset_name, "tasks": [], "error": "dataset not found"}
+    if not ds["prepared"]:
+        return {
+            "dataset": dataset_name,
+            "tasks": [],
+            "error": "dataset not downloaded yet — run a benchmark on it first",
+        }
 
-    if run_id is not None:
-        run = load_results(workspace.results_dir / f"{run_id}.json")
-    else:
-        run = _latest_run_for_dataset(workspace, dataset_name)
-
+    run = (
+        load_results(workspace.results_dir / f"{run_id}.json")
+        if run_id is not None
+        else _latest_run_for_dataset(workspace, dataset_name)
+    )
     if run is None:
         return {
             "dataset": dataset_name,
-            "task": task,
-            "rows": [],
+            "tasks": [],
             "error": "no benchmark run found for this dataset — run a benchmark first",
         }
 
-    manifest = load_manifest(Path(ds["manifest_path"]))
-    annotation_values = annotation_values_from_manifest(manifest, task, "zscore_mos")
-    if not annotation_values:
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    task_names = annotation_tasks_in_manifest(manifest)
+    if not task_names:
         return {
             "dataset": dataset_name,
-            "task": task,
-            "rows": [],
-            "error": f"dataset has no '{task}' annotations",
+            "tasks": [],
+            "error": "dataset has no expert annotations",
         }
 
-    rows = correlate_measures_with_annotations(
-        run, annotation_values, measures=measures, dataset=dataset_name
-    )
-    return {
-        "dataset": dataset_name,
-        "task": task,
-        "run_id": run.run_id,
-        "available_tasks": ds["annotation_tasks"],
-        "rows": [r.as_dict() for r in rows],
-        "error": None,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Standings
-# ---------------------------------------------------------------------------
-
-
-def standings_table(workspace: Workspace, *, task: str = DEFAULT_TASK) -> dict:
-    """Rank algorithm groups within each dataset by mean expert score (z-MOS)."""
-    records: list[tuple[str, str, float]] = []
-    datasets_present: list[str] = []
-    for ds in discover_datasets(workspace):
-        if not ds["has_annotations"]:
-            continue
-        manifest = load_manifest(Path(ds["manifest_path"]))
+    tasks = []
+    for task in task_names:
         values = annotation_values_from_manifest(manifest, task, "zscore_mos")
-        groups = groups_from_manifest(manifest, "algorithm")
-        if not values or not groups:
-            continue
-        datasets_present.append(ds["name"])
-        for image_id, score in values.items():
-            if image_id in groups:
-                records.append((ds["name"], groups[image_id], score))
+        rows = correlate_measures_with_annotations(
+            run, values, measures=measures, dataset=dataset_name
+        )
+        tasks.append({"task": task, "rows": [r.as_dict() for r in rows]})
 
-    rows = [s.as_dict() for s in compute_standings(records)]
-    return {"task": task, "datasets": datasets_present, "rows": rows}
+    return {"dataset": dataset_name, "run_id": run.run_id, "tasks": tasks, "error": None}
+
+
+# ---------------------------------------------------------------------------
+# Standings — IQA measures ranked by correlation, per dataset, per task
+# ---------------------------------------------------------------------------
+
+
+def standings(workspace: Workspace) -> dict:
+    """For each prepared+annotated dataset with a run, rank measures by |SRCC|.
+
+    Produces one ranked leaderboard per (dataset, task). Correlation rows arrive
+    already sorted by ``|srcc|`` descending, so list position is the rank.
+    """
+    entries: list[dict] = []
+    for ds in discover_datasets(workspace):
+        if not ds["prepared"] or not ds["has_annotations"]:
+            continue
+        run = _latest_run_for_dataset(workspace, ds["name"])
+        if run is None:
+            continue
+        manifest = load_manifest(dataset_registry.manifest_path(ds["name"], workspace.data_dir))
+        for task in ds["annotation_tasks"]:
+            values = annotation_values_from_manifest(manifest, task, "zscore_mos")
+            rows = correlate_measures_with_annotations(run, values, dataset=ds["name"])
+            ranked = [
+                {"rank": i + 1, **r.as_dict()}
+                for i, r in enumerate(rows)
+                if r.srcc is not None
+            ]
+            if ranked:
+                entries.append({"dataset": ds["name"], "task": task, "rows": ranked})
+
+    return {"entries": entries}

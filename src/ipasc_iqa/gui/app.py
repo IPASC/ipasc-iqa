@@ -20,15 +20,22 @@ STATIC_DIR = _HERE / "static"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-def create_app(workspace_root: Path | str | None = None) -> FastAPI:
+def create_app(
+    workspace_root: Path | str | None = None,
+    data_dir: Path | str | None = None,
+) -> FastAPI:
     """Build the FastAPI app.
 
-    The workspace root resolves from (in order): the explicit argument, the
-    ``IPASC_IQA_WORKSPACE`` environment variable, or the current directory.
+    ``workspace_root`` (results) resolves from: the explicit argument, the
+    ``IPASC_IQA_WORKSPACE`` env var, or the current directory. ``data_dir``
+    (managed dataset downloads) resolves from: the argument, the
+    ``IPASC_IQA_DATA_DIR`` env var, or the platform default data directory.
     """
     if workspace_root is None:
         workspace_root = os.environ.get("IPASC_IQA_WORKSPACE", ".")
-    workspace = Workspace(root=Path(workspace_root).resolve())
+    if data_dir is None:
+        data_dir = os.environ.get("IPASC_IQA_DATA_DIR") or None
+    workspace = Workspace.resolve(workspace_root, data_dir)
     workspace.ensure()
 
     app = FastAPI(title="ipasc_iqa", version=__version__)

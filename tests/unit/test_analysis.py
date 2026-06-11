@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
 from ipasc_iqa.analysis.standings import compute_standings
@@ -35,7 +35,7 @@ def _make_run(values: dict[str, float], measure: str = "psnr") -> RunResults:
     return RunResults(
         run_id="test",
         environment=EnvironmentInfo(python="3.13", platform="test"),
-        started=datetime.now(timezone.utc),
+        started=datetime.now(UTC),
         config=RunConfig(),
         results=records,
     )

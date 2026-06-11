@@ -140,6 +140,10 @@ body {
 .chip input { accent-color: var(--navy); }
 
 .result-area { min-height: 4rem; }
+.task-block { margin-bottom: 1.5rem; }
+.task-block__title { color: var(--navy); font-size: 1rem; margin: 0 0 0.5rem;
+                     text-transform: capitalize; }
+.check__desc { color: var(--muted); font-weight: 400; font-size: 0.74rem; margin-top: 0.15rem; }
 .result-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
 .result-head__title { color: var(--navy); margin: 0; font-size: 1.2rem; }
 .badge { background: var(--bg); border: 1px solid var(--border); color: var(--muted);

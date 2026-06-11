@@ -8,7 +8,7 @@
 {% else %}
 <div class="analysis-layout">
   <form class="controls"
-        hx-get="/api/correlation"
+        hx-get="/api/analysis"
         hx-target="#correlation-result"
         hx-trigger="load, change"
         hx-swap="innerHTML">
@@ -18,18 +18,8 @@
       <select name="dataset" class="select">
         {% for ds in datasets %}
         <option value="{{ ds.name }}" {{ 'selected' if ds.name == selected_dataset }}>
-          {{ ds.name }}
+          {{ ds.name }}{{ '' if ds.prepared else ' (not downloaded)' }}
         </option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <label class="field">
-      <span class="field__label">Quality task</span>
-      <select name="task" class="select">
-        {% set tasks = datasets[0].annotation_tasks or [default_task] %}
-        {% for t in tasks %}
-        <option value="{{ t }}" {{ 'selected' if t == default_task }}>{{ t }}</option>
         {% endfor %}
       </select>
     </label>
@@ -45,6 +35,7 @@
         {% endfor %}
       </div>
     </fieldset>
+    <p class="panel__hint">All quality tasks for the dataset are shown below.</p>
   </form>
 
   <div id="correlation-result" class="result-area">

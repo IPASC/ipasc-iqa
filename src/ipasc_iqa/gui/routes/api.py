@@ -6,7 +6,7 @@ The POST ``/run`` triggers a benchmark and redirects to the results page.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from ipasc_iqa.gui import service
@@ -50,37 +50,34 @@ def run_benchmark(
 
 
 # ---------------------------------------------------------------------------
-# Detailed analysis (correlation) fragment
+# Detailed analysis fragment — one correlation table per task
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/correlation", response_class=HTMLResponse)
-def correlation_fragment(
+@router.get("/api/analysis", response_class=HTMLResponse)
+def analysis_fragment(
     request: Request,
     dataset: str,
-    task: str = service.DEFAULT_TASK,
-    measures: list[str] | None = None,
+    measures: list[str] | None = Query(default=None),
 ) -> HTMLResponse:
     ws = _ws(request)
-    table = service.correlation_table(ws, dataset, measures=measures, task=task)
+    result = service.analysis_for_dataset(ws, dataset, measures=measures)
     return templates.TemplateResponse(
-        request, "fragments/correlation_table.html", {"table": table}
+        request, "fragments/analysis_tables.html", {"result": result}
     )
 
 
 # ---------------------------------------------------------------------------
-# Standings fragment
+# Standings fragment — measures ranked by correlation, per dataset, per task
 # ---------------------------------------------------------------------------
 
 
 @router.get("/api/standings", response_class=HTMLResponse)
-def standings_fragment(
-    request: Request, task: str = service.DEFAULT_TASK
-) -> HTMLResponse:
+def standings_fragment(request: Request) -> HTMLResponse:
     ws = _ws(request)
-    table = service.standings_table(ws, task=task)
+    result = service.standings(ws)
     return templates.TemplateResponse(
-        request, "fragments/standings_table.html", {"table": table}
+        request, "fragments/standings_table.html", {"result": result}
     )
 
 

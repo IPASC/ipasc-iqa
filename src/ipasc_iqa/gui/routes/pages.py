@@ -39,7 +39,9 @@ def results_page(request: Request) -> HTMLResponse:
     ws = _ws(request)
     datasets = service.discover_datasets(ws)
     measures = service.list_measures()
-    selected = datasets[0]["name"] if datasets else None
+    # Prefer a prepared dataset as the initial selection.
+    prepared = [d for d in datasets if d["prepared"]]
+    selected = (prepared or datasets or [{"name": None}])[0]["name"]
     return templates.TemplateResponse(
         request,
         "results.html",
@@ -48,20 +50,12 @@ def results_page(request: Request) -> HTMLResponse:
             "datasets": datasets,
             "measures": measures,
             "selected_dataset": selected,
-            "default_task": service.DEFAULT_TASK,
         },
     )
 
 
 @router.get("/standings", response_class=HTMLResponse)
 def standings_page(request: Request) -> HTMLResponse:
-    ws = _ws(request)
     return templates.TemplateResponse(
-        request,
-        "standings.html",
-        {
-            "active": "standings",
-            "datasets": service.discover_datasets(ws),
-            "default_task": service.DEFAULT_TASK,
-        },
+        request, "standings.html", {"active": "standings"}
     )

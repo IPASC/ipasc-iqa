@@ -18,10 +18,34 @@ class LocalDataset(Dataset):
     The directory must contain a ``manifest.json`` and an ``images/`` sub-directory.
     Subclasses may override ``_prepare`` to download and convert source data before
     the manifest is read.
+
+    Registry contract
+    -----------------
+    Adapters that are discoverable via :class:`~ipasc_iqa.datasets.registry.DatasetRegistry`
+    declare ``DATASET_NAME`` / ``DATASET_VERSION`` / ``DATASET_DESCRIPTION`` as class
+    attributes, accept a ``download`` keyword in ``__init__``, and may override the
+    ``is_prepared`` / ``prepared_manifest_path`` classmethods if their prepared
+    manifest lives somewhere other than ``<root>/manifest.json``.
     """
 
-    def __init__(self, root: Path | str) -> None:
+    #: Registry metadata (overridden by concrete adapters).
+    DATASET_NAME: str = "local"
+    DATASET_VERSION: str = "unknown"
+    DATASET_DESCRIPTION: str = ""
+
+    @classmethod
+    def prepared_manifest_path(cls, root: Path | str) -> Path:
+        """Where the prepared manifest lands under *root* (before instantiation)."""
+        return Path(root) / "manifest.json"
+
+    @classmethod
+    def is_prepared(cls, root: Path | str) -> bool:
+        """True if the dataset is already downloaded/converted at *root*."""
+        return cls.prepared_manifest_path(root).exists()
+
+    def __init__(self, root: Path | str, *, download: bool = True) -> None:
         self.root = Path(root)
+        self._download = download
         self._prepare()
         self._manifest: dict = self._load_manifest()
         self.name: str = self._manifest.get("dataset_name", self.root.name)

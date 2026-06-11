@@ -33,6 +33,7 @@ coverage.xml
 
 # --- Datasets (large; downloaded/generated, never committed) ---
 PHOT-IQA dataset/
+.data/
 *.zip
 converted/
 results/

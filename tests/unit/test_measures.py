@@ -5,11 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ipasc_iqa.measures.classical.psnr import PSNRMeasure
-from ipasc_iqa.measures.classical.ssim import SSIMMeasure
 from ipasc_iqa.measures.classical.cnr import CNRMeasure
+from ipasc_iqa.measures.classical.psnr import PSNRMeasure
 from ipasc_iqa.measures.classical.snr import SNRMeasure
-
+from ipasc_iqa.measures.classical.ssim import SSIMMeasure
 
 rng = np.random.default_rng(0)
 IMAGE = rng.random((64, 64, 1), dtype=np.float32).astype(np.float32)

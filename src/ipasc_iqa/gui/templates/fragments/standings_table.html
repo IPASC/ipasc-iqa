@@ -1,22 +1,26 @@
-{% if not table.rows %}
-  <p class="muted">No annotated datasets found — standings need expert ratings.</p>
+{% if not result.entries %}
+  <p class="muted">
+    No rankings yet — standings need a benchmark run on a dataset that has expert ratings.
+    Run a benchmark first.
+  </p>
 {% else %}
   {% set medals = {1: '🥇', 2: '🥈', 3: '🥉'} %}
   <div class="standings-grid">
-    {% for dataset in table.datasets %}
+    {% for entry in result.entries %}
     <div class="standings-card">
-      <h2 class="standings-card__title">{{ dataset }}</h2>
-      <span class="badge">task: {{ table.task }}</span>
+      <h2 class="standings-card__title">{{ entry.dataset }}</h2>
+      <span class="badge">task: {{ entry.task }}</span>
       <ol class="ranking">
-        {% for row in table.rows if row.dataset == dataset %}
+        {% for row in entry.rows %}
         <li class="ranking__row ranking__row--{{ row.rank }}">
           <span class="ranking__medal">{{ medals.get(row.rank, '#' ~ row.rank) }}</span>
-          <span class="ranking__group mono">{{ row.group }}</span>
-          <span class="ranking__score">{{ '%+.3f'|format(row.score) }}</span>
+          <span class="ranking__group mono">{{ row.measure }}</span>
+          <span class="ranking__score" title="SRCC">{{ '%+.3f'|format(row.srcc) }}</span>
         </li>
         {% endfor %}
       </ol>
     </div>
     {% endfor %}
   </div>
+  <p class="legend">IQA measures ranked by |SRCC| against expert z-MOS (higher = better aligned with experts).</p>
 {% endif %}

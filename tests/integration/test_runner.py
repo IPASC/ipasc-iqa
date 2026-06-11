@@ -6,10 +6,10 @@ from pathlib import Path
 
 from ipasc_iqa.core.runner import run_evaluation
 from ipasc_iqa.datasets.local import LocalDataset
-from ipasc_iqa.measures.classical.psnr import PSNRMeasure
-from ipasc_iqa.measures.classical.ssim import SSIMMeasure
 from ipasc_iqa.measures.classical.cnr import CNRMeasure
+from ipasc_iqa.measures.classical.psnr import PSNRMeasure
 from ipasc_iqa.measures.classical.snr import SNRMeasure
+from ipasc_iqa.measures.classical.ssim import SSIMMeasure
 
 
 def test_run_full_pipeline(synthetic_dataset: Path, tmp_path: Path) -> None:
@@ -49,7 +49,7 @@ def test_skips_missing_reference(synthetic_dataset: Path) -> None:
 
 
 def test_results_json_roundtrip(synthetic_dataset: Path, tmp_path: Path) -> None:
-    from ipasc_iqa.io.results import load_results, save_results
+    from ipasc_iqa.io.results import load_results
 
     ds = LocalDataset(synthetic_dataset)
     out = tmp_path / "run.json"

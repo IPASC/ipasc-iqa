@@ -13,15 +13,27 @@ def main() -> None:
         "--workspace",
         type=Path,
         default=Path(os.environ.get("IPASC_IQA_WORKSPACE", ".")),
-        help="Directory containing datasets and a results/ folder (default: cwd).",
+        help="Directory where run results are written (results/ folder; default: cwd).",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=(
+            Path(os.environ["IPASC_IQA_DATA_DIR"])
+            if os.environ.get("IPASC_IQA_DATA_DIR")
+            else None
+        ),
+        help="Managed directory for downloaded datasets (default: platform data dir).",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1).")
     parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000).")
     parser.add_argument("--reload", action="store_true", help="Auto-reload on code changes.")
     args = parser.parse_args()
 
-    # Pass workspace to the app factory via env (works with uvicorn's reload subprocess).
+    # Pass config to the app factory via env (works with uvicorn's reload subprocess).
     os.environ["IPASC_IQA_WORKSPACE"] = str(args.workspace.resolve())
+    if args.data_dir is not None:
+        os.environ["IPASC_IQA_DATA_DIR"] = str(args.data_dir.resolve())
 
     import uvicorn
 

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ipasc_iqa.datasets.local import LocalDataset
 from ipasc_iqa.core.dataset import ImageRecord
+from ipasc_iqa.datasets.local import LocalDataset
 
 
 def test_dataset_loads_records(synthetic_dataset: Path) -> None:

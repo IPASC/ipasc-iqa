@@ -2,25 +2,13 @@
 {% block title %}IPASC IQA — Standings{% endblock %}
 {% block content %}
 <h1 class="page-title">Standings</h1>
-<p class="muted">Reconstruction algorithms ranked per dataset by mean expert quality (z-scored MOS).</p>
+<p class="muted">
+  IQA measures ranked by how well they correlate (SRCC) with expert ratings —
+  one leaderboard per dataset and quality task.
+</p>
 
-<form class="controls"
-      hx-get="/api/standings"
-      hx-target="#standings-result"
-      hx-trigger="load, change"
-      hx-swap="innerHTML">
-  <label class="field">
-    <span class="field__label">Quality task</span>
-    <select name="task" class="select">
-      {% set tasks = (datasets[0].annotation_tasks if datasets else None) or [default_task] %}
-      {% for t in tasks %}
-      <option value="{{ t }}" {{ 'selected' if t == default_task }}>{{ t }}</option>
-      {% endfor %}
-    </select>
-  </label>
-</form>
-
-<div id="standings-result" class="result-area">
+<div id="standings-result" class="result-area"
+     hx-get="/api/standings" hx-trigger="load" hx-swap="innerHTML">
   <p class="muted">Loading…</p>
 </div>
 {% endblock %}

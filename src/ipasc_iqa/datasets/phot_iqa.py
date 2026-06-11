@@ -68,6 +68,15 @@ class PhotIQADataset(LocalDataset):
 
     DATASET_NAME = "phot_iqa"
     DATASET_VERSION = "1.0.0"
+    DATASET_DESCRIPTION = (
+        "PhotIQA: 1134 reconstructed photoacoustic images from 3 algorithms, paired "
+        "with 378 references and expert quality ratings (Breger et al., Zenodo 13325196)."
+    )
+
+    @classmethod
+    def prepared_manifest_path(cls, root: Path | str) -> Path:
+        # PhotIQA converts source data into a <root>/converted/ sub-folder.
+        return Path(root) / "converted" / "manifest.json"
 
     def __init__(
         self,
@@ -76,10 +85,9 @@ class PhotIQADataset(LocalDataset):
         download: bool = True,
         force_convert: bool = False,
     ) -> None:
-        self._download = download
         self._force_convert = force_convert
-        # LocalDataset.__init__ calls self._prepare() then reads the manifest.
-        super().__init__(root)
+        # LocalDataset.__init__ stores self._download, calls _prepare(), reads manifest.
+        super().__init__(root, download=download)
 
     # ------------------------------------------------------------------
     # Overridden hook: download + convert before manifest is read

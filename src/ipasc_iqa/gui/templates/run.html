@@ -16,15 +16,18 @@
             <label class="check">
               <input type="checkbox" name="datasets" value="{{ ds.name }}">
               <span class="check__label">{{ ds.name }}
-                <small>v{{ ds.version }} · {{ ds.n_images }} images
-                  {%- if ds.has_annotations %} · annotated{% endif %}</small>
+                <small>v{{ ds.version }}
+                  {%- if ds.prepared %} · {{ ds.n_images }} images
+                    {%- if ds.has_annotations %} · annotated{% endif %}
+                  {%- else %} · will download on first run{% endif %}</small>
+                <small class="check__desc">{{ ds.description }}</small>
               </span>
             </label>
           </li>
           {% endfor %}
         </ul>
       {% else %}
-        <p class="empty">No datasets found in the workspace.</p>
+        <p class="empty">No dataset adapters registered.</p>
       {% endif %}
     </section>
 
