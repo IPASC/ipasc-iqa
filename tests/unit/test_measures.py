@@ -113,3 +113,41 @@ class TestLPIPS:
         model_ref = m._model
         m.evaluate(IMAGE, reference=REFERENCE)
         assert m._model is model_ref  # same object, not reloaded
+
+
+# ---------------------------------------------------------------------------
+# DISTS — skipped when ipasc_iqa[deep] is not installed
+# ---------------------------------------------------------------------------
+
+pytest.importorskip("torch", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("DISTS_pytorch", reason="requires ipasc_iqa[deep]")
+
+from ipasc_iqa.measures.deep.dists import DISTSMeasure  # noqa: E402
+
+
+class TestDISTS:
+    def test_returns_non_negative_float(self) -> None:
+        v = DISTSMeasure(device="cpu").evaluate(IMAGE, reference=REFERENCE)
+        assert isinstance(v, float)
+        assert v >= 0.0
+
+    def test_identical_images_near_zero(self) -> None:
+        v = DISTSMeasure(device="cpu").evaluate(IMAGE, reference=IMAGE)
+        assert v < 0.01
+
+    def test_requires_reference(self) -> None:
+        with pytest.raises(ValueError):
+            DISTSMeasure(device="cpu").evaluate(IMAGE)
+
+    def test_three_channel_input(self) -> None:
+        v = DISTSMeasure(device="cpu").evaluate(_IMG_3C, reference=_REF_3C)
+        assert isinstance(v, float)
+        assert v >= 0.0
+
+    def test_model_reused_across_calls(self) -> None:
+        m = DISTSMeasure(device="cpu")
+        assert m._model is None
+        m.evaluate(IMAGE, reference=REFERENCE)
+        model_ref = m._model
+        m.evaluate(IMAGE, reference=REFERENCE)
+        assert m._model is model_ref  # same object, not reloaded

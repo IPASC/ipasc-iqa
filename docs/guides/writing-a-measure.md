@@ -108,8 +108,10 @@ For a real-world template, read the bundled
 
 ### Deep-learning (PyTorch) measures
 
-Put the file under `measures/deep/`. The [LPIPS adapter](../../src/ipasc_iqa/measures/deep/lpips.py)
-is the canonical reference; its design decisions are worth following exactly:
+Put the file under `measures/deep/`. The bundled
+[LPIPS](../../src/ipasc_iqa/measures/deep/lpips.py) and
+[DISTS](../../src/ipasc_iqa/measures/deep/dists.py) adapters are the canonical
+references; their design decisions are worth following exactly:
 
 #### Defer all heavy imports to first use
 
@@ -230,13 +232,14 @@ cnr   = "ipasc_iqa.measures.classical.cnr:CNRMeasure"
 snr   = "ipasc_iqa.measures.classical.snr:SNRMeasure"
 mae   = "ipasc_iqa.measures.classical.mae:MAEMeasure"
 lpips = "ipasc_iqa.measures.deep.lpips:LPIPSMeasure"   # <- new deep measure
+dists = "ipasc_iqa.measures.deep.dists:DISTSMeasure"   # <- new deep measure
 ```
 
 For deep measures, also add the extra dependency to the `deep` group:
 
 ```toml
 [project.optional-dependencies]
-deep = ["torch>=2.2", "torchvision>=0.17", "lpips>=0.1.4"]
+deep = ["torch>=2.2", "torchvision>=0.17", "lpips>=0.1.4", "DISTS-pytorch>=0.1"]
 ```
 
 Re-install so the entry point is picked up, and confirm it is discovered:
