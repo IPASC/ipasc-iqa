@@ -10,6 +10,7 @@
       <h2 class="panel__title">Datasets</h2>
       <p class="panel__hint">Select one or more (multi-select).</p>
       {% if datasets %}
+        <button type="button" id="toggle-btn-ds" style="margin-bottom: 1rem;" class="btn">Select All</button>
         <ul class="checklist">
           {% for ds in datasets %}
           <li>
@@ -34,6 +35,7 @@
     <section class="panel">
       <h2 class="panel__title">Measures</h2>
       <p class="panel__hint">Select one or more (multi-select).</p>
+      <button type="button" id="toggle-btn-measures" style="margin-bottom: 1rem;" class="btn">Select All</button>
       <ul class="checklist">
         {% for m in measures %}
         <li>
@@ -41,13 +43,32 @@
             <input type="checkbox" name="measures" value="{{ m.name }}">
             <span class="check__label">{{ m.name }}
               <small>v{{ m.version }}
-                {{ m.measure_type }}</small>
+                {{ m.measure_type }}
+                {%- if m.measure_type == "FULL_REFERENCE" %} (requires reference) {% endif %}
+                {%- if m.requires_signal_roi or m.requires_noise_roi %} (requires ROIs) {% endif %}</small>
             </span>
           </label>
         </li>
         {% endfor %}
       </ul>
     </section>
+
+    <script>
+      const btn1 = document.getElementById("toggle-btn-measures");
+      btn1.addEventListener("click", () => {
+          const checkboxes = document.querySelectorAll('input[name="measures"]');
+          const allChecked = [...checkboxes].every(cb => cb.checked);
+          checkboxes.forEach(cb => cb.checked = !allChecked);
+          btn1.textContent = allChecked ? "Select All" : "Deselect All";
+      });
+      const btn2 = document.getElementById("toggle-btn-ds");
+      btn2.addEventListener("click", () => {
+          const checkboxes = document.querySelectorAll('input[name="datasets"]');
+          const allChecked = [...checkboxes].every(cb => cb.checked);
+          checkboxes.forEach(cb => cb.checked = !allChecked);
+          btn2.textContent = allChecked ? "Select All" : "Deselect All";
+      });
+    </script>
 
   </div>
 
