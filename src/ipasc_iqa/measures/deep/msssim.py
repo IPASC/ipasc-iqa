@@ -57,7 +57,7 @@ class MSSSIMMeasure(BaseMeasure):
         ),
     )
 
-    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5) -> None:
+    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device = None) -> None:
         # Pass hyperparameters to super() so config_canonical_json() picks them
         # up and they contribute to the cache key.
         super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
