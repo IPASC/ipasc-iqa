@@ -9,7 +9,7 @@ from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 
 class PSNRMeasure(BaseMeasure):
     metadata = MeasureMetadata(
-        name="psnr",
+        name="PSNR",
         version="1.0.0",
         measure_type=MeasureType.FULL_REFERENCE,
         requires_signal_roi=False,

@@ -106,14 +106,114 @@ For a real-world template, read the bundled
 [`PSNRMeasure`](../../src/ipasc_iqa/measures/classical/psnr.py) and
 [`CNRMeasure`](../../src/ipasc_iqa/measures/classical/cnr.py) (the latter shows ROI usage).
 
-### Notes for GPU / deep-learning measures
+### Deep-learning (PyTorch) measures
 
-- Put the file under `measures/deep/` and import `torch` *inside* `__init__`/`evaluate`, not at
-  module top level, so the base install stays lightweight.
-- `BaseMeasure.__init__` resolves `self.device` (CUDA → MPS → CPU). Convert NumPy → tensor inside
-  `evaluate()` and move to `self.device`.
-- Override `batch_evaluate()` if you want true batched GPU evaluation.
-- Add the dependency to the `deep` optional-dependency group in `pyproject.toml`.
+Put the file under `measures/deep/`. The [LPIPS adapter](../../src/ipasc_iqa/measures/deep/lpips.py)
+is the canonical reference; its design decisions are worth following exactly:
+
+#### Defer all heavy imports to first use
+
+Do **not** import `torch` or a deep-learning library at module top level. Import inside the method
+that needs them. This lets `from ipasc_iqa.measures.deep.lpips import LPIPSMeasure` succeed even
+when `ipasc_iqa[deep]` is not installed, and means registry discovery never triggers a slow or
+failing import.
+
+```python
+# wrong — breaks base install
+import torch
+import lpips
+
+class LPIPSMeasure(BaseMeasure):
+    ...
+
+# correct
+class LPIPSMeasure(BaseMeasure):
+    def _get_model(self):
+        try:
+            import lpips
+        except ImportError as exc:
+            raise ImportError("Requires ipasc_iqa[deep]") from exc
+        import torch
+        ...
+```
+
+#### Lazy model initialisation
+
+Pretrained deep models download weights (tens to hundreds of MB) on first construction.
+Loading in `__init__` would trigger a download for every `ipasc_iqa list measures` call.
+Use a `None` sentinel and load on the first `evaluate()` call instead:
+
+```python
+def __init__(self, device: str = "auto", net: str = "alex") -> None:
+    super().__init__(device=device, net=net)  # pass hyperparams as kwargs
+    self._net = net
+    self._model: Any = None  # loaded lazily
+
+def _get_model(self) -> Any:
+    if self._model is None:
+        import lpips, torch
+        self._model = lpips.LPIPS(net=self._net, verbose=False)
+        self._model = self._model.to(torch.device(self.device)).eval()
+    return self._model
+```
+
+#### Pass all hyperparameters as kwargs to `super().__init__()`
+
+`BaseMeasure.__init__` captures `**kwargs` into `self._config`, which is serialised into
+`config_canonical_json()` — the component of the cache key that changes when a measure is
+reconfigured.  If you forget this, changing the backbone (e.g. `net="vgg"`) reuses stale
+cached results silently.
+
+```python
+super().__init__(device=device, net=net)  # net ends up in the cache key
+```
+
+#### Device handling
+
+`BaseMeasure.__init__` resolves `self.device` via `core.device.resolve()` (CUDA → MPS → CPU,
+never assumes CUDA is available). Move the model to this device at lazy-init time, and move
+tensors to the same device when building them:
+
+```python
+self._model = model.to(torch.device(self.device)).eval()
+# ...
+tensor = tensor.to(torch.device(self.device))
+```
+
+#### Single-channel to 3-channel expansion
+
+Photoacoustic images are single-channel `(H, W, 1)`. Networks pretrained on RGB images expect
+3 channels. Use `.expand()` rather than `.repeat()` — it creates a zero-copy view:
+
+```python
+if t.shape[0] == 1:
+    t = t.expand(3, -1, -1)   # view, no data copy
+    # not: t = t.repeat(3, 1, 1)  # allocates 3× the memory
+```
+
+#### Joint normalisation
+
+Normalise image and reference together using the **reference's** data range. This preserves
+intensity differences (a systematically brighter reconstruction is penalised), unlike
+per-image normalisation which would wash out those differences:
+
+```python
+data_min   = float(reference.min())
+data_range = float(reference.max()) - data_min or 1.0
+# apply the same transform to both
+img_t = (img_t - data_min) / data_range   # result in [0, 1] for ref
+ref_t = (ref_t - data_min) / data_range   # values outside range are clamped
+```
+
+Use the library's built-in rescaling flag when available (`normalize=True` in the lpips
+package maps `[0, 1] → [−1, 1]`) rather than doing it manually.
+
+#### Always use `torch.no_grad()`
+
+```python
+with torch.no_grad():
+    score = model(img_t, ref_t, normalize=True)
+```
 
 ---
 
@@ -124,46 +224,76 @@ is the entry-point name; the value is `module.path:ClassName`:
 
 ```toml
 [project.entry-points."ipasc_iqa.measures"]
-psnr = "ipasc_iqa.measures.classical.psnr:PSNRMeasure"
-ssim = "ipasc_iqa.measures.classical.ssim:SSIMMeasure"
-cnr  = "ipasc_iqa.measures.classical.cnr:CNRMeasure"
-snr  = "ipasc_iqa.measures.classical.snr:SNRMeasure"
-mae  = "ipasc_iqa.measures.classical.mae:MAEMeasure"   # <- new
+psnr  = "ipasc_iqa.measures.classical.psnr:PSNRMeasure"
+ssim  = "ipasc_iqa.measures.classical.ssim:SSIMMeasure"
+cnr   = "ipasc_iqa.measures.classical.cnr:CNRMeasure"
+snr   = "ipasc_iqa.measures.classical.snr:SNRMeasure"
+mae   = "ipasc_iqa.measures.classical.mae:MAEMeasure"
+lpips = "ipasc_iqa.measures.deep.lpips:LPIPSMeasure"   # <- new deep measure
+```
+
+For deep measures, also add the extra dependency to the `deep` group:
+
+```toml
+[project.optional-dependencies]
+deep = ["torch>=2.2", "torchvision>=0.17", "lpips>=0.1.4"]
 ```
 
 Re-install so the entry point is picked up, and confirm it is discovered:
 
 ```bash
-pip install -e ".[dev,gui]"
-ipasc_iqa list measures        # 'mae' should appear in the table
+pip install -e ".[dev,gui,deep]"
+ipasc_iqa list measures        # 'lpips' should appear in the table
 ```
 
 ---
 
 ## 4. Add a test
 
-Add a unit test under `tests/unit/` mirroring `tests/unit/test_measures.py`:
+Add a unit test under `tests/unit/` mirroring `tests/unit/test_measures.py`.  For deep measures,
+guard the entire test class with `pytest.importorskip` so the suite stays green without
+`ipasc_iqa[deep]`:
 
 ```python
 import numpy as np
-from ipasc_iqa.measures.classical.mae import MAEMeasure
+import pytest
 
-def test_mae_zero_for_identical_images():
-    img = np.random.default_rng(0).random((32, 32, 1), dtype=np.float32)
-    assert MAEMeasure().evaluate(img, reference=img) == 0.0
+pytest.importorskip("torch",  reason="requires ipasc_iqa[deep]")
+pytest.importorskip("lpips",  reason="requires ipasc_iqa[deep]")
+
+from ipasc_iqa.measures.deep.lpips import LPIPSMeasure
+
+rng = np.random.default_rng(42)
+IMG = rng.random((32, 32, 1), dtype=np.float32).astype(np.float32)
+REF = rng.random((32, 32, 1), dtype=np.float32).astype(np.float32)
+
+class TestLPIPS:
+    def test_returns_non_negative_float(self):
+        v = LPIPSMeasure(device="cpu").evaluate(IMG, reference=REF)
+        assert isinstance(v, float) and v >= 0.0
+
+    def test_identical_images_near_zero(self):
+        assert LPIPSMeasure(device="cpu").evaluate(IMG, reference=IMG) < 0.01
+
+    def test_requires_reference(self):
+        with pytest.raises(ValueError):
+            LPIPSMeasure(device="cpu").evaluate(IMG)
 ```
+
+`pytest.importorskip` at module level causes pytest to **skip** (not fail) the whole module
+when the packages are absent, keeping CI green on the base install.
 
 ---
 
 ## 5. Open the pull request
 
 ```bash
-git checkout -b add-mae-measure
+git checkout -b add-lpips-measure
 ruff check .          # lint must pass
 pytest                # tests must pass
 git add -A
-git commit -m "Add MAE measure"
-git push -u origin add-mae-measure
+git commit -m "Add LPIPS deep measure"
+git push -u origin add-lpips-measure
 gh pr create --fill   # or open the PR on GitHub
 ```
 

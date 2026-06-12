@@ -75,4 +75,4 @@ def test_cnr_snr_now_runnable(fake_source: Path) -> None:
     # With ROI masks present, the no-reference measures produce values (no skips).
     assert run.results
     assert not run.skipped
-    assert {r.measure for r in run.results} == {"cnr", "snr"}
+    assert {r.measure for r in run.results} == {"CNR", "SNR"}

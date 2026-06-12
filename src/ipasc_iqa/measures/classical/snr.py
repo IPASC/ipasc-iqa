@@ -9,7 +9,7 @@ from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 
 class SNRMeasure(BaseMeasure):
     metadata = MeasureMetadata(
-        name="snr",
+        name="SNR",
         version="1.0.0",
         measure_type=MeasureType.REDUCED_REFERENCE,
         requires_signal_roi=True,

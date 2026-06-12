@@ -71,3 +71,45 @@ class TestSNR:
         m = SNRMeasure()
         with pytest.raises(ValueError):
             m.evaluate(IMAGE)
+
+
+# ---------------------------------------------------------------------------
+# LPIPS — skipped when ipasc_iqa[deep] is not installed
+# ---------------------------------------------------------------------------
+
+pytest.importorskip("torch", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("lpips", reason="requires ipasc_iqa[deep]")
+
+from ipasc_iqa.measures.deep.lpips import LPIPSMeasure  # noqa: E402
+
+_rng = np.random.default_rng(42)
+_IMG_3C = _rng.random((32, 32, 3)).astype(np.float32)
+_REF_3C = _rng.random((32, 32, 3)).astype(np.float32)
+
+
+class TestLPIPS:
+    def test_returns_non_negative_float(self) -> None:
+        v = LPIPSMeasure(device="cpu").evaluate(IMAGE, reference=REFERENCE)
+        assert isinstance(v, float)
+        assert v >= 0.0
+
+    def test_identical_images_near_zero(self) -> None:
+        v = LPIPSMeasure(device="cpu").evaluate(IMAGE, reference=IMAGE)
+        assert v < 0.01
+
+    def test_requires_reference(self) -> None:
+        with pytest.raises(ValueError):
+            LPIPSMeasure(device="cpu").evaluate(IMAGE)
+
+    def test_three_channel_input(self) -> None:
+        v = LPIPSMeasure(device="cpu").evaluate(_IMG_3C, reference=_REF_3C)
+        assert isinstance(v, float)
+        assert v >= 0.0
+
+    def test_model_reused_across_calls(self) -> None:
+        m = LPIPSMeasure(device="cpu")
+        assert m._model is None
+        m.evaluate(IMAGE, reference=REFERENCE)
+        model_ref = m._model
+        m.evaluate(IMAGE, reference=REFERENCE)
+        assert m._model is model_ref  # same object, not reloaded

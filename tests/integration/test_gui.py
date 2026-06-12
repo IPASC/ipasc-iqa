@@ -104,11 +104,11 @@ def test_api_datasets_adapter_driven(client: TestClient) -> None:
 
 def test_measures_listed(client: TestClient) -> None:
     names = {m["name"] for m in client.get("/api/measures").json()}
-    assert {"psnr", "ssim", "cnr", "snr"} <= names
+    assert {"PSNR", "SSIM", "CNR", "SNR"} <= names
 
 
 def test_run_then_analysis_all_tasks(client: TestClient) -> None:
-    resp = client.post("/run", data={"datasets": ["mini"], "measures": ["psnr", "ssim"]})
+    resp = client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR", "SSIM"]})
     assert resp.status_code == 200
     assert resp.headers.get("HX-Redirect") == "/results"
 
@@ -117,9 +117,9 @@ def test_run_then_analysis_all_tasks(client: TestClient) -> None:
     # Both tasks present (not selectable — all shown).
     assert "overall_quality" in frag.text
     assert "edge_visibility" in frag.text
-    assert "SRCC" in frag.text and "psnr" in frag.text
+    assert "SRCC" in frag.text and "PSNR" in frag.text
     # 'mini' has references but no ROI masks -> cnr/snr are disabled, not shown.
-    assert 'value="cnr"' in frag.text  # present as a disabled chip (oob)
+    assert 'value="CNR"' in frag.text  # present as a disabled chip (oob)
     assert "disabled" in frag.text
 
 
@@ -131,21 +131,21 @@ def test_measure_options_reflect_capabilities(client: TestClient) -> None:
     )
     opts = {o["name"]: o for o in service.measure_options(ws, "mini")}
     # 'mini' has references (psnr/ssim usable) but no ROIs (cnr/snr unusable).
-    assert opts["psnr"]["usable"] is True
-    assert opts["ssim"]["usable"] is True
-    assert opts["cnr"]["usable"] is False
-    assert opts["snr"]["usable"] is False
+    assert opts["PSNR"]["usable"] is True
+    assert opts["SSIM"]["usable"] is True
+    assert opts["CNR"]["usable"] is False
+    assert opts["SNR"]["usable"] is False
 
 
 def test_partial_runs_merge_in_analysis(client: TestClient) -> None:
     # Run only psnr, then only ssim — analysis should show BOTH (merged store).
-    client.post("/run", data={"datasets": ["mini"], "measures": ["psnr"]})
-    client.post("/run", data={"datasets": ["mini"], "measures": ["ssim"]})
+    client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR"]})
+    client.post("/run", data={"datasets": ["mini"], "measures": ["SSIM"]})
 
     frag = client.get("/api/analysis", params={"dataset": "mini"})
     assert frag.status_code == 200
-    assert "psnr" in frag.text
-    assert "ssim" in frag.text
+    assert "PSNR" in frag.text
+    assert "SSIM" in frag.text
     assert "merged results" in frag.text
 
 
@@ -156,9 +156,9 @@ def test_run_requires_selection(client: TestClient) -> None:
 
 
 def test_standings_ranks_measures(client: TestClient) -> None:
-    client.post("/run", data={"datasets": ["mini"], "measures": ["psnr", "ssim"]})
+    client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR", "SSIM"]})
     frag = client.get("/api/standings")
     assert frag.status_code == 200
     # Measures (not algorithms) are ranked; both tasks appear.
-    assert "psnr" in frag.text or "ssim" in frag.text
+    assert "PSNR" in frag.text or "SSIM" in frag.text
     assert "overall_quality" in frag.text

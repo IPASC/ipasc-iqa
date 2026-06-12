@@ -88,4 +88,4 @@ def test_partial_runs_accumulate_in_store(synthetic_dataset: Path, tmp_path: Pat
 
         # The store holds both measures even though each run computed only one.
         measures = {r.measure for r in store.records_for_dataset()}
-        assert measures == {"psnr", "ssim"}
+        assert measures == {"PSNR", "SSIM"}

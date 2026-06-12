@@ -555,10 +555,10 @@ Hosted on GitHub Pages via the docs workflow.
 - Result caching with `diskcache`.
 - Property-based tests for cache keys.
 
-**v0.3 — Plugins + DL**
-- Entry-point discovery, reference LPIPS measure as `ipasc_iqa[deep]`.
-- `device.resolve()` with CUDA/MPS/CPU.
-- Contributor guide for third-party measures.
+**v0.3 — Plugins + DL** ✓
+- Entry-point discovery, reference LPIPS measure as `ipasc_iqa[deep]`. ✓
+- `device.resolve()` with CUDA/MPS/CPU. ✓
+- Contributor guide for third-party measures. ✓
 
 **v0.4 — GUI**
 - Streamlit webapp with Run / Compare / Datasets pages.

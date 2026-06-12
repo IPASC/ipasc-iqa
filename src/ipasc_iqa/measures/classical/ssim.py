@@ -10,7 +10,7 @@ from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 
 class SSIMMeasure(BaseMeasure):
     metadata = MeasureMetadata(
-        name="ssim",
+        name="SSIM",
         version="1.0.0",
         measure_type=MeasureType.FULL_REFERENCE,
         requires_signal_roi=False,
