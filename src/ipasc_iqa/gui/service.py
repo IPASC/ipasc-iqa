@@ -43,8 +43,11 @@ class Workspace:
 
     @property
     def store_path(self) -> Path:
-        """Persistent, newest-wins result store (also the run cache)."""
-        return self.results_dir / "store.json"
+        """Persistent, newest-wins result store (also the run cache).
+
+        A diskcache directory (SQLite-backed), not a single file.
+        """
+        return self.results_dir / "cache"
 
     def ensure(self) -> None:
         self.results_dir.mkdir(parents=True, exist_ok=True)
@@ -206,15 +209,14 @@ def run_benchmark(
     if reference_preference is None:
         reference_preference = ["ground_truth", "pseudo_reference"]
 
-    store = ResultStore(workspace.store_path)
-    run = run_evaluation(
-        datasets,
-        measures,
-        reference_preference=reference_preference,
-        cache=store,
-        progress=False,
-    )
-    store.save()
+    with ResultStore(workspace.store_path) as store:
+        run = run_evaluation(
+            datasets,
+            measures,
+            reference_preference=reference_preference,
+            cache=store,
+            progress=False,
+        )
     # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
@@ -250,8 +252,8 @@ def _merged_run(workspace: Workspace, dataset_name: str) -> RunResults | None:
     """
     if not workspace.store_path.exists():
         return None
-    store = ResultStore(workspace.store_path)
-    records = store.records_for_dataset(dataset_name)
+    with ResultStore(workspace.store_path) as store:
+        records = store.records_for_dataset(dataset_name)
     if not records:
         return None
     return RunResults(

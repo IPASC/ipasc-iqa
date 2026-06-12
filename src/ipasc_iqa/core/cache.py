@@ -11,6 +11,11 @@ Two responsibilities, one object:
    therefore *adds to* the accumulated results rather than replacing them, so the
    analysis views show the union of everything computed so far.
 
+The backend is [`diskcache`](https://grantjenks.com/docs/diskcache/): an
+SQLite-backed, transactional, process- and thread-safe key/value store. This
+scales to a public multi-user deployment without the load-modify-save races a
+single JSON file would suffer.
+
 The cache key follows the roadmap composition: it hashes the measure name +
 version, the image hash, the reference type + hash, the ROI hashes, and the
 measure's canonical config JSON. Any change to those invalidates the entry.
@@ -19,10 +24,14 @@ measure's canonical config JSON. Any change to those invalidates the entry.
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
+from types import TracebackType
+from typing import TYPE_CHECKING
 
 from ipasc_iqa.core.result import ResultRecord
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 def make_cache_key(
@@ -49,67 +58,78 @@ def make_cache_key(
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
-def _index_key(dataset: str, image_id: str, measure: str) -> str:
-    return f"{dataset}\x00{image_id}\x00{measure}"
-
-
 class ResultStore:
-    """JSON-backed, newest-wins store keyed by content hash.
+    """diskcache-backed, newest-wins store keyed by content hash.
 
-    Also exposes the ``get``/``set`` pair the runner uses as a cache.
+    Two kinds of entries live in one cache, distinguished by a tuple-key tag:
+
+    - ``("r", cache_key)`` → the serialized :class:`ResultRecord` (the cache).
+    - ``("i", dataset, image_id, measure)`` → the ``cache_key`` currently held for
+      that triple (the merge index). Lets a newer computation supersede an older
+      one and lets the analysis views enumerate one record per triple.
+
+    Use as a context manager, or remember to :meth:`close` it.
     """
 
     def __init__(self, path: Path | str) -> None:
+        import diskcache
+
         self.path = Path(path)
-        # cache_key -> serialized ResultRecord
-        self._by_key: dict[str, dict] = {}
-        # (dataset, image, measure) -> cache_key currently held for it
-        self._index: dict[str, str] = {}
-        self._load()
+        self._cache = diskcache.Cache(str(self.path))
 
-    # -- persistence -------------------------------------------------------
+    # -- lifecycle ---------------------------------------------------------
 
-    def _load(self) -> None:
-        if not self.path.exists():
-            return
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return
-        self._by_key = data.get("by_key", {})
-        self._index = data.get("index", {})
+    def close(self) -> None:
+        self._cache.close()
 
-    def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps({"by_key": self._by_key, "index": self._index}),
-            encoding="utf-8",
-        )
+    def __enter__(self) -> ResultStore:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
 
     # -- runner cache interface -------------------------------------------
 
     def get(self, key: str) -> ResultRecord | None:
-        rec = self._by_key.get(key)
+        rec = self._cache.get(("r", key))
         return ResultRecord.model_validate(rec) if rec is not None else None
 
     def set(self, key: str, record: ResultRecord) -> None:
-        idx = _index_key(record.dataset, record.image_id, record.measure)
-        previous = self._index.get(idx)
-        if previous is not None and previous != key:
-            # A newer computation for this (dataset, image, measure) supersedes the
-            # old one (e.g. the measure version or an input hash changed).
-            self._by_key.pop(previous, None)
-        self._by_key[key] = record.model_dump(mode="json")
-        self._index[idx] = key
+        index_key = ("i", record.dataset, record.image_id, record.measure)
+        # Atomic supersede-and-store: each op is transactional, and transact()
+        # batches them so concurrent writers never interleave a partial update.
+        with self._cache.transact():
+            previous = self._cache.get(index_key)
+            if previous is not None and previous != key:
+                # A newer computation for this (dataset, image, measure) replaces
+                # the old one (e.g. measure version or an input hash changed).
+                self._cache.delete(("r", previous))
+            self._cache.set(("r", key), record.model_dump(mode="json"))
+            self._cache.set(index_key, key)
 
     # -- merged query for the analysis views ------------------------------
 
+    def _index_keys(self) -> Iterator[tuple]:
+        for k in self._cache:
+            if isinstance(k, tuple) and k and k[0] == "i":
+                yield k
+
     def records_for_dataset(self, dataset: str | None = None) -> list[ResultRecord]:
         out: list[ResultRecord] = []
-        for rec in self._by_key.values():
-            if dataset is None or rec.get("dataset") == dataset:
+        for index_key in self._index_keys():
+            _, ds, _image, _measure = index_key
+            if dataset is not None and ds != dataset:
+                continue
+            cache_key = self._cache.get(index_key)
+            rec = self._cache.get(("r", cache_key)) if cache_key is not None else None
+            if rec is not None:
                 out.append(ResultRecord.model_validate(rec))
         return out
 
     def __len__(self) -> int:
-        return len(self._by_key)
+        return sum(1 for _ in self._index_keys())

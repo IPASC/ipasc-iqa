@@ -55,36 +55,42 @@ class TestCacheKey:
 
 class TestResultStore:
     def test_get_set_roundtrip(self, tmp_path: Path) -> None:
-        store = ResultStore(tmp_path / "store.json")
-        rec = _record(value=42.0)
-        store.set("k1", rec)
-        got = store.get("k1")
-        assert got is not None and got.value == 42.0
-        assert store.get("missing") is None
+        with ResultStore(tmp_path / "cache") as store:
+            store.set("k1", _record(value=42.0))
+            got = store.get("k1")
+            assert got is not None and got.value == 42.0
+            assert store.get("missing") is None
 
     def test_newest_wins_per_dataset_image_measure(self, tmp_path: Path) -> None:
-        store = ResultStore(tmp_path / "store.json")
-        # Same (dataset, image, measure) recomputed with a new version -> new key.
-        store.set("old", _record(value=1.0, version="1.0.0"))
-        store.set("new", _record(value=2.0, version="2.0.0"))
-        recs = store.records_for_dataset("d")
-        assert len(recs) == 1  # the old one was superseded
-        assert recs[0].value == 2.0
-        assert store.get("old") is None
+        with ResultStore(tmp_path / "cache") as store:
+            # Same (dataset, image, measure) recomputed with a new version -> new key.
+            store.set("old", _record(value=1.0, version="1.0.0"))
+            store.set("new", _record(value=2.0, version="2.0.0"))
+            recs = store.records_for_dataset("d")
+            assert len(recs) == 1  # the old one was superseded
+            assert recs[0].value == 2.0
+            assert store.get("old") is None
 
     def test_partial_runs_accumulate(self, tmp_path: Path) -> None:
-        store = ResultStore(tmp_path / "store.json")
-        store.set("kp", _record(measure="psnr", value=1.0))
-        store.set("ks", _record(measure="ssim", value=0.5))
-        measures = {r.measure for r in store.records_for_dataset("d")}
-        assert measures == {"psnr", "ssim"}
+        with ResultStore(tmp_path / "cache") as store:
+            store.set("kp", _record(measure="psnr", value=1.0))
+            store.set("ks", _record(measure="ssim", value=0.5))
+            measures = {r.measure for r in store.records_for_dataset("d")}
+            assert measures == {"psnr", "ssim"}
 
     def test_persistence_round_trips_through_disk(self, tmp_path: Path) -> None:
-        path = tmp_path / "store.json"
-        s = ResultStore(path)
-        s.set("k", _record(value=7.0))
-        s.save()
-        # A fresh instance loads what was saved.
-        reloaded = ResultStore(path)
-        got = reloaded.get("k")
-        assert got is not None and got.value == 7.0
+        path = tmp_path / "cache"
+        with ResultStore(path) as s:
+            s.set("k", _record(value=7.0))
+        # A fresh instance opened on the same directory sees the data.
+        with ResultStore(path) as reloaded:
+            got = reloaded.get("k")
+            assert got is not None and got.value == 7.0
+
+    def test_concurrent_stores_share_state(self, tmp_path: Path) -> None:
+        # diskcache is process/thread-safe: a second handle sees the first's writes.
+        path = tmp_path / "cache"
+        with ResultStore(path) as a, ResultStore(path) as b:
+            a.set("k", _record(value=3.0))
+            got = b.get("k")
+            assert got is not None and got.value == 3.0
