@@ -210,3 +210,117 @@ def compare(
                 f"{arr.mean():>10.4f} {arr.std():>10.4f} {np.median(arr):>10.4f}"
             )
         typer.echo(f"  Skipped: {len(run_res.skipped)}")
+
+@app.command()
+def show(
+    result_file: str = typer.Argument(
+        ..., help="Result JSON file to inspect."
+    ),
+    top: int = typer.Option(
+        5,
+        "--top",
+        "-t",
+        help="Number of best/worst examples to show per measure.",
+    ),
+) -> None:
+    """Inspect a single result JSON file."""
+
+    from pathlib import Path
+
+    import numpy as np
+
+    from ipasc_iqa.io.results import load_results
+
+    run_res = load_results(Path(result_file))
+
+    tool_name = run_res.tool.get("name", "?")
+    tool_version = run_res.tool.get("version", "?")
+
+    typer.echo(f"\n=== Run: {run_res.run_id} ===")
+    typer.echo(f"Started:  {run_res.started}")
+    typer.echo(f"Finished: {run_res.finished}")
+    typer.echo(f"Tool:     {tool_name} {tool_version}")
+
+    typer.echo("\nDatasets:")
+    for ds in run_res.datasets:
+        typer.echo(
+            f"  - {ds.name} v{ds.version} "
+            f"({ds.n_images} images)"
+        )
+
+    typer.echo("\nMeasures:")
+    for measure in run_res.measures:
+        typer.echo(
+            f"  - {measure.name} v{measure.version}"
+        )
+
+    typer.echo("\nRun summary:")
+    typer.echo(f"  Results: {len(run_res.results)}")
+    typer.echo(f"  Skipped: {len(run_res.skipped)}")
+
+    by_measure: dict[str, list[tuple[str, str, float]]] = {}
+
+    for rec in run_res.results:
+        if rec.value is not None:
+            by_measure.setdefault(rec.measure, []).append(
+                (rec.dataset, rec.image_id, rec.value)
+            )
+
+        if rec.sub_scores:
+            for sub_name, sub_value in rec.sub_scores.items():
+                by_measure.setdefault(
+                    f"{rec.measure}.{sub_name}",
+                    [],
+                ).append(
+                    (rec.dataset, rec.image_id, sub_value)
+                )
+
+    typer.echo("\nStatistics:")
+    typer.echo(
+        f"{'Measure':<25}"
+        f"{'N':>8}"
+        f"{'Mean':>12}"
+        f"{'Std':>12}"
+        f"{'Median':>12}"
+        f"{'Min':>12}"
+        f"{'Max':>12}"
+    )
+    typer.echo("-" * 93)
+
+    for measure_name, rows in sorted(by_measure.items()):
+        values = np.array([row[2] for row in rows], dtype=float)
+
+        typer.echo(
+            f"{measure_name:<25}"
+            f"{len(values):>8}"
+            f"{values.mean():>12.4f}"
+            f"{values.std():>12.4f}"
+            f"{np.median(values):>12.4f}"
+            f"{values.min():>12.4f}"
+            f"{values.max():>12.4f}"
+        )
+
+    for measure_name, rows in sorted(by_measure.items()):
+        typer.echo(f"\n=== {measure_name} ===")
+
+        rows_sorted = sorted(rows, key=lambda x: x[2])
+
+        typer.echo("\nWorst examples:")
+        for dataset, image_id, value in rows_sorted[:top]:
+            typer.echo(
+                f"  {value:>10.4f}  {dataset}/{image_id}"
+            )
+
+        typer.echo("\nBest examples:")
+        for dataset, image_id, value in reversed(rows_sorted[-top:]):
+            typer.echo(
+                f"  {value:>10.4f}  {dataset}/{image_id}"
+            )
+
+    if run_res.skipped:
+        typer.echo("\nSkipped:")
+        for rec in run_res.skipped[:10]:
+            typer.echo(
+                f"  {rec.dataset}/{rec.image_id} | "
+                f"{rec.measure} | {rec.reason}"
+            )
