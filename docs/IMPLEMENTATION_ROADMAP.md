@@ -562,7 +562,8 @@ Hosted on GitHub Pages via the docs workflow.
 - Entry-point discovery, reference LPIPS measure as `ipasc_iqa[deep]`. ✓
 - `device.resolve()` with CUDA/MPS/CPU. ✓
 - Contributor guide for third-party measures. ✓
-- Additional deep measures: DISTS, MS-SSIM, IW-SSIM, BRISQUE. ✓
+- Additional deep measures: DISTS, MS-SSIM, IW-SSIM, BRISQUE, VIF, FSIM, GMSD, MS-GMSD, HaarPSI, CLIP-IQA. ✓
+- Classical no-reference measure: TV (Total Variation, numpy-only). ✓
 
 **v0.4 — GUI**
 - Streamlit webapp with Run / Compare / Datasets pages.
