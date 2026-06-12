@@ -21,7 +21,7 @@ Converted layout written to <root>/converted/ follows the framework data contrac
             imageX.var.alg0.npy
             imageX.var.alg1.npy
             imageX.var.alg2.npy
-            imageX.ref.pseudo_reference.npy   (shared per stem X)
+            imageX.ref.ground_truth.npy   (shared per stem X)
 
 Images are stored as float32 arrays of shape (H, W, 1), normalised to [0, 1].
 The source PNGs are already linearly normalised relative to the reference image,
@@ -41,12 +41,13 @@ import numpy as np
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
 
-ZENODO_BASE = "https://zenodo.org/records/13325196/files"
+ZENODO_BASE = "https://zenodo.org/records/19920440/files"
 NORMALISED_IMAGES_ZIP = "normalised_images.zip"
 ANNOTATIONS_ZIP = "annotations.zip"
+EPS = 1e-10
 
 ALGORITHM_NAMES = {0: "alg0", 1: "alg1", 2: "alg2"}
-REFERENCE_TYPE = "pseudo_reference"
+REFERENCE_TYPE = "ground_truth"
 
 _ALG_FILE_RE = re.compile(r"^image(\d+)_(\d+)\.png$")
 _REF_FILE_RE = re.compile(r"^image(\d+)\.png$")
@@ -183,17 +184,28 @@ class PhotIQADataset(LocalDataset):
 
         for stem in sorted(alg_map.keys(), key=lambda s: int(s)):
             ref_npy_relpath: str | None = None
+            signal_roi_relpath: str | None = None
+            noise_roi_relpath: str | None = None
 
-            # Write shared reference once per stem
-            if stem in ref_map and stem not in written_refs:
-                ref_arr = self._png_to_npy(ref_map[stem])
-                ref_npy_name = f"image{stem}.ref.{REFERENCE_TYPE}.npy"
-                ref_npy_path = images_out / ref_npy_name
-                np.save(ref_npy_path, ref_arr)
-                written_refs.add(stem)
-                ref_npy_relpath = f"images/{ref_npy_name}"
-            elif stem in written_refs:
+            # The reference and its derived ROI masks are shared by all variants of
+            # this stem. Their filenames are deterministic, so resolve the relpaths
+            # for every variant and write the files once.
+            if stem in ref_map:
                 ref_npy_relpath = f"images/image{stem}.ref.{REFERENCE_TYPE}.npy"
+                signal_roi_relpath = f"images/image{stem}.signal_roi.npy"
+                noise_roi_relpath = f"images/image{stem}.noise_roi.npy"
+
+                if stem not in written_refs:
+                    ref_arr = self._png_to_npy(ref_map[stem])
+                    np.save(converted_dir / ref_npy_relpath, ref_arr)
+                    written_refs.add(stem)
+
+                    # Background = the darkest (near-minimum) pixels of the reference;
+                    # signal = everything else. Stored as boolean masks.
+                    noise_roi = ref_arr <= (np.min(ref_arr) + EPS)
+                    signal_roi = ~noise_roi
+                    np.save(converted_dir / noise_roi_relpath, noise_roi)
+                    np.save(converted_dir / signal_roi_relpath, signal_roi)
 
             for alg_idx, alg_path in sorted(alg_map[stem].items()):
                 alg_name = ALGORITHM_NAMES.get(alg_idx, f"alg{alg_idx}")
@@ -221,13 +233,24 @@ class PhotIQADataset(LocalDataset):
                 if ann_for_image:
                     entry["metadata"]["annotations"] = ann_for_image
 
+                # Register the shared reference + ROI masks on every variant entry,
+                # using the same {path, sha256} structure the framework discovers.
                 if ref_npy_relpath:
-                    ref_abs = converted_dir / ref_npy_relpath
                     entry["references"] = {
                         REFERENCE_TYPE: {
                             "path": ref_npy_relpath,
-                            "sha256": hash_file(ref_abs),
+                            "sha256": hash_file(converted_dir / ref_npy_relpath),
                         }
+                    }
+                if signal_roi_relpath:
+                    entry["signal_roi"] = {
+                        "path": signal_roi_relpath,
+                        "sha256": hash_file(converted_dir / signal_roi_relpath),
+                    }
+                if noise_roi_relpath:
+                    entry["noise_roi"] = {
+                        "path": noise_roi_relpath,
+                        "sha256": hash_file(converted_dir / noise_roi_relpath),
                     }
 
                 manifest_entries.append(entry)

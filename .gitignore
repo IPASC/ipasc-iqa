@@ -11,6 +11,8 @@ dist/
 .eggs/
 wheels/
 
+data/
+
 # --- Virtual environments ---
 .venv/
 venv/
