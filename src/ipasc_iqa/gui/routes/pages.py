@@ -23,6 +23,12 @@ def welcome(request: Request) -> HTMLResponse:
 @router.get("/run", response_class=HTMLResponse)
 def run_page(request: Request) -> HTMLResponse:
     ws = _ws(request)
+    # If a job is already running, surface it so the page shows progress
+    # instead of letting the user accidentally queue a second run.
+    active_job = next(
+        (j.snapshot() for j in request.app.state.jobs.values() if j.status == "running"),
+        None,
+    )
     return templates.TemplateResponse(
         request,
         "run.html",
@@ -30,6 +36,7 @@ def run_page(request: Request) -> HTMLResponse:
             "active": "run",
             "datasets": service.discover_datasets(ws),
             "measures": service.list_measures(),
+            "active_job": active_job,
         },
     )
 

@@ -1,0 +1,45 @@
+{% if status == "running" %}
+<div id="run-container" class="run-progress"
+     hx-get="/api/run/{{ job_id }}/status"
+     hx-trigger="every 1.5s"
+     hx-target="this"
+     hx-swap="outerHTML">
+{% elif status == "error" %}
+<div id="run-container" class="run-progress">
+{% else %}
+<div id="run-container" class="run-progress run-progress--done">
+{% endif %}
+
+  <div class="run-progress__header">
+    {% if status == "running" %}
+      <span class="progress-spinner"></span> Computing…
+    {% elif status == "done" %}
+      <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting…
+    {% else %}
+      <span class="progress-err">✗</span> Run failed
+    {% endif %}
+  </div>
+
+  {% if done_per_measure %}
+  <ul class="progress-chips">
+    {% for measure, count in done_per_measure.items() | sort %}
+    <li class="progress-chip progress-chip--{{ 'done' if status == 'done' else 'active' }}">
+      <span class="progress-chip__name">{{ measure }}</span>
+      {% if status != "done" %}
+        <span class="progress-chip__count">{{ count }}</span>
+      {% else %}
+        <span class="progress-chip__check">✓</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif status == "running" %}
+  <p class="muted" style="margin:0.75rem 0 0">Preparing datasets…</p>
+  {% endif %}
+
+  {% if status == "error" %}
+  <p class="notice notice--warn" style="margin-top:1rem">{{ error }}</p>
+  <a href="/run" class="btn" style="margin-top:0.75rem;display:inline-block">← Back</a>
+  {% endif %}
+
+</div>

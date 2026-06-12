@@ -11,6 +11,7 @@ run outputs (``<run_id>.json``).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -194,6 +195,7 @@ def run_benchmark(
     *,
     reference_preference: list[str] | None = None,
     device: str = "auto",
+    on_result: Callable[[str], None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
 
@@ -217,6 +219,7 @@ def run_benchmark(
             reference_preference=reference_preference,
             cache=store,
             progress=False,
+            on_result=on_result,
         )
     # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"

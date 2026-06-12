@@ -3,7 +3,17 @@
 {% block content %}
 <h1 class="page-title">Run benchmark</h1>
 
-<form hx-post="/run" hx-target="#run-status" hx-swap="innerHTML" hx-indicator="#run-indicator">
+{% if active_job %}
+{# A benchmark is already running — show its live progress instead of the form. #}
+{% with job_id=active_job.job_id, status=active_job.status,
+        run_id=active_job.run_id, error=active_job.error,
+        done_per_measure=active_job.done_per_measure %}
+  {% include "fragments/job_progress.html" %}
+{% endwith %}
+
+{% else %}
+<div id="run-container">
+<form hx-post="/run" hx-target="#run-container" hx-swap="outerHTML">
   <div class="panel-grid">
 
     <section class="panel">
@@ -73,9 +83,9 @@
   </div>
 
   <div class="actions">
-    <button type="submit" class="btn btn--primary">Run ▶</button>
-    <span id="run-indicator" class="htmx-indicator spinner">Running…</span>
+    <button type="submit" class="btn btn--primary" hx-disabled-elt="this">Run ▶</button>
   </div>
-  <div id="run-status" class="status" aria-live="polite"></div>
 </form>
+</div>
+{% endif %}
 {% endblock %}

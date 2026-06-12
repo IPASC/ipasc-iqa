@@ -183,3 +183,52 @@ body {
 .ranking__medal { font-size: 1.2rem; text-align: center; }
 .ranking__group { font-weight: 600; }
 .ranking__score { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* ---------- Run progress view ---------- */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes chip-pop {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.run-progress {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow);
+  margin-top: 1.5rem;
+}
+.run-progress--done { border-color: #6ee7b7; }
+
+.run-progress__header {
+  display: flex; align-items: center; gap: 0.6rem;
+  font-size: 1.05rem; font-weight: 500; color: var(--navy);
+}
+
+.progress-spinner {
+  display: inline-block; width: 1.1em; height: 1.1em; flex-shrink: 0;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.75s linear infinite;
+}
+.progress-ok  { color: var(--ok); }
+.progress-err { color: var(--warn); }
+
+.progress-chips {
+  list-style: none; margin: 1rem 0 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 0.45rem;
+}
+.progress-chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.82rem; font-weight: 500;
+  animation: chip-pop 0.2s ease;
+}
+.progress-chip--active {
+  background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8;
+}
+.progress-chip--done {
+  background: #ecfdf5; border: 1px solid #6ee7b7; color: var(--ok);
+}
+.progress-chip__count {
+  font-size: 0.72rem; background: #dbeafe; color: #1d4ed8;
+  border-radius: 999px; padding: 0.05rem 0.45rem; min-width: 1.4em; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.progress-chip__check { font-size: 0.85rem; }

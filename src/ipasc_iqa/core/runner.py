@@ -24,6 +24,8 @@ from ipasc_iqa.core.result import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ipasc_iqa.core.cache import ResultStore
     from ipasc_iqa.core.dataset import Dataset
 
@@ -88,6 +90,7 @@ def run_evaluation(
     output_path: Path | None = None,
     cache: ResultStore | None = None,
     progress: bool = True,
+    on_result: Callable[[str], None] | None = None,
 ) -> RunResults:
     from ipasc_iqa import __version__
     from ipasc_iqa.core.cache import make_cache_key
@@ -237,6 +240,8 @@ def run_evaluation(
                 if cache is not None:
                     cache.set(cache_key, record_out)
                 results.append(record_out)
+                if on_result is not None:
+                    on_result(measure.metadata.name)
 
     pbar.close()
     finished = datetime.now(UTC)

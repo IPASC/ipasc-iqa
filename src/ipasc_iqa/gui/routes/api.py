@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from ipasc_iqa.gui import service
 from ipasc_iqa.gui.app import templates
+from ipasc_iqa.gui.jobs import launch_run
 
 router = APIRouter()
 
@@ -38,14 +39,21 @@ def run_benchmark(
             {"error": "Select at least one dataset and one measure.", "run_id": None},
             status_code=400,
         )
-    run_id = service.run_benchmark(ws, datasets, measures)
-    # HTMX-aware redirect to the results page.
-    resp = templates.TemplateResponse(
-        request,
-        "fragments/run_status.html",
-        {"error": None, "run_id": run_id},
-    )
-    resp.headers["HX-Redirect"] = "/results"
+    job_id = launch_run(ws, request.app.state.jobs, datasets, measures)
+    snap = request.app.state.jobs[job_id].snapshot()
+    return templates.TemplateResponse(request, "fragments/job_progress.html", snap)
+
+
+@router.get("/api/run/{job_id}/status", response_class=HTMLResponse)
+def run_job_status(request: Request, job_id: str) -> Response:
+    """Polling endpoint — returns a progress fragment; redirects when done."""
+    jobs = request.app.state.jobs
+    if job_id not in jobs:
+        return HTMLResponse("<p class='notice notice--warn'>Job not found.</p>")
+    snap = jobs[job_id].snapshot()
+    resp = templates.TemplateResponse(request, "fragments/job_progress.html", snap)
+    if snap["status"] == "done":
+        resp.headers["HX-Redirect"] = "/results"
     return resp
 
 
