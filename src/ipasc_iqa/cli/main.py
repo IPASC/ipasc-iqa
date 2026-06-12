@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import typer
 
+from ipasc_iqa.core.measure import MeasureType
+
 app = typer.Typer(
     name="ipasc_iqa",
     help="Benchmarking framework for photoacoustic Image Quality Assessment.",
@@ -40,7 +42,7 @@ def list_measures(
                 {
                     "name": n,
                     "version": cls.metadata.version,
-                    "full_reference": cls.metadata.full_reference,
+                    "measure_type": cls.metadata.measure_type,
                     "distribution": registry.distribution_for(n),
                 }
             )
@@ -52,7 +54,7 @@ def list_measures(
             cls = registry.get(n)
             typer.echo(
                 f"{n:<20} {cls.metadata.version:<10} "
-                f"{'yes' if cls.metadata.full_reference else 'no':<10} "
+                f"{'yes' if cls.metadata.measure_type == MeasureType.FULL_REFERENCE else 'no':<10} "
                 f"{registry.distribution_for(n)}"
             )
 

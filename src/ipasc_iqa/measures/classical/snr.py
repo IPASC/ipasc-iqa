@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata
+from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 
 
 class SNRMeasure(BaseMeasure):
     metadata = MeasureMetadata(
         name="snr",
         version="1.0.0",
-        full_reference=False,
+        measure_type=MeasureType.REDUCED_REFERENCE,
         requires_signal_roi=True,
         requires_noise_roi=True,
         accepted_reference_types=None,

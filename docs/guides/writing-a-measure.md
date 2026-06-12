@@ -1,3 +1,5 @@
+
+
 # Writing a custom IQA measure
 
 IQA measures are the one pluggable axis of `ipasc_iqa`. A measure is a Python class that subclasses
@@ -16,12 +18,13 @@ a measure from a *third-party* package is identical except you put the entry poi
 
 ```python
 from dataclasses import dataclass
+from ipasc_iqa.core.measure import MeasureType
 
 @dataclass(frozen=True)
 class MeasureMetadata:
     name: str                                # canonical, lowercase, no spaces
     version: str                             # semver of THIS measure's algorithm
-    full_reference: bool                     # does it need a reference image?
+    measure_type: MeasureType                     # does it need a reference image?
     requires_signal_roi: bool                # does it need a signal ROI mask?
     requires_noise_roi: bool                 # does it need a noise ROI mask?
     accepted_reference_types: tuple[str, ...] | None = None  # None = any
@@ -69,34 +72,34 @@ from __future__ import annotations
 
 import numpy as np
 
-from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata
+from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 
 
 class MAEMeasure(BaseMeasure):
-    metadata = MeasureMetadata(
-        name="mae",
-        version="1.0.0",
-        full_reference=True,
-        requires_signal_roi=False,
-        requires_noise_roi=False,
-        accepted_reference_types=None,   # accepts any reference type
-        higher_is_better=False,          # lower error is better
-        value_range=(0.0, float("inf")),
-        description="Mean absolute error between image and reference.",
-    )
+  metadata = MeasureMetadata(
+    name="mae",
+    version="1.0.0",
+    measure_type=MeasureType.FULL_REFERENCE,
+    requires_signal_roi=False,
+    requires_noise_roi=False,
+    accepted_reference_types=None,  # accepts any reference type
+    higher_is_better=False,  # lower error is better
+    value_range=(0.0, float("inf")),
+    description="Mean absolute error between image and reference.",
+  )
 
-    def evaluate(
-        self,
-        image: np.ndarray,
-        *,
-        reference: np.ndarray | None = None,
-        reference_type: str | None = None,
-        signal_roi: np.ndarray | None = None,
-        noise_roi: np.ndarray | None = None,
-    ) -> float:
-        if reference is None:
-            raise ValueError("MAE requires a reference image.")
-        return float(np.mean(np.abs(image.astype(np.float64) - reference.astype(np.float64))))
+  def evaluate(
+          self,
+          image: np.ndarray,
+          *,
+          reference: np.ndarray | None = None,
+          reference_type: str | None = None,
+          signal_roi: np.ndarray | None = None,
+          noise_roi: np.ndarray | None = None,
+  ) -> float:
+    if reference is None:
+      raise ValueError("MAE requires a reference image.")
+    return float(np.mean(np.abs(image.astype(np.float64) - reference.astype(np.float64))))
 ```
 
 For a real-world template, read the bundled

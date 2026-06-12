@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata
+from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 
 
 class PSNRMeasure(BaseMeasure):
     metadata = MeasureMetadata(
         name="psnr",
         version="1.0.0",
-        full_reference=True,
+        measure_type=MeasureType.FULL_REFERENCE,
         requires_signal_roi=False,
         requires_noise_roi=False,
         accepted_reference_types=None,

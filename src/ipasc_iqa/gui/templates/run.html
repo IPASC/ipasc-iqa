@@ -41,7 +41,7 @@
             <input type="checkbox" name="measures" value="{{ m.name }}">
             <span class="check__label">{{ m.name }}
               <small>v{{ m.version }}
-                {%- if m.full_reference %} · full-reference{% else %} · no-reference{% endif %}</small>
+                {{ m.measure_type }}</small>
             </span>
           </label>
         </li>

@@ -246,7 +246,7 @@ import torch  # optional dependency at use site only
 class MeasureMetadata:
     name: str                                # canonical, lowercase, hyphen-free
     version: str                             # semver of THIS measure impl
-    full_reference: bool                     # needs a reference image?
+    measure_type: MeasureType                     # needs a reference image?
     requires_signal_roi: bool
     requires_noise_roi: bool
     accepted_reference_types: tuple[str, ...] | None = None  # None = any
@@ -368,7 +368,7 @@ One run produces one JSON file. Schema is versioned and validated with `jsonsche
       "name": "psnr",
       "version": "1.0.0",
       "plugin_distribution": "ipasc_iqa",   // or third-party package name
-      "metadata": { "full_reference": true, "higher_is_better": true }
+      "metadata": { "measure_type": "FULL_REFERENCE", "higher_is_better": true }
     }
   ],
   "results": [

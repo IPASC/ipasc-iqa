@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from tqdm import tqdm
 
-from ipasc_iqa.core.measure import BaseMeasure
+from ipasc_iqa.core.measure import BaseMeasure, MeasureType
 from ipasc_iqa.core.result import (
     DatasetMeta,
     EnvironmentInfo,
@@ -58,7 +58,7 @@ def _pick_reference(
     reference_preference: list[str] | None,
 ) -> tuple[object, str | None]:
     """Return (array_or_None, reference_type_or_None)."""
-    if not measure.metadata.full_reference:
+    if not measure.metadata.measure_type == MeasureType.FULL_REFERENCE:
         return None, None
 
     accepted = measure.metadata.accepted_reference_types
@@ -116,7 +116,7 @@ def run_evaluation(
                 version=m.metadata.version,
                 plugin_distribution=dist,
                 metadata={
-                    "full_reference": m.metadata.full_reference,
+                    "measure_type": m.metadata.measure_type,
                     "higher_is_better": m.metadata.higher_is_better,
                 },
             )
@@ -160,7 +160,7 @@ def run_evaluation(
                     record.references, measure, reference_preference
                 )
 
-                if measure.metadata.full_reference and reference is None:
+                if measure.metadata.measure_type == MeasureType.FULL_REFERENCE and reference is None:
                     skipped.append(
                         SkippedRecord(
                             dataset=ds.name,

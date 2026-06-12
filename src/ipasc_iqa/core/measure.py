@@ -1,18 +1,23 @@
 """BaseMeasure, MeasureMetadata, and EvaluationInput."""
 
 from __future__ import annotations
+from enum import Enum
 
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
+class MeasureType(Enum):
+    FULL_REFERENCE = 1
+    REDUCED_REFERENCE = 2
+    NO_REFERENCE = 3
 
 @dataclass(frozen=True)
 class MeasureMetadata:
     name: str
     version: str
-    full_reference: bool
+    measure_type: MeasureType
     requires_signal_roi: bool
     requires_noise_roi: bool
     accepted_reference_types: tuple[str, ...] | None = None  # None = any

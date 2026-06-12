@@ -21,6 +21,7 @@ from ipasc_iqa.analysis.manifest_query import (
     annotation_values_from_manifest,
 )
 from ipasc_iqa.core.cache import ResultStore
+from ipasc_iqa.core.measure import MeasureType
 from ipasc_iqa.core.registry import registry as measure_registry
 from ipasc_iqa.core.result import EnvironmentInfo, RunConfig, RunResults
 from ipasc_iqa.core.runner import run_evaluation
@@ -74,7 +75,7 @@ def list_measures() -> list[dict]:
             {
                 "name": name,
                 "version": m.version,
-                "full_reference": m.full_reference,
+                "measure_type": m.measure_type.name,
                 "requires_signal_roi": m.requires_signal_roi,
                 "requires_noise_roi": m.requires_noise_roi,
                 "higher_is_better": m.higher_is_better,
@@ -111,7 +112,7 @@ def _capabilities_from_manifest(manifest: dict) -> dict:
 
 def _measure_usable(measure_meta: dict, caps: dict) -> bool:
     """True if the dataset can satisfy a measure's requirements."""
-    if measure_meta["full_reference"] and not caps.get("has_references"):
+    if measure_meta["measure_type"] == MeasureType.FULL_REFERENCE and not caps.get("has_references"):
         return False
     if measure_meta["requires_signal_roi"] and not caps.get("has_signal_roi"):
         return False
