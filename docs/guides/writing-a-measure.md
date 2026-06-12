@@ -217,6 +217,49 @@ with torch.no_grad():
     score = model(img_t, ref_t, normalize=True)
 ```
 
+#### Functional measures need no lazy model — but still defer imports
+
+Some `piq` measures (MS-SSIM, IW-SSIM, BRISQUE, …) are pure functions with no
+pretrained weights to download.  You still **must** defer the `piq` / `torch`
+imports to first use so that the base install (which omits `torch`) can import
+your class without error, but you do **not** need the `_model = None` sentinel or
+a `_get_model()` method.  Keep the import inside `evaluate()`:
+
+```python
+class MSSSIMMeasure(BaseMeasure):
+    # No __init__ override needed unless you expose hyperparameters.
+    # If you do, pass them to super() for the cache key:
+    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5) -> None:
+        super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
+        self._kernel_size = kernel_size
+
+    def evaluate(self, image, *, reference=None, **_):
+        try:
+            from piq import multi_scale_ssim
+        except ImportError as exc:
+            raise ImportError("Requires ipasc_iqa[deep]") from exc
+        import torch
+        # ... build tensors, call function, return float
+```
+
+#### Adaptive spatial parameters for multi-scale measures
+
+MS-SSIM processes the image at multiple resolutions, halving spatial dimensions
+at each scale.  The Gaussian kernel (`kernel_size × kernel_size`) must still fit
+at the coarsest scale.  For small images (e.g. test fixtures at 64×64) the
+default 5-scale pyramid may not fit — detect this and clip the number of scales:
+
+```python
+min_dim = min(image.shape[0], image.shape[1])
+# At scale s (1-indexed from finest) the dim is min_dim / 2^(s-1)
+n_scales = min(5, max(1, int(np.floor(np.log2(min_dim / kernel_size))) + 1))
+weights = default_weights[:n_scales]
+weights = weights / weights.sum()   # renormalise
+```
+
+Without this guard, evaluating on small test images raises a `RuntimeError`
+inside piq.
+
 ---
 
 ## 3. Register the entry point

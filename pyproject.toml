@@ -42,8 +42,10 @@ snr  = "ipasc_iqa.measures.classical.snr:SNRMeasure"
 mse  = "ipasc_iqa.measures.classical.mse:MSEMeasure"
 mae   = "ipasc_iqa.measures.classical.mae:MAEMeasure"
 brisque = "ipasc_iqa.measures.classical.brisque:BRISQUEMeasure"
-lpips = "ipasc_iqa.measures.deep.lpips:LPIPSMeasure"
-dists = "ipasc_iqa.measures.deep.dists:DISTSMeasure"
+lpips   = "ipasc_iqa.measures.deep.lpips:LPIPSMeasure"
+dists   = "ipasc_iqa.measures.deep.dists:DISTSMeasure"
+msssim  = "ipasc_iqa.measures.deep.msssim:MSSSIMMeasure"
+iwssim  = "ipasc_iqa.measures.deep.iwssim:IWSSIMMeasure"
 
 [tool.hatch.version]
 source = "vcs"

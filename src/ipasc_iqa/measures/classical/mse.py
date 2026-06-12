@@ -1,4 +1,4 @@
-"""Contrast-to-Noise Ratio."""
+"""Mean Squared Error."""
 
 from __future__ import annotations
 
