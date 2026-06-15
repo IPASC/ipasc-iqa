@@ -99,6 +99,9 @@ body {
 .panel__hint { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.85rem; }
 
 .checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+/* Cap long lists at ~half the viewport and scroll internally, so the panels
+   stay compact and the Run button below the grid is always visible. */
+.checklist--scroll { max-height: 50vh; overflow-y: auto; padding-right: 0.35rem; }
 .check { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.5rem 0.6rem;
          border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
 .check:hover { border-color: var(--accent); }
@@ -107,6 +110,10 @@ body {
 .check__label small { display: block; color: var(--muted); font-weight: 400; font-size: 0.78rem; }
 
 .actions { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0 0.5rem; }
+/* Pin the Run bar to the bottom of the viewport so it stays reachable even
+   when the (capped, internally-scrolling) measure list makes the page tall. */
+.actions--sticky { position: sticky; bottom: 0; padding: 0.75rem 0;
+                   background: linear-gradient(to top, var(--bg) 70%, transparent); }
 .btn { border: none; border-radius: 8px; padding: 0.6rem 1.4rem; font-size: 1rem;
        font-weight: 600; cursor: pointer; }
 .btn--primary { background: var(--navy); color: #fff; }

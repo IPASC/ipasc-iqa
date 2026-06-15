@@ -21,7 +21,7 @@
       <p class="panel__hint">Select one or more (multi-select).</p>
       {% if datasets %}
         <button type="button" id="toggle-btn-ds" style="margin-bottom: 1rem;" class="btn">Select All</button>
-        <ul class="checklist">
+        <ul class="checklist checklist--scroll">
           {% for ds in datasets %}
           <li>
             <label class="check">
@@ -46,7 +46,7 @@
       <h2 class="panel__title">Measures</h2>
       <p class="panel__hint">Select one or more (multi-select).</p>
       <button type="button" id="toggle-btn-measures" style="margin-bottom: 1rem;" class="btn">Select All</button>
-      <ul class="checklist">
+      <ul class="checklist checklist--scroll">
         {% for m in measures %}
         <li>
           <label class="check">
@@ -82,7 +82,7 @@
 
   </div>
 
-  <div class="actions">
+  <div class="actions actions--sticky">
     <button type="submit" class="btn btn--primary" hx-disabled-elt="this">Run ▶</button>
   </div>
 </form>
