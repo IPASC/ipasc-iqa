@@ -24,14 +24,28 @@
       </select>
     </label>
 
+    <div id="task-filter">
+      {% if initial_tasks | length > 1 %}
+      <label class="field">
+        <span class="field__label">Sub-task</span>
+        <select name="task" class="select">
+          {% for t in initial_tasks %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+    </div>
+
     <fieldset class="field field--measures">
       <legend class="field__label">Measures</legend>
       <div id="measure-chips" class="measure-chips">
         {% include "fragments/measure_chips.html" %}
       </div>
     </fieldset>
+
     <p class="panel__hint">
-      Greyed-out measures aren't usable with this dataset. All quality tasks are shown below.
+      Greyed-out measures aren't usable with this dataset.
     </p>
   </form>
 

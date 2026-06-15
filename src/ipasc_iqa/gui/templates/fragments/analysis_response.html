@@ -1,7 +1,22 @@
-{# Response for /api/analysis. The analysis tables become the main swap target
-   (#correlation-result); the chips are swapped out-of-band so the dataset change
-   updates which measures are usable. #}
+{# Response for /api/analysis. The analysis tables are the main swap target
+   (#correlation-result). Two OOB swaps keep the sidebar controls in sync:
+   - #measure-chips  — which measures are usable for this dataset
+   - #task-filter    — sub-task dropdown (shown only when dataset has >1 task) #}
 <div id="measure-chips" class="measure-chips" hx-swap-oob="true">
   {% include "fragments/measure_chips.html" %}
 </div>
+
+<div id="task-filter" hx-swap-oob="true">
+  {% if result.all_tasks | length > 1 %}
+  <label class="field">
+    <span class="field__label">Sub-task</span>
+    <select name="task" class="select">
+      {% for t in result.all_tasks %}
+      <option value="{{ t }}" {{ 'selected' if t == result.active_task }}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
+</div>
+
 {% include "fragments/analysis_tables.html" %}

@@ -11,7 +11,7 @@
       <h2 class="standings-card__title">{{ entry.dataset }}</h2>
       <span class="badge">task: {{ entry.task }}</span>
       <ol class="ranking">
-        {% for row in entry.rows %}
+        {% for row in entry.rows[:5] %}
         <li class="ranking__row ranking__row--{{ row.rank }}">
           <span class="ranking__medal">{{ medals.get(row.rank, '#' ~ row.rank) }}</span>
           <span class="ranking__group mono">{{ row.measure }}</span>

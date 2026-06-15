@@ -15,7 +15,9 @@
   {% for task in result.tasks %}
   {% set rows = task.rows | selectattr('n', 'gt', 0) | list %}
   <section class="task-block">
+    {% if result.all_tasks | length > 1 %}
     <h3 class="task-block__title">{{ task.task }}</h3>
+    {% endif %}
     {% if not rows %}
       <p class="muted">No measures to correlate.</p>
     {% else %}

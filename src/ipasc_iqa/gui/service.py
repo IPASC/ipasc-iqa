@@ -281,20 +281,27 @@ def analysis_for_dataset(
     *,
     measures: list[str] | None = None,
     run_id: str | None = None,
+    task: str | None = None,
 ) -> dict:
-    """Correlate measures against expert MOS, one table per annotation task.
+    """Correlate measures against expert MOS for a single annotation task.
 
-    Tasks are not selectable — every task the dataset provides is shown, since
-    different datasets expose different sub-tasks.
+    When ``task`` is provided and valid it is used as the active task;
+    otherwise the first available task is shown.  ``all_tasks`` and
+    ``active_task`` are always present in the return value so that the
+    template can render the sub-task dropdown (or omit it for single-task
+    datasets) regardless of error state.
     """
+    _empty: dict = {"all_tasks": [], "active_task": None}
+
     ds = get_dataset(workspace, dataset_name)
     if ds is None:
-        return {"dataset": dataset_name, "tasks": [], "error": "dataset not found"}
+        return {"dataset": dataset_name, "tasks": [], "error": "dataset not found", **_empty}
     if not ds["prepared"]:
         return {
             "dataset": dataset_name,
             "tasks": [],
             "error": "dataset not downloaded yet — run a benchmark on it first",
+            **_empty,
         }
 
     run = (
@@ -307,6 +314,7 @@ def analysis_for_dataset(
             "dataset": dataset_name,
             "tasks": [],
             "error": "no benchmark run found for this dataset — run a benchmark first",
+            **_empty,
         }
 
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
@@ -316,7 +324,11 @@ def analysis_for_dataset(
             "dataset": dataset_name,
             "tasks": [],
             "error": "dataset has no expert annotations",
+            **_empty,
         }
+
+    # Resolve the active task: honour the caller's choice when valid, else first.
+    active_task = task if (task and task in task_names) else task_names[0]
 
     # Only correlate measures the dataset can actually support, intersected with
     # the user's selection — so unusable measures never produce empty rows.
@@ -324,15 +336,19 @@ def analysis_for_dataset(
     usable = [m["name"] for m in list_measures() if _measure_usable(m, caps)]
     chosen = [m for m in (measures or usable) if m in usable]
 
-    tasks = []
-    for task in task_names:
-        values = annotation_values_from_manifest(manifest, task, "zscore_mos")
-        rows = correlate_measures_with_annotations(
-            run, values, measures=chosen, dataset=dataset_name
-        )
-        tasks.append({"task": task, "rows": [r.as_dict() for r in rows]})
+    values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+    rows = correlate_measures_with_annotations(
+        run, values, measures=chosen, dataset=dataset_name
+    )
 
-    return {"dataset": dataset_name, "run_id": run.run_id, "tasks": tasks, "error": None}
+    return {
+        "dataset": dataset_name,
+        "run_id": run.run_id,
+        "tasks": [{"task": active_task, "rows": [r.as_dict() for r in rows]}],
+        "all_tasks": task_names,
+        "active_task": active_task,
+        "error": None,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -67,9 +67,10 @@ def analysis_fragment(
     request: Request,
     dataset: str,
     measures: list[str] | None = Query(default=None),
+    task: str | None = Query(default=None),
 ) -> HTMLResponse:
     ws = _ws(request)
-    result = service.analysis_for_dataset(ws, dataset, measures=measures)
+    result = service.analysis_for_dataset(ws, dataset, measures=measures, task=task)
     # Re-render the measure checkboxes (disabled/checked for this dataset) and
     # swap them out-of-band, so changing the dataset updates which are usable.
     options = service.measure_options(ws, dataset, selected=measures)
