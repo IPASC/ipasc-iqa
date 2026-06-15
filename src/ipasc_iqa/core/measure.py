@@ -24,6 +24,7 @@ class MeasureMetadata:
     higher_is_better: bool = True
     value_range: tuple[float, float] | None = None
     citation: str | None = None
+    bibtex: str | None = None  # raw BibTeX entry, surfaced by get_bibtex_citation()
     description: str = ""
 
 
@@ -88,3 +89,16 @@ class BaseMeasure:
         self, items: list[EvaluationInput]
     ) -> list[float | dict[str, float]]:
         return [self.evaluate(**it.as_kwargs()) for it in items]
+
+    def get_bibtex_citation(self) -> str:
+        """Return a raw BibTeX entry for the measure's reference publication.
+
+        Reads ``metadata.bibtex``. Measures without a canonical reference (e.g.
+        PSNR, MSE) leave it unset, in which case this raises ``NotImplementedError``.
+        """
+        bibtex = self.metadata.bibtex
+        if bibtex is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not provide a BibTeX citation."
+            )
+        return bibtex

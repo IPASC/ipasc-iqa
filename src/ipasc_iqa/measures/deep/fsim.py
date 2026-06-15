@@ -48,6 +48,17 @@ class FSIMMeasure(BaseMeasure):
             "Zhang et al., 'FSIM: A Feature Similarity Index for Image Quality Assessment', "
             "IEEE Trans. Image Process. 20(8), 2011."
         ),
+        bibtex=(
+            "@article{zhang2011fsim,\n"
+            "  author  = {Zhang, Lin and Zhang, Lei and Mou, Xuanqin and Zhang, David},\n"
+            "  title   = {{FSIM}: A Feature Similarity Index for Image Quality Assessment},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {20},\n"
+            "  number  = {8},\n"
+            "  pages   = {2378--2386},\n"
+            "  year    = {2011}\n"
+            "}"
+        ),
         description=(
             "Feature Similarity Index (FSIM). "
             "Computed via piq.fsim with chromatic=False (luminance only). "

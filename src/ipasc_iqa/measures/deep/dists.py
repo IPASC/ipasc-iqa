@@ -30,6 +30,17 @@ class DISTSMeasure(BaseMeasure):
             "Ding et al., 'Image Quality Assessment: Unifying Structure and Texture Similarity', "
             "IEEE TPAMI 2022. https://github.com/dingkeyan93/DISTS"
         ),
+        bibtex=(
+            "@article{ding2022dists,\n"
+            "  author  = {Ding, Keyan and Ma, Kede and Wang, Shiqi and Simoncelli, Eero P.},\n"
+            "  title   = {Image Quality Assessment: Unifying Structure and Texture Similarity},\n"
+            "  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},\n"
+            "  volume  = {44},\n"
+            "  number  = {5},\n"
+            "  pages   = {2567--2581},\n"
+            "  year    = {2022}\n"
+            "}"
+        ),
         description=(
             "Deep Image Structure and Texture Similarity. "
             "Invariant to texture resampling; lower distance = more similar. "

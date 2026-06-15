@@ -47,6 +47,17 @@ class VIFMeasure(BaseMeasure):
             "Sheikh & Bovik, 'Image Information and Visual Quality', "
             "IEEE Trans. Image Process. 15(2), 2006."
         ),
+        bibtex=(
+            "@article{sheikh2006vif,\n"
+            "  author  = {Sheikh, Hamid R. and Bovik, Alan C.},\n"
+            "  title   = {Image Information and Visual Quality},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {15},\n"
+            "  number  = {2},\n"
+            "  pages   = {430--444},\n"
+            "  year    = {2006}\n"
+            "}"
+        ),
         description=(
             "Visual Information Fidelity in the pixel domain (VIF-P). "
             "Computed via piq.vif_p. "

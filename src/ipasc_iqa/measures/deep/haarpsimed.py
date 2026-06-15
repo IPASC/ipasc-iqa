@@ -30,8 +30,16 @@ class HaarPSIMedMeasure(BaseMeasure):
         higher_is_better=True,
         value_range=(0.0, 1.0),
         citation=(
-            "Reisenhofer et al., 'A Haar Wavelet-Based Perceptual Similarity Index "
-            "for Image Quality Assessment', Signal Process. Image Commun. 61, 2018."
+            "Karner et al., 'Parameter Choices in HaarPSI for IQA with Medical Images', "
+            "IEEE 22nd International Symposium on Biomedical Imaging (ISBI), 2025."
+        ),
+        bibtex=(
+            "@inproceedings{karner2025haarpsimed,\n"
+            "  author    = {Karner, Clemens and others},\n"
+            "  title     = {Parameter Choices in {HaarPSI} for {IQA} with Medical Images},\n"
+            "  booktitle = {IEEE 22nd International Symposium on Biomedical Imaging (ISBI)},\n"
+            "  year      = {2025}\n"
+            "}"
         ),
         description=(
             "Haar Wavelet-Based Perceptual Similarity Index (HaarPSI). "

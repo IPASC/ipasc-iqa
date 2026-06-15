@@ -109,6 +109,40 @@ body {
 .check__label { font-weight: 500; }
 .check__label small { display: block; color: var(--muted); font-weight: 400; font-size: 0.78rem; }
 
+/* Each row holds the selectable label plus an optional citation icon, pinned
+   to the top-right so it never interferes with the checkbox/label hit area. */
+.check-row { position: relative; }
+.check-row .check { padding-right: 2.4rem; }
+.cite-btn {
+  position: absolute; top: 0.5rem; right: 0.5rem;
+  width: 1.7rem; height: 1.7rem; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--muted); cursor: pointer;
+  font-size: 0.8rem; transition: color 0.12s ease, border-color 0.12s ease;
+}
+.cite-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Citation popup */
+.cite-dialog { border: none; border-radius: var(--radius); padding: 0;
+               box-shadow: var(--shadow); max-width: min(560px, 92vw); }
+.cite-dialog::backdrop { background: rgba(0, 31, 76, 0.35); }
+.cite-dialog__card { padding: 1.25rem; }
+.cite-dialog__head { display: flex; align-items: center; justify-content: space-between;
+                     gap: 1rem; margin-bottom: 0.75rem; }
+.cite-dialog__title { color: var(--navy); font-weight: 600; }
+.cite-dialog__copy { padding: 0.35rem 0.9rem; font-size: 0.85rem;
+                     background: var(--bg); color: var(--navy); }
+.cite-dialog__copy:hover { background: var(--border); }
+.cite-dialog__text {
+  margin: 0; padding: 0.9rem; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+  user-select: text; max-height: 50vh; overflow: auto;
+}
+.cite-dialog__foot { margin-top: 0.9rem; text-align: right; }
+
 .actions { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0 0.5rem; }
 /* Pin the Run bar to the bottom of the viewport so it stays reachable even
    when the (capped, internally-scrolling) measure list makes the page tall. */

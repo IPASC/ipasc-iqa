@@ -17,6 +17,21 @@ class PSNRMeasure(BaseMeasure):
         accepted_reference_types=None,
         higher_is_better=True,
         value_range=(0.0, float("inf")),
+        citation=(
+            "Huynh-Thu & Ghanbari, 'Scope of validity of PSNR in image/video quality "
+            "assessment', Electronics Letters 44(13), 2008."
+        ),
+        bibtex=(
+            "@article{huynhthu2008psnr,\n"
+            "  author  = {Huynh-Thu, Quan and Ghanbari, Mohammed},\n"
+            "  title   = {Scope of Validity of {PSNR} in Image/Video Quality Assessment},\n"
+            "  journal = {Electronics Letters},\n"
+            "  volume  = {44},\n"
+            "  number  = {13},\n"
+            "  pages   = {800--801},\n"
+            "  year    = {2008}\n"
+            "}"
+        ),
         description="Peak Signal-to-Noise Ratio (dB). data_range inferred from reference.",
     )
 

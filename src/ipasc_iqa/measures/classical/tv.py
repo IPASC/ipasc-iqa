@@ -43,7 +43,21 @@ class TVMeasure(BaseMeasure):
         accepted_reference_types=None,
         higher_is_better=False,
         value_range=(0.0, float("inf")),
-        citation=None,
+        citation=(
+            "Rudin, Osher & Fatemi, 'Nonlinear total variation based noise removal "
+            "algorithms', Physica D 60(1–4), 1992."
+        ),
+        bibtex=(
+            "@article{rudin1992tv,\n"
+            "  author  = {Rudin, Leonid I. and Osher, Stanley and Fatemi, Emad},\n"
+            "  title   = {Nonlinear Total Variation Based Noise Removal Algorithms},\n"
+            "  journal = {Physica D: Nonlinear Phenomena},\n"
+            "  volume  = {60},\n"
+            "  number  = {1--4},\n"
+            "  pages   = {259--268},\n"
+            "  year    = {1992}\n"
+            "}"
+        ),
         description=(
             "Total Variation (anisotropic L1), normalised by H×W. "
             "Measures image smoothness without a reference. "

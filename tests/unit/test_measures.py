@@ -12,8 +12,8 @@ from ipasc_iqa.measures.classical.ssim import SSIMMeasure
 from ipasc_iqa.measures.classical.tv import TVMeasure
 
 rng = np.random.default_rng(0)
-IMAGE = rng.random((64, 64, 1), dtype=np.float32).astype(np.float32)
-REFERENCE = rng.random((64, 64, 1), dtype=np.float32).astype(np.float32)
+IMAGE = rng.random((256, 256, 1), dtype=np.float32).astype(np.float32)
+REFERENCE = rng.random((256, 256, 1), dtype=np.float32).astype(np.float32)
 SIGNAL_ROI = (IMAGE[:, :, 0] > 0.7)[:, :, np.newaxis].astype(bool)
 NOISE_ROI = (IMAGE[:, :, 0] < 0.2)[:, :, np.newaxis].astype(bool)
 
@@ -186,8 +186,8 @@ from ipasc_iqa.measures.deep.msssim import MSSSIMMeasure  # noqa: E402
 
 # Use a larger image so the adaptive scale logic gets to exercise ≥2 scales.
 _rng2 = np.random.default_rng(7)
-_IMG_128 = _rng2.random((128, 128, 1)).astype(np.float32)
-_REF_128 = _rng2.random((128, 128, 1)).astype(np.float32)
+_IMG_128 = _rng2.random((256, 256, 1)).astype(np.float32)
+_REF_128 = _rng2.random((256, 256, 1)).astype(np.float32)
 
 
 class TestMSSSIM:
@@ -253,8 +253,8 @@ class TestIWSSIM:
             IWSSIMMeasure().evaluate(_IMG_128)
 
     def test_three_channel_input(self) -> None:
-        img_3c = _rng2.random((128, 128, 3)).astype(np.float32)
-        ref_3c = _rng2.random((128, 128, 3)).astype(np.float32)
+        img_3c = _rng2.random((256, 256, 3)).astype(np.float32)
+        ref_3c = _rng2.random((256, 256, 3)).astype(np.float32)
         v = IWSSIMMeasure().evaluate(img_3c, reference=ref_3c)
         assert isinstance(v, float)
         assert 0.0 <= v <= 1.0

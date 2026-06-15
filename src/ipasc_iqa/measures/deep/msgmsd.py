@@ -52,8 +52,19 @@ class MSGMSDMeasure(BaseMeasure):
         higher_is_better=False,
         value_range=(0.0, float("inf")),
         citation=(
-            "Reisenhofer et al., 'A Haar Wavelet-Based Perceptual Similarity Index "
-            "for Image Quality Assessment', Signal Process. Image Commun. 61, 2018."
+            "Zhang et al., 'Gradient Magnitude Similarity Deviation on Multiple Scales "
+            "for Color Image Quality Assessment', IEEE ICASSP 2017."
+        ),
+        bibtex=(
+            "@inproceedings{zhang2017msgmsd,\n"
+            "  author    = {Zhang, Bo and Sander, Pedro V. and Bermak, Amine},\n"
+            "  title     = {Gradient Magnitude Similarity Deviation on Multiple Scales\n"
+            "               for Color Image Quality Assessment},\n"
+            "  booktitle = {IEEE International Conference on Acoustics, Speech and\n"
+            "               Signal Processing (ICASSP)},\n"
+            "  pages     = {1253--1257},\n"
+            "  year      = {2017}\n"
+            "}"
         ),
         description=(
             "Multi-Scale Gradient Magnitude Similarity Deviation (MS-GMSD). "

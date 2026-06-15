@@ -81,6 +81,7 @@ def list_measures() -> list[dict]:
                 "requires_noise_roi": m.requires_noise_roi,
                 "higher_is_better": m.higher_is_better,
                 "description": m.description,
+                "bibtex": m.bibtex,
                 "distribution": measure_registry.distribution_for(name),
             }
         )

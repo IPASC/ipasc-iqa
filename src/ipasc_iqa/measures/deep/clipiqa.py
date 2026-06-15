@@ -55,6 +55,14 @@ class CLIPIQAMeasure(BaseMeasure):
             "Radford et al., 'Learning Transferable Visual Models from Natural Language "
             "Supervision', ICML 2021."
         ),
+        bibtex=(
+            "@inproceedings{wang2023clipiqa,\n"
+            "  author    = {Wang, Jianyi and Chan, Kelvin C. K. and Loy, Chen Change},\n"
+            "  title     = {Exploring {CLIP} for Assessing the Look and Feel of Images},\n"
+            "  booktitle = {AAAI Conference on Artificial Intelligence},\n"
+            "  year      = {2023}\n"
+            "}"
+        ),
         description=(
             "No-reference image quality via CLIP (CLIP-IQA). "
             "Computed via piq.CLIPIQA — piq bundles its own CLIP weights. "

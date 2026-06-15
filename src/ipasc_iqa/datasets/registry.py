@@ -86,6 +86,7 @@ class DatasetRegistry:
                     "name": name,
                     "version": cls.DATASET_VERSION,
                     "description": cls.DATASET_DESCRIPTION,
+                    "bibtex": getattr(cls, "DATASET_BIBTEX", None),
                     "distribution": self._distributions.get(name, "unknown"),
                 }
             )

@@ -73,6 +73,16 @@ class PhotIQADataset(LocalDataset):
         "PhotIQA: 1134 reconstructed photoacoustic images from 3 algorithms, paired "
         "with 378 references and expert quality ratings (Breger et al., Zenodo 13325196)."
     )
+    DATASET_BIBTEX = (
+        "@dataset{breger2024photiqa,\n"
+        "  author    = {Breger, Anna and others},\n"
+        "  title     = {{PhotIQA}: A Photoacoustic Image Data Set with Image Quality Ratings},\n"
+        "  year      = {2024},\n"
+        "  publisher = {Zenodo},\n"
+        "  doi       = {10.5281/zenodo.13325196},\n"
+        "  url       = {https://zenodo.org/records/13325196}\n"
+        "}"
+    )
 
     @classmethod
     def prepared_manifest_path(cls, root: Path | str) -> Path:

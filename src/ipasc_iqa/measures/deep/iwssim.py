@@ -49,6 +49,17 @@ class IWSSIMMeasure(BaseMeasure):
             "Wang & Li, 'Information Content Weighting for Perceptual Image Quality Assessment', "
             "IEEE Trans. Image Process. 20(5), 2011."
         ),
+        bibtex=(
+            "@article{wang2011iwssim,\n"
+            "  author  = {Wang, Zhou and Li, Qiang},\n"
+            "  title   = {Information Content Weighting for Perceptual Image Quality Assessment},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {20},\n"
+            "  number  = {5},\n"
+            "  pages   = {1185--1198},\n"
+            "  year    = {2011}\n"
+            "}"
+        ),
         description=(
             "Information-Weighted Structural Similarity (IW-SSIM). "
             "Computed via piq.information_weighted_ssim — no reference implementation "
