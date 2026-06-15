@@ -1,0 +1,15 @@
+{# Shared citation popup. Wired up by /static/js/citations.js (delegated, so it
+   works for cite-btns added via HTMX swaps). The <pre> content is selectable
+   for manual copy; the Copy button uses the Clipboard API as a convenience. #}
+<dialog id="cite-dialog" class="cite-dialog">
+  <div class="cite-dialog__card">
+    <div class="cite-dialog__head">
+      <span class="cite-dialog__title"><i class="fa-solid fa-quote-right"></i> BibTeX citation</span>
+      <button type="button" id="cite-copy" class="btn cite-dialog__copy">Copy</button>
+    </div>
+    <pre id="cite-text" class="cite-dialog__text"></pre>
+    <form method="dialog" class="cite-dialog__foot">
+      <button class="btn">Close</button>
+    </form>
+  </div>
+</dialog>

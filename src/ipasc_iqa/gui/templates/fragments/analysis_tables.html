@@ -23,13 +23,31 @@
     {% else %}
     <table class="data-table">
       <thead>
-        <tr><th>Measure</th><th class="num">n</th><th class="num">SRCC</th><th class="num">KRCC</th></tr>
+        <tr><th>Measure</th><th class="num">n</th><th class="num">Mean</th><th class="num">Std</th>
+            <th class="num">SRCC</th><th class="num">KRCC</th></tr>
       </thead>
       <tbody>
         {% for row in rows %}
-        <tr>
-          <td class="mono">{{ row.measure }}</td>
+        <tr class="measure-row"
+            hx-get="/api/scatter?dataset={{ result.dataset | urlencode }}&task={{ task.task | urlencode }}&measure={{ row.measure | urlencode }}"
+            hx-target="#scatter-result" hx-swap="innerHTML"
+            title="Click to plot {{ row.measure }} against the human scores">
+          <td class="mono">
+            <span class="measure-cell">
+              <span class="measure-cell__icon">
+                {% if row.bibtex %}
+                <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ row.bibtex }}"
+                        title="Show BibTeX citation" aria-label="Citation for {{ row.measure }}">
+                  <i class="fa-solid fa-quote-right"></i>
+                </button>
+                {% endif %}
+              </span>
+              <span>{{ row.measure }}</span>
+            </span>
+          </td>
           <td class="num">{{ row.n }}</td>
+          <td class="num mono">{{ '%.3g'|format(row.mean) if row.mean is not none else '—' }}</td>
+          <td class="num mono">{{ '%.3g'|format(row.std) if row.std is not none else '—' }}</td>
           {% for key in ['srcc', 'krcc'] %}
             {% set val = row[key] %}
             {% if val is none %}
@@ -54,5 +72,9 @@
     <span class="legend__swatch" style="background:hsl(0,70%,90%)"></span> weak
     →
     <span class="legend__swatch" style="background:hsl(120,70%,90%)"></span> strong.
+    Click a measure to plot it against the human scores.
   </p>
+
+  {# Scatter plot target — cleared whenever the table re-renders (dataset/task change). #}
+  <div id="scatter-result" class="scatter-result"></div>
 {% endif %}

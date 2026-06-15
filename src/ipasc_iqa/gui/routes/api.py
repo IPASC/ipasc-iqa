@@ -62,6 +62,19 @@ def run_job_status(request: Request, job_id: str) -> Response:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/api/scatter", response_class=HTMLResponse)
+def scatter_fragment(
+    request: Request,
+    dataset: str,
+    measure: str,
+    task: str | None = Query(default=None),
+) -> HTMLResponse:
+    """Scatter plot (SVG) of one measure's per-image values vs the human scores."""
+    ws = _ws(request)
+    model = service.scatter_for_measure(ws, dataset, measure, task=task)
+    return templates.TemplateResponse(request, "fragments/scatter.html", {"s": model})
+
+
 @router.get("/api/analysis", response_class=HTMLResponse)
 def analysis_fragment(
     request: Request,

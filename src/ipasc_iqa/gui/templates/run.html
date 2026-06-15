@@ -90,40 +90,7 @@
           checkboxes.forEach(cb => cb.checked = !allChecked);
           btn2.textContent = allChecked ? "Select All" : "Deselect All";
       });
-
-      // Citation popup: clicking a cite-btn shows that entry's BibTeX in a
-      // shared dialog. Delegated listener so it works for every row. Deferred
-      // until DOMContentLoaded because the <dialog> is parsed after this script.
-      const initCitations = () => {
-        const dlg = document.getElementById("cite-dialog");
-        if (!dlg) return;
-        const pre = document.getElementById("cite-text");
-        const copyBtn = document.getElementById("cite-copy");
-        document.addEventListener("click", (e) => {
-          const btn = e.target.closest(".cite-btn");
-          if (!btn) return;
-          e.preventDefault();          // don't toggle the checkbox in the label
-          e.stopPropagation();
-          pre.textContent = btn.dataset.bibtex;
-          copyBtn.textContent = "Copy";
-          dlg.showModal();
-        });
-        copyBtn.addEventListener("click", async () => {
-          try {
-            await navigator.clipboard.writeText(pre.textContent);
-            copyBtn.textContent = "Copied ✓";
-          } catch {
-            copyBtn.textContent = "Select & copy manually";
-          }
-        });
-        // Click outside the inner card closes the dialog.
-        dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
-      };
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initCitations);
-      } else {
-        initCitations();
-      }
+      // Citation popups are wired globally by /static/js/citations.js.
     </script>
 
   </div>
@@ -133,20 +100,7 @@
   </div>
 </form>
 
-{# Shared citation popup. The <pre> content is selectable for manual copy; the
-   Copy button uses the Clipboard API as a convenience. #}
-<dialog id="cite-dialog" class="cite-dialog">
-  <div class="cite-dialog__card">
-    <div class="cite-dialog__head">
-      <span class="cite-dialog__title"><i class="fa-solid fa-quote-right"></i> BibTeX citation</span>
-      <button type="button" id="cite-copy" class="btn cite-dialog__copy">Copy</button>
-    </div>
-    <pre id="cite-text" class="cite-dialog__text"></pre>
-    <form method="dialog" class="cite-dialog__foot">
-      <button class="btn">Close</button>
-    </form>
-  </div>
-</dialog>
+{% include "fragments/cite_dialog.html" %}
 </div>
 {% endif %}
 {% endblock %}

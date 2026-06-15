@@ -11,16 +11,21 @@ run outputs (``<run_id>.json``).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ipasc_iqa.analysis.aggregate import measure_stats
 from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
 from ipasc_iqa.analysis.manifest_query import (
     annotation_tasks_in_manifest,
     annotation_values_from_manifest,
+    groups_from_manifest,
 )
+from ipasc_iqa.analysis.scatter import build_scatter
+from ipasc_iqa.gui.charts import scatter_chart
 from ipasc_iqa.core.cache import ResultStore
 from ipasc_iqa.core.measure import MeasureType
 from ipasc_iqa.core.registry import registry as measure_registry
@@ -222,10 +227,49 @@ def run_benchmark(
             progress=False,
             on_result=on_result,
         )
+        # Pre-compute per-dataset mean/std over the merged per-image results and
+        # persist them, so reporting doesn't have to recompute from scratch.
+        for name in dataset_names:
+            _write_dataset_stats(workspace, name, store.records_for_dataset(name))
+
     # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
     return run.run_id
+
+
+def _dataset_stats_path(workspace: Workspace, dataset_name: str) -> Path:
+    return workspace.results_dir / f"{dataset_name}.stats.json"
+
+
+def _write_dataset_stats(workspace: Workspace, dataset_name: str, records: list) -> None:
+    """Persist ``{measure: {n, mean, std}}`` for one dataset to a sidecar JSON."""
+    stats = measure_stats(records)
+    payload = {
+        "dataset": dataset_name,
+        "computed": datetime.now(UTC).isoformat(),
+        "measures": stats,
+    }
+    path = _dataset_stats_path(workspace, dataset_name)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def dataset_measure_stats(workspace: Workspace, dataset_name: str) -> dict[str, dict[str, float]]:
+    """Per-measure mean/std for a dataset.
+
+    Prefers the pre-computed sidecar written at run time; falls back to computing
+    live from the merged store if the sidecar is missing or unreadable.
+    """
+    path = _dataset_stats_path(workspace, dataset_name)
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8")).get("measures", {})
+        except (OSError, ValueError):
+            pass
+    if not workspace.store_path.exists():
+        return {}
+    with ResultStore(workspace.store_path) as store:
+        return measure_stats(store.records_for_dataset(dataset_name))
 
 
 def list_runs(workspace: Workspace) -> list[dict]:
@@ -342,13 +386,95 @@ def analysis_for_dataset(
         run, values, measures=chosen, dataset=dataset_name
     )
 
+    # Annotate each row with its measure's BibTeX (for the citation icon) and the
+    # pre-computed per-dataset mean/std of its values.
+    bibtex_by_measure = {m["name"]: m["bibtex"] for m in list_measures()}
+    stats_by_measure = dataset_measure_stats(workspace, dataset_name)
+    row_dicts = []
+    for r in rows:
+        d = r.as_dict()
+        d["bibtex"] = bibtex_by_measure.get(r.measure)
+        stat = stats_by_measure.get(r.measure, {})
+        d["mean"] = stat.get("mean")
+        d["std"] = stat.get("std")
+        row_dicts.append(d)
+
     return {
         "dataset": dataset_name,
         "run_id": run.run_id,
-        "tasks": [{"task": active_task, "rows": [r.as_dict() for r in rows]}],
+        "tasks": [{"task": active_task, "rows": row_dicts}],
         "all_tasks": task_names,
         "active_task": active_task,
         "error": None,
+    }
+
+
+def scatter_for_measure(
+    workspace: Workspace,
+    dataset_name: str,
+    measure: str,
+    *,
+    task: str | None = None,
+    run_id: str | None = None,
+) -> dict:
+    """Build the scatter-plot model for one measure vs the human scores.
+
+    Returns ``{"error": ...}`` when the plot can't be produced (dataset not
+    ready, no run, no annotations, or fewer than two paired points).
+    """
+    ds = get_dataset(workspace, dataset_name)
+    if ds is None or not ds["prepared"]:
+        return {"error": "dataset not available"}
+
+    run = (
+        load_results(workspace.results_dir / f"{run_id}.json")
+        if run_id is not None
+        else _merged_run(workspace, dataset_name)
+    )
+    if run is None:
+        return {"error": "no benchmark run found for this dataset"}
+
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    task_names = annotation_tasks_in_manifest(manifest)
+    if not task_names:
+        return {"error": "dataset has no expert annotations"}
+    active_task = task if (task and task in task_names) else task_names[0]
+
+    annotation_values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+    groups = groups_from_manifest(manifest, "algorithm")
+    data = build_scatter(run, annotation_values, measure, dataset=dataset_name, groups=groups)
+    if len(data.xs) < 2:
+        return {"error": f"not enough paired data points for {measure}"}
+
+    rows = correlate_measures_with_annotations(
+        run, annotation_values, measures=[measure], dataset=dataset_name
+    )
+    srcc = rows[0].srcc if rows else None
+    krcc = rows[0].krcc if rows else None
+
+    meta = measure_registry.get(measure).metadata
+    chart = scatter_chart(
+        data,
+        srcc=srcc,
+        krcc=krcc,
+        x_label=f"Human score (z-MOS · {active_task})",
+        y_label=f"{measure}{' ↑' if meta.higher_is_better else ' ↓'}",
+    )
+
+    stats = dataset_measure_stats(workspace, dataset_name).get(measure, {})
+    return {
+        "error": None,
+        "measure": measure,
+        "dataset": dataset_name,
+        "task": active_task,
+        "chart": chart,
+        "srcc": srcc,
+        "krcc": krcc,
+        "n": len(data.xs),
+        "mean": stats.get("mean"),
+        "std": stats.get("std"),
+        "higher_is_better": meta.higher_is_better,
+        "bibtex": meta.bibtex,
     }
 
 

@@ -42,7 +42,7 @@ body {
 }
 .brand { display: flex; align-items: baseline; gap: 0.6rem; text-decoration: none; }
 .brand img { transform: translateY(4px); }
-.brand__sub { color: var(--muted); font-size: 2rem; letter-spacing: 0.01em; }
+.brand__sub { color: var(--muted); font-size: 1rem; letter-spacing: 0.01em; }
 .nav { display: flex; gap: 0.25rem; }
 .nav__link {
   padding: 0.45rem 0.85rem;
@@ -122,6 +122,18 @@ body {
   font-size: 0.8rem; transition: color 0.12s ease, border-color 0.12s ease;
 }
 .cite-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Inline variant: sits next to text (e.g. in a table cell), not absolutely placed. */
+.cite-btn--inline {
+  position: static; width: 1.4rem; height: 1.4rem; margin-left: 0.4rem;
+  font-size: 0.7rem; vertical-align: middle;
+}
+
+/* Measure cell: fixed-width icon slot so names line up whether or not a row
+   has a citation icon. */
+.measure-cell { display: inline-flex; align-items: center; gap: 0.4rem; }
+.measure-cell__icon { flex: 0 0 1.4rem; display: inline-flex; justify-content: center; }
+.measure-cell__icon .cite-btn--inline { margin-left: 0; }
 
 /* Citation popup */
 .cite-dialog { border: none; border-radius: var(--radius); padding: 0;
@@ -273,3 +285,27 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .progress-chip__check { font-size: 0.85rem; }
+
+/* ---------- Detailed analysis: clickable rows + scatter plot ---------- */
+.measure-row { cursor: pointer; transition: background 0.1s ease; }
+.measure-row:hover td { background: #eef2ff; }
+.measure-row:hover td.corr-cell { filter: brightness(0.97); }
+
+.scatter-result { margin-top: 1.5rem; }
+.scatter {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.1rem; box-shadow: var(--shadow);
+}
+.scatter__head { display: flex; align-items: baseline; justify-content: space-between;
+                 gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.scatter__title { color: var(--navy); margin: 0; font-size: 1.05rem; }
+.scatter__sub { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.scatter__svg { width: 100%; height: auto; display: block; }
+.scatter__tick { fill: var(--muted); font-size: 11px; }
+.scatter__axis { fill: var(--text); font-size: 12px; font-weight: 500; }
+.scatter__label-name { fill: var(--navy); font-size: 13px; font-weight: 700; }
+.scatter__label-stat { fill: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; }
+.scatter__legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.6rem;
+                   font-size: 0.8rem; color: var(--text); }
+.scatter__legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
+.scatter__swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; }
