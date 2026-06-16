@@ -68,10 +68,11 @@ def scatter_fragment(
     dataset: str,
     measure: str,
     task: str | None = Query(default=None),
+    source: str = Query(default="mos"),
 ) -> HTMLResponse:
     """Scatter plot (SVG) of one measure's per-image values vs the human scores."""
     ws = _ws(request)
-    model = service.scatter_for_measure(ws, dataset, measure, task=task)
+    model = service.scatter_for_measure(ws, dataset, measure, task=task, source=source)
     return templates.TemplateResponse(request, "fragments/scatter.html", {"s": model})
 
 
@@ -81,9 +82,10 @@ def analysis_fragment(
     dataset: str,
     measures: list[str] | None = Query(default=None),
     task: str | None = Query(default=None),
+    source: str = Query(default="mos"),
 ) -> HTMLResponse:
     ws = _ws(request)
-    result = service.analysis_for_dataset(ws, dataset, measures=measures, task=task)
+    result = service.analysis_for_dataset(ws, dataset, measures=measures, task=task, source=source)
     # Re-render the measure checkboxes (disabled/checked for this dataset) and
     # swap them out-of-band, so changing the dataset updates which are usable.
     options = service.measure_options(ws, dataset, selected=measures)

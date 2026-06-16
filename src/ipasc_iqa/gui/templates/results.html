@@ -37,6 +37,12 @@
       {% endif %}
     </div>
 
+    <div id="source-filter">
+      {% with sources=initial_sources, active_source=(initial_sources[0].key if initial_sources else 'mos') %}
+        {% include "fragments/source_field.html" %}
+      {% endwith %}
+    </div>
+
     <fieldset class="field field--measures">
       <legend class="field__label">Measures</legend>
       <div id="measure-chips" class="measure-chips">

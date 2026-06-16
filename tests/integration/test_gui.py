@@ -188,3 +188,59 @@ def test_standings_ranks_measures(client: TestClient) -> None:
     # Measures (not algorithms) are ranked; both tasks appear.
     assert "PSNR" in frag.text or "SSIM" in frag.text
     assert "overall_quality" in frag.text
+
+
+def _seed_bt_comparisons(client: TestClient, task: str = "overall_quality") -> None:
+    """Seed contributed pairwise comparisons for the 'mini' dataset (ref best)."""
+    from ipasc_iqa.contrib.store import AnnotatorStore
+
+    ws = client.app.state.workspace
+    with AnnotatorStore(ws.annotations_path) as store:
+        store.upsert_user("u@x.com", "U")
+        for stem in range(3):
+            a0, a1, ref = f"image{stem}_alg0", f"image{stem}_alg1", f"__ref__{stem}"
+            comps = [
+                {"winner": ref, "loser": a0},
+                {"winner": ref, "loser": a1},
+                {"winner": a0, "loser": a1},
+            ] * 4
+            store.add_session(
+                {
+                    "user_email": "u@x.com",
+                    "dataset": "mini",
+                    "task": task,
+                    "reference": str(stem),
+                    "order": [a1, a0, ref],
+                    "comparisons": comps,
+                    "n_comparisons": len(comps),
+                }
+            )
+
+
+def test_bt_source_in_analysis(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+    _seed_bt_comparisons(client)
+
+    # Both human-score sources are now offered; selecting BT yields correlations.
+    frag = client.get(
+        "/api/analysis",
+        params={"dataset": "mini", "task": "overall_quality", "source": "bt"},
+    )
+    assert frag.status_code == 200
+    assert "Pairwise (Bradley" in frag.text  # source dropdown shows BT option
+    assert "PSNR" in frag.text and "SRCC" in frag.text
+
+    # The scatter endpoint honours the BT source.
+    scatter = client.get(
+        "/api/scatter",
+        params={"dataset": "mini", "task": "overall_quality", "measure": "PSNR", "source": "bt"},
+    )
+    assert scatter.status_code == 200
+    assert "BT" in scatter.text  # BT axis label, not z-MOS
+
+
+def test_bt_source_absent_without_contributions(client: TestClient) -> None:
+    # With no contributed comparisons, only MOS is offered (no source dropdown).
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    frag = client.get("/api/analysis", params={"dataset": "mini", "task": "overall_quality"})
+    assert "Pairwise (Bradley" not in frag.text

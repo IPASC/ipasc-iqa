@@ -1,0 +1,13 @@
+{# Human-score source <select>. Shown only when more than one source exists
+   (e.g. both absolute MOS and contributed Bradley-Terry scores). Expects
+   `sources` ([{key,label}]) and `active_source`. #}
+{% if sources | length > 1 %}
+<label class="field">
+  <span class="field__label">Human score</span>
+  <select class="select" name="source">
+    {% for s in sources %}
+    <option value="{{ s.key }}" {{ 'selected' if s.key == active_source }}>{{ s.label }}</option>
+    {% endfor %}
+  </select>
+</label>
+{% endif %}

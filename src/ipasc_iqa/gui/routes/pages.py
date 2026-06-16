@@ -52,6 +52,7 @@ def results_page(request: Request) -> HTMLResponse:
     # sub-task dropdown can be rendered on first load without an extra request.
     sel_ds = next((d for d in datasets if d["name"] == selected), None)
     initial_tasks: list[str] = sel_ds["annotation_tasks"] if sel_ds else []
+    initial_sources = service.human_score_sources(ws, selected) if selected else []
     return templates.TemplateResponse(
         request,
         "results.html",
@@ -61,6 +62,7 @@ def results_page(request: Request) -> HTMLResponse:
             "measure_options": service.measure_options(ws, selected),
             "selected_dataset": selected,
             "initial_tasks": initial_tasks,
+            "initial_sources": initial_sources,
         },
     )
 

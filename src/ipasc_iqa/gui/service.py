@@ -31,6 +31,7 @@ from ipasc_iqa.analysis.manifest_query import (
     groups_from_manifest,
 )
 from ipasc_iqa.analysis.scatter import build_scatter
+from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
 from ipasc_iqa.contrib.ranking import RankingSession
 from ipasc_iqa.contrib.store import AnnotatorStore, normalize_email
 from ipasc_iqa.core.cache import ResultStore
@@ -340,16 +341,17 @@ def analysis_for_dataset(
     measures: list[str] | None = None,
     run_id: str | None = None,
     task: str | None = None,
+    source: str = "mos",
 ) -> dict:
-    """Correlate measures against expert MOS for a single annotation task.
+    """Correlate measures against a human-score source for one annotation task.
 
-    When ``task`` is provided and valid it is used as the active task;
-    otherwise the first available task is shown.  ``all_tasks`` and
-    ``active_task`` are always present in the return value so that the
-    template can render the sub-task dropdown (or omit it for single-task
-    datasets) regardless of error state.
+    ``source`` selects which human scores to correlate against: ``"mos"`` (the
+    dataset's absolute expert ratings) or ``"bt"`` (continuous Bradley-Terry
+    scores derived from contributed pairwise comparisons). ``all_tasks`` /
+    ``active_task`` / ``sources`` / ``active_source`` are always present so the
+    template can render the dropdowns regardless of error state.
     """
-    _empty: dict = {"all_tasks": [], "active_task": None}
+    _empty: dict = {"all_tasks": [], "active_task": None, "sources": [], "active_source": source}
 
     ds = get_dataset(workspace, dataset_name)
     if ds is None:
@@ -394,7 +396,18 @@ def analysis_for_dataset(
     usable = [m["name"] for m in list_measures() if _measure_usable(m, caps)]
     chosen = [m for m in (measures or usable) if m in usable]
 
-    values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+    # Resolve the human-score source (MOS vs contributed Bradley-Terry).
+    mos_values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+    bt = bt_scores_for_dataset_task(workspace, dataset_name, active_task)
+    sources: list[dict] = []
+    if mos_values:
+        sources.append({"key": "mos", "label": _SOURCE_LABELS["mos"]})
+    if bt["scores"]:
+        sources.append({"key": "bt", "label": _SOURCE_LABELS["bt"]})
+    source_keys = {s["key"] for s in sources}
+    active_source = source if source in source_keys else (sources[0]["key"] if sources else "mos")
+    values = bt["scores"] if active_source == "bt" else mos_values
+
     rows = correlate_measures_with_annotations(
         run, values, measures=chosen, dataset=dataset_name
     )
@@ -418,6 +431,8 @@ def analysis_for_dataset(
         "tasks": [{"task": active_task, "rows": row_dicts}],
         "all_tasks": task_names,
         "active_task": active_task,
+        "sources": sources,
+        "active_source": active_source,
         "error": None,
     }
 
@@ -429,11 +444,13 @@ def scatter_for_measure(
     *,
     task: str | None = None,
     run_id: str | None = None,
+    source: str = "mos",
 ) -> dict:
-    """Build the scatter-plot model for one measure vs the human scores.
+    """Build the scatter-plot model for one measure vs a human-score source.
 
-    Returns ``{"error": ...}`` when the plot can't be produced (dataset not
-    ready, no run, no annotations, or fewer than two paired points).
+    ``source`` is ``"mos"`` (absolute ratings) or ``"bt"`` (Bradley-Terry scores
+    from contributed comparisons). Returns ``{"error": ...}`` when the plot can't
+    be produced (dataset not ready, no run, no annotations, or < 2 paired points).
     """
     ds = get_dataset(workspace, dataset_name)
     if ds is None or not ds["prepared"]:
@@ -453,14 +470,22 @@ def scatter_for_measure(
         return {"error": "dataset has no expert annotations"}
     active_task = task if (task and task in task_names) else task_names[0]
 
-    annotation_values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+    if source == "bt":
+        human_values = bt_scores_for_dataset_task(workspace, dataset_name, active_task)["scores"]
+        x_label = f"Human score (BT · {active_task})"
+    else:
+        human_values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+        x_label = f"Human score (z-MOS · {active_task})"
+    if not human_values:
+        return {"error": f"no '{source}' human scores available for this dataset/task"}
+
     groups = groups_from_manifest(manifest, "algorithm")
-    data = build_scatter(run, annotation_values, measure, dataset=dataset_name, groups=groups)
+    data = build_scatter(run, human_values, measure, dataset=dataset_name, groups=groups)
     if len(data.xs) < 2:
         return {"error": f"not enough paired data points for {measure}"}
 
     rows = correlate_measures_with_annotations(
-        run, annotation_values, measures=[measure], dataset=dataset_name
+        run, human_values, measures=[measure], dataset=dataset_name
     )
     srcc = rows[0].srcc if rows else None
     krcc = rows[0].krcc if rows else None
@@ -470,7 +495,7 @@ def scatter_for_measure(
         data,
         srcc=srcc,
         krcc=krcc,
-        x_label=f"Human score (z-MOS · {active_task})",
+        x_label=x_label,
         y_label=f"{measure}{' ↑' if meta.higher_is_better else ' ↓'}",
     )
 
@@ -553,6 +578,86 @@ def annotators_leaderboard(workspace: Workspace) -> list[dict]:
     """Per-annotator ranking/comparison totals for the contribute screen."""
     with AnnotatorStore(workspace.annotations_path) as store:
         return store.leaderboard()
+
+
+def bt_scores_for_dataset_task(
+    workspace: Workspace, dataset_name: str, task: str | None
+) -> dict:
+    """Per-image Bradley-Terry quality scores from contributed comparisons.
+
+    Comparisons are aggregated per reference set (across all annotators), and each
+    set is fit independently and anchored at its reference image (beta = 0) — so a
+    variant's score is its *deficit below ground truth*, a scale that is
+    comparable across reference sets. Reference (GT) items are excluded from the
+    returned per-image mapping: full-reference IQMs are computed against the GT,
+    so including it would trivially inflate their correlation (per Breger et al.).
+
+    Returns ``{"scores": {image_id: beta}, "se": {...}, "n_comparisons", "n_sets"}``.
+    """
+    with AnnotatorStore(workspace.annotations_path) as store:
+        sessions = store.sessions()
+
+    by_ref: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    items_by_ref: dict[str, set[str]] = defaultdict(set)
+    for s in sessions:
+        if s.get("dataset") != dataset_name or s.get("task") != task:
+            continue
+        ref = s.get("reference")
+        for c in s.get("comparisons", []):
+            by_ref[ref].append((c["winner"], c["loser"]))
+            items_by_ref[ref].update((c["winner"], c["loser"]))
+
+    scores: dict[str, float] = {}
+    ses: dict[str, float] = {}
+    n_comparisons = 0
+    for ref, comps in by_ref.items():
+        items = sorted(items_by_ref[ref])
+        anchor = f"{_REF_PREFIX}{ref}"
+        result = fit_bradley_terry(
+            items, comps, anchor=anchor if anchor in items_by_ref[ref] else None
+        )
+        n_comparisons += len(comps)
+        for item in items:
+            if item.startswith(_REF_PREFIX):
+                continue  # GT excluded from the correlation mapping
+            scores[item] = result.beta[item]
+            ses[item] = result.se[item]
+
+    return {
+        "scores": scores,
+        "se": ses,
+        "n_comparisons": n_comparisons,
+        "n_sets": len(by_ref),
+    }
+
+
+# Human-score sources the analysis can correlate measures against.
+_SOURCE_LABELS = {
+    "mos": "Absolute rating (MOS)",
+    "bt": "Pairwise (Bradley–Terry)",
+}
+
+
+def _sources_for(
+    manifest: dict, workspace: Workspace, dataset_name: str, task: str | None
+) -> list[dict]:
+    """Available human-score sources for a (dataset, task): MOS and/or BT."""
+    out: list[dict] = []
+    if task and annotation_values_from_manifest(manifest, task, "zscore_mos"):
+        out.append({"key": "mos", "label": _SOURCE_LABELS["mos"]})
+    if bt_scores_for_dataset_task(workspace, dataset_name, task)["scores"]:
+        out.append({"key": "bt", "label": _SOURCE_LABELS["bt"]})
+    return out
+
+
+def human_score_sources(workspace: Workspace, dataset_name: str) -> list[dict]:
+    """Sources for a dataset's first annotation task (for the initial page load)."""
+    ds = get_dataset(workspace, dataset_name)
+    if ds is None or not ds["prepared"]:
+        return []
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    tasks = annotation_tasks_in_manifest(manifest)
+    return _sources_for(manifest, workspace, dataset_name, tasks[0] if tasks else None)
 
 
 def _dataset_root(workspace: Workspace, dataset_name: str) -> Path:

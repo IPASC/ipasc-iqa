@@ -19,4 +19,10 @@
   {% endif %}
 </div>
 
+<div id="source-filter" hx-swap-oob="true">
+  {% with sources=result.sources, active_source=result.active_source %}
+    {% include "fragments/source_field.html" %}
+  {% endwith %}
+</div>
+
 {% include "fragments/analysis_tables.html" %}
