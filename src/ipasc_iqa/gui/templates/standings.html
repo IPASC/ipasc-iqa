@@ -8,8 +8,8 @@
     <select class="select" name="source"
             hx-get="/api/standings" hx-target="#standings-result"
             hx-swap="innerHTML" hx-trigger="change">
-      <option value="mos">MOS (expert ratings)</option>
-      <option value="bt">BT (pairwise)</option>
+      <option value="mos">MOS (absolute rating: 1-4)</option>
+      <option value="bt">BT (relative rating: pairwise)</option>
     </select>
   </label>
 </div>

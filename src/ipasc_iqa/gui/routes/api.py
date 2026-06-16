@@ -211,11 +211,45 @@ def contribute_tasks(request: Request, dataset: str = Query(default="random")) -
     )
 
 
+def _rate_fragment(
+    request: Request,
+    account: dict,
+    draw: dict,
+    dataset_choice: str,
+    *,
+    toast: str | None = None,
+) -> Response:
+    """Render the single-stimulus rating fragment, or the picker on failure."""
+    if draw.get("error"):
+        return _picker_response(request, account, message=draw["error"])
+    task = draw["task"]
+    if task:
+        prompt = (
+            f"Rate the quality of the right image for the task: "
+            f"{task.replace('_', ' ')}  (1 = low, 4 = best)"
+        )
+    else:
+        prompt = "Rate the quality of the right image  (1 = low, 4 = best)"
+    return templates.TemplateResponse(
+        request,
+        "fragments/annotate_rate.html",
+        {
+            "dataset": draw["dataset"],
+            "image_id": draw["image_id"],
+            "reference_item": draw["reference_item"],
+            "task": task or "",
+            "dataset_choice": dataset_choice,
+            "prompt": prompt,
+            "toast": toast,
+        },
+    )
+
+
 @router.post("/contribute/start")
 def contribute_start(
     request: Request,
     dataset: str = Form(default="random"),
-    task: str = Form(default="random"),
+    rating_type: str = Form(default="comparative"),
 ) -> Response:
     ws = _ws(request)
     email = request.cookies.get("annotator_email")
@@ -223,16 +257,49 @@ def contribute_start(
     if account is None:
         return templates.TemplateResponse(request, "fragments/annotate_login.html", {})
 
+    if rating_type == "quantitative":
+        draw = service.draw_rating_item(ws, dataset)
+        return _rate_fragment(request, account, draw, dataset)
+
+    # Comparative (2AFC): the sub-task is always randomised per session.
     res = service.start_ranking(
         ws,
         request.app.state.ranking_sessions,
         user_email=email,
         dataset_choice=dataset,
-        task_choice=task,
+        task_choice="random",
     )
     if res.get("error"):
         return _picker_response(request, account, message=res["error"])
     return _compare_or_picker(request, account, res["session_id"])
+
+
+@router.post("/contribute/rate")
+def contribute_rate(
+    request: Request,
+    dataset: str = Form(...),
+    image_id: str = Form(...),
+    score: int = Form(...),
+    task: str = Form(default=""),
+    dataset_choice: str = Form(default="random"),
+) -> Response:
+    ws = _ws(request)
+    email = request.cookies.get("annotator_email")
+    account = service.annotator_for(ws, email)
+    if account is None:
+        return templates.TemplateResponse(request, "fragments/annotate_login.html", {})
+
+    count = service.record_rating(
+        ws,
+        user_email=email,
+        dataset=dataset,
+        image_id=image_id,
+        task=task or None,
+        score=score,
+    )
+    draw = service.draw_rating_item(ws, dataset_choice)
+    toast = f"Rating saved — thank you! ({count} total). Next:"
+    return _rate_fragment(request, account, draw, dataset_choice, toast=toast)
 
 
 @router.post("/contribute/choose")

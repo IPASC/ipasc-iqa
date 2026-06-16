@@ -251,7 +251,8 @@ def test_standings_endpoint_switch(client: TestClient) -> None:
 
     # The page exposes the MOS/BT endpoint dropdown.
     page = client.get("/standings")
-    assert 'name="source"' in page.text and ">BT (pairwise)<" in page.text
+    assert 'name="source"' in page.text
+    assert 'value="mos"' in page.text and 'value="bt"' in page.text
 
     # MOS ranks measures against z-MOS by default.
     mos = client.get("/api/standings")

@@ -15,9 +15,7 @@
     <form hx-post="/contribute/start" hx-target="#contribute-root" hx-swap="innerHTML">
       <label class="field">
         <span class="field__label">Dataset</span>
-        <select class="select" name="dataset"
-                hx-get="/api/annotate/tasks" hx-target="#annotate-task-field"
-                hx-swap="innerHTML" hx-trigger="change">
+        <select class="select" name="dataset">
           <option value="random">Random</option>
           {% for d in eligible_datasets %}
           <option value="{{ d.name }}">{{ d.name }}</option>
@@ -25,13 +23,19 @@
         </select>
       </label>
 
-      <div id="annotate-task-field">
-        {% include "fragments/annotate_task_field.html" %}
-      </div>
+      <label class="field">
+        <span class="field__label">Rating type</span>
+        <select class="select" name="rating_type">
+          <option value="comparative">Comparative — pairwise (2AFC)</option>
+          <option value="quantitative">Quantitative — absolute 1–4</option>
+        </select>
+      </label>
 
       <p class="panel__hint">
-        You'll compare two images at a time and pick the higher-quality one, until a
-        full ranking emerges. It takes only a handful of clicks per image set.
+        The sub-task is randomised on every screen, so read the prompt before each
+        rating. Comparative: pick the higher-quality of two images until a full
+        ranking emerges. Quantitative: rate one reconstruction against its
+        reference on a 1–4 scale.
       </p>
       <div class="actions">
         <button type="submit" class="btn btn--primary">Start annotating ▶</button>
@@ -49,6 +53,7 @@
           <tr>
             <th>Annotator</th>
             <th class="num">Rankings</th>
+            <th class="num">Ratings</th>
             <th class="num">Comparisons</th>
           </tr>
         </thead>
@@ -57,6 +62,7 @@
           <tr>
             <td>{{ a.name }}</td>
             <td class="num">{{ a.rankings }}</td>
+            <td class="num">{{ a.ratings }}</td>
             <td class="num">{{ a.comparisons }}</td>
           </tr>
           {% endfor %}

@@ -83,6 +83,35 @@ class AnnotatorStore:
             if isinstance(k, tuple) and k and k[0] == "session":
                 yield k
 
+    # -- ratings (single-stimulus MOS) ------------------------------------
+
+    def add_rating(self, record: dict) -> str:
+        """Persist one quantitative (1-4) rating; returns the generated id."""
+        rid = uuid.uuid4().hex
+        stored = {**record, "rating_id": rid, "created": datetime.now(UTC).isoformat()}
+        self._cache.set(("rating", rid), stored)
+        return rid
+
+    def _rating_keys(self) -> Iterator[tuple]:
+        for k in self._cache:
+            if isinstance(k, tuple) and k and k[0] == "rating":
+                yield k
+
+    def ratings(self, *, dataset: str | None = None) -> list[dict]:
+        out: list[dict] = []
+        for key in self._rating_keys():
+            rec = self._cache.get(key)
+            if rec is None:
+                continue
+            if dataset is not None and rec.get("dataset") != dataset:
+                continue
+            out.append(rec)
+        return out
+
+    def rating_tasks(self, dataset: str) -> set[str | None]:
+        """Distinct task values among contributed ratings for a dataset."""
+        return {r.get("task") for r in self.ratings(dataset=dataset)}
+
     def _user_keys(self) -> Iterator[tuple]:
         for k in self._cache:
             if isinstance(k, tuple) and k and k[0] == "user":
@@ -116,31 +145,38 @@ class AnnotatorStore:
         return out
 
     def leaderboard(self) -> list[dict]:
-        """Per-annotator totals: ``[{name, rankings, comparisons}]``.
+        """Per-annotator totals: ``[{name, rankings, comparisons, ratings}]``.
 
-        Includes registered annotators with zero completed rankings. Sorted by
-        rankings (desc), then name.
+        Includes registered annotators with no activity. Sorted by total
+        contributions (rankings + ratings) desc, then name.
         """
         users = {k[1]: self._cache.get(k) for k in self._user_keys()}
-        agg: dict[str, dict[str, int]] = {
-            email: {"rankings": 0, "comparisons": 0} for email in users
-        }
+
+        def _blank() -> dict[str, int]:
+            return {"rankings": 0, "comparisons": 0, "ratings": 0}
+
+        agg: dict[str, dict[str, int]] = {email: _blank() for email in users}
         for key in self._session_keys():
             rec = self._cache.get(key)
             if rec is None:
                 continue
-            email = rec.get("user_email")
-            stats = agg.setdefault(email, {"rankings": 0, "comparisons": 0})
+            stats = agg.setdefault(rec.get("user_email"), _blank())
             stats["rankings"] += 1
             stats["comparisons"] += int(rec.get("n_comparisons", 0))
+        for key in self._rating_keys():
+            rec = self._cache.get(key)
+            if rec is None:
+                continue
+            agg.setdefault(rec.get("user_email"), _blank())["ratings"] += 1
 
         rows = [
             {
                 "name": (users.get(email) or {}).get("name") or email,
                 "rankings": stats["rankings"],
                 "comparisons": stats["comparisons"],
+                "ratings": stats["ratings"],
             }
             for email, stats in agg.items()
         ]
-        rows.sort(key=lambda r: (-r["rankings"], r["name"].lower()))
+        rows.sort(key=lambda r: (-(r["rankings"] + r["ratings"]), r["name"].lower()))
         return rows

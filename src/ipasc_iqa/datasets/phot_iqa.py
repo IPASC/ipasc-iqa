@@ -288,11 +288,13 @@ class PhotIQADataset(LocalDataset):
         print(f"Manifest written to {manifest_path} ({len(manifest_entries)} images)")
 
     @staticmethod
-    def _load_annotations(src_root: Path) -> dict[str, dict[str, dict[str, float]]]:
-        """Load expert annotation CSVs into ``{source_stem: {task: {mos, zscore_mos}}}``.
+    def _load_annotations(src_root: Path) -> dict[str, dict[str, dict]]:
+        """Load expert annotation CSVs into ``{source_stem: {task: {...}}}``.
 
-        Returns an empty mapping if no annotation directory is found (annotations
-        are optional — the dataset is still usable for raw measure evaluation).
+        Each task slot holds the aggregate ``mos`` / ``zscore_mos`` *and* the
+        individual per-rater scores under ``ratings`` ({rater_id: raw}), so a
+        composite MOS can be recomputed (and pooled with contributed ratings).
+        Returns an empty mapping if no annotation directory is found.
         """
         from ipasc_iqa.analysis.annotations import load_annotation_dir
 
@@ -303,7 +305,7 @@ class PhotIQADataset(LocalDataset):
         ann_dir = candidates[0].parent
 
         tables = load_annotation_dir(ann_dir)
-        per_image: dict[str, dict[str, dict[str, float]]] = {}
+        per_image: dict[str, dict[str, dict]] = {}
         for task, table in tables.items():
             for key in table.image_keys():
                 slot = per_image.setdefault(key, {})
@@ -312,6 +314,8 @@ class PhotIQADataset(LocalDataset):
                     slot[task]["mos"] = table.mos[key]
                 if key in table.zscore_mos:
                     slot[task]["zscore_mos"] = table.zscore_mos[key]
+                if key in table.raters:
+                    slot[task]["ratings"] = table.raters[key]
         return per_image
 
     @staticmethod

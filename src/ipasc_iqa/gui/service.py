@@ -31,8 +31,10 @@ from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
 from ipasc_iqa.analysis.manifest_query import (
     annotation_tasks_in_manifest,
     annotation_values_from_manifest,
+    annotator_ratings_from_manifest,
     groups_from_manifest,
 )
+from ipasc_iqa.analysis.mos import composite_mos
 from ipasc_iqa.analysis.scatter import build_scatter
 from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
 from ipasc_iqa.contrib.ranking import RankingSession
@@ -404,7 +406,7 @@ def analysis_for_dataset(
     chosen = [m for m in (measures or usable) if m in usable]
 
     # Resolve the human-score source (MOS vs contributed Bradley-Terry).
-    mos_values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+    mos_values = mos_values_for_dataset_task(workspace, dataset_name, active_task, manifest)
     bt = bt_scores_for_dataset_task(workspace, dataset_name, active_task)
     sources: list[dict] = []
     if mos_values:
@@ -483,7 +485,7 @@ def scatter_for_measure(
         human_values = bt_scores_for_dataset_task(workspace, dataset_name, active_task)["scores"]
         x_label = f"Human score (BT · {task_label})"
     else:
-        human_values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
+        human_values = mos_values_for_dataset_task(workspace, dataset_name, active_task, manifest)
         x_label = f"Human score (z-MOS · {task_label})"
     if not human_values:
         return {"error": f"no '{source}' human scores available for this dataset/task"}
@@ -560,7 +562,7 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
             if source == "bt":
                 values = bt_scores_for_dataset_task(workspace, ds["name"], task)["scores"]
             else:
-                values = annotation_values_from_manifest(manifest, task, "zscore_mos")
+                values = mos_values_for_dataset_task(workspace, ds["name"], task, manifest)
             if not values:
                 continue
             rows = correlate_measures_with_annotations(run, values, dataset=ds["name"])
@@ -604,6 +606,51 @@ def annotators_leaderboard(workspace: Workspace) -> list[dict]:
     """Per-annotator ranking/comparison totals for the contribute screen."""
     with AnnotatorStore(workspace.annotations_path) as store:
         return store.leaderboard()
+
+
+def _mos_annotator_scores(
+    workspace: Workspace, dataset_name: str, task: str | None, manifest: dict
+) -> dict[str, dict[str, float]]:
+    """Per-image, per-annotator raw ratings feeding the MOS endpoint.
+
+    Pools the dataset's published per-rater ratings (from the manifest) with
+    contributed quantitative ratings, so a composite MOS can be computed over all
+    annotators. (Contributed ratings are merged once the rating-collection tool
+    is in place.)
+    """
+    scores: dict[str, dict[str, float]] = {}
+    if task is not None:
+        for image_id, raters in annotator_ratings_from_manifest(manifest, task).items():
+            scores.setdefault(image_id, {}).update(raters)
+    # Pool in contributed quantitative ratings (one annotator per email).
+    with AnnotatorStore(workspace.annotations_path) as store:
+        for r in store.ratings(dataset=dataset_name):
+            if r.get("task") != task or r.get("image_id") is None or r.get("score") is None:
+                continue
+            scores.setdefault(r["image_id"], {})[f"user:{r['user_email']}"] = float(r["score"])
+    return scores
+
+
+def mos_values_for_dataset_task(
+    workspace: Workspace,
+    dataset_name: str,
+    task: str | None,
+    manifest: dict | None = None,
+) -> dict[str, float]:
+    """Composite MOS per image for (dataset, task); ``{}`` if no ratings exist.
+
+    Built from individual annotator ratings (z-normalise each annotator, then
+    average). Falls back to the manifest's pre-computed ``zscore_mos`` for older
+    conversions that don't carry per-rater data.
+    """
+    if manifest is None:
+        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    per_annotator = _mos_annotator_scores(workspace, dataset_name, task, manifest)
+    if per_annotator:
+        return composite_mos(per_annotator)
+    if task is not None:
+        return annotation_values_from_manifest(manifest, task, "zscore_mos")
+    return {}
 
 
 def bt_scores_for_dataset_task(
@@ -669,7 +716,7 @@ def _sources_for(
 ) -> list[dict]:
     """Available human-score sources for a (dataset, task): MOS and/or BT."""
     out: list[dict] = []
-    if task and annotation_values_from_manifest(manifest, task, "zscore_mos"):
+    if task and mos_values_for_dataset_task(workspace, dataset_name, task, manifest):
         out.append({"key": "mos", "label": _SOURCE_LABELS["mos"]})
     if bt_scores_for_dataset_task(workspace, dataset_name, task)["scores"]:
         out.append({"key": "bt", "label": _SOURCE_LABELS["bt"]})
@@ -692,14 +739,15 @@ def _available_tasks(
     """Annotation tasks available from *either* MOS or contributed comparisons.
 
     Returns ``(named_tasks, has_unnamed)`` where ``named_tasks`` are the named
-    tasks (manifest MOS tasks ∪ named BT tasks) and ``has_unnamed`` is True when
-    BT comparisons were collected for a dataset that has no sub-tasks (task=None).
+    tasks (manifest MOS tasks ∪ contributed tasks) and ``has_unnamed`` is True
+    when contributed annotations (pairwise or ratings) were collected for a
+    dataset with no sub-tasks (task=None).
     """
     mos_tasks = annotation_tasks_in_manifest(manifest)
     with AnnotatorStore(workspace.annotations_path) as store:
-        bt_tasks = store.dataset_tasks(dataset_name)
-    named = sorted(set(mos_tasks) | {t for t in bt_tasks if t})
-    has_unnamed = None in bt_tasks
+        contrib_tasks = store.dataset_tasks(dataset_name) | store.rating_tasks(dataset_name)
+    named = sorted(set(mos_tasks) | {t for t in contrib_tasks if t})
+    has_unnamed = None in contrib_tasks
     return named, has_unnamed
 
 
@@ -892,6 +940,86 @@ def submit_choice(
         "next_session_id": nxt.get("session_id"),
         "error": nxt.get("error"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Single-stimulus MOS rating (quantitative 1-4)
+# ---------------------------------------------------------------------------
+
+
+def draw_rating_item(
+    workspace: Workspace,
+    dataset_choice: str,
+    *,
+    rng: random.Random | None = None,
+) -> dict:
+    """Pick a random reconstruction + its reference + a random task to rate.
+
+    The task is always randomised (no sub-task selection) so the annotator must
+    read the prompt each time. Returns ``{"error": ...}`` or a draw dict with
+    ``dataset``, ``image_id`` (variant), ``reference_item`` and ``task``.
+    """
+    rng = rng or random.Random()
+    eligible = {e["name"] for e in eligible_annotation_datasets(workspace)}
+    if not eligible:
+        return {"error": "No datasets with rankable variants are prepared yet."}
+
+    dataset_name = dataset_choice
+    if dataset_name in (None, "", "random"):
+        dataset_name = rng.choice(sorted(eligible))
+    elif dataset_name not in eligible:
+        return {"error": "That dataset isn't available for rating."}
+
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    groups = _reference_groups(manifest)
+    # Variants only (drop the reference pseudo-item); a stem needs a reference too.
+    rateable: dict[str, list[str]] = {}
+    for stem, entries in groups.items():
+        items = _items_for_stem(entries)
+        variants = [i for i in items if not i.startswith(_REF_PREFIX)]
+        has_ref = any(i.startswith(_REF_PREFIX) for i in items)
+        if variants and has_ref:
+            rateable[stem] = variants
+    if not rateable:
+        return {"error": "That dataset has no reconstructions with a reference to rate."}
+
+    stem = rng.choice(sorted(rateable))
+    image_id = rng.choice(rateable[stem])
+    tasks = annotation_tasks_in_manifest(manifest)
+    task = rng.choice(sorted(tasks)) if tasks else None
+
+    return {
+        "error": None,
+        "dataset": dataset_name,
+        "image_id": image_id,
+        "reference_item": f"{_REF_PREFIX}{stem}",
+        "task": task,
+    }
+
+
+def record_rating(
+    workspace: Workspace,
+    *,
+    user_email: str,
+    dataset: str,
+    image_id: str,
+    task: str | None,
+    score: int,
+) -> int:
+    """Persist one 1-4 rating; returns the annotator's total rating count."""
+    score = max(1, min(4, int(score)))
+    email = normalize_email(user_email)
+    with AnnotatorStore(workspace.annotations_path) as store:
+        store.add_rating(
+            {
+                "user_email": email,
+                "dataset": dataset,
+                "image_id": image_id,
+                "task": task,
+                "score": score,
+            }
+        )
+        return sum(1 for r in store.ratings() if r.get("user_email") == email)
 
 
 def resolve_item_path(workspace: Workspace, dataset_name: str, item_id: str) -> Path | None:
