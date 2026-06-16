@@ -378,17 +378,21 @@ def analysis_for_dataset(
         }
 
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
-    task_names = annotation_tasks_in_manifest(manifest)
-    if not task_names:
+    # Tasks can come from manifest MOS *or* from contributed pairwise comparisons,
+    # so a dataset with no expert ratings is still analysable once BT data exists.
+    task = task or None
+    task_names, has_unnamed = _available_tasks(workspace, dataset_name, manifest)
+    if not task_names and not has_unnamed:
         return {
             "dataset": dataset_name,
             "tasks": [],
-            "error": "dataset has no expert annotations",
+            "error": "no expert annotations or contributed comparisons to analyse yet",
             **_empty,
         }
 
-    # Resolve the active task: honour the caller's choice when valid, else first.
-    active_task = task if (task and task in task_names) else task_names[0]
+    # Resolve the active task. A dataset with no sub-tasks but contributed
+    # comparisons has a single unnamed task (active_task=None, no dropdown).
+    active_task = _resolve_active_task(task, task_names)
 
     # Only correlate measures the dataset can actually support, intersected with
     # the user's selection — so unusable measures never produce empty rows.
@@ -465,17 +469,19 @@ def scatter_for_measure(
         return {"error": "no benchmark run found for this dataset"}
 
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
-    task_names = annotation_tasks_in_manifest(manifest)
-    if not task_names:
-        return {"error": "dataset has no expert annotations"}
-    active_task = task if (task and task in task_names) else task_names[0]
+    task = task or None
+    task_names, has_unnamed = _available_tasks(workspace, dataset_name, manifest)
+    if not task_names and not has_unnamed:
+        return {"error": "no expert annotations or contributed comparisons to analyse yet"}
+    active_task = _resolve_active_task(task, task_names)
 
+    task_label = active_task or "all"
     if source == "bt":
         human_values = bt_scores_for_dataset_task(workspace, dataset_name, active_task)["scores"]
-        x_label = f"Human score (BT · {active_task})"
+        x_label = f"Human score (BT · {task_label})"
     else:
         human_values = annotation_values_from_manifest(manifest, active_task, "zscore_mos")
-        x_label = f"Human score (z-MOS · {active_task})"
+        x_label = f"Human score (z-MOS · {task_label})"
     if not human_values:
         return {"error": f"no '{source}' human scores available for this dataset/task"}
 
@@ -658,6 +664,33 @@ def human_score_sources(workspace: Workspace, dataset_name: str) -> list[dict]:
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
     tasks = annotation_tasks_in_manifest(manifest)
     return _sources_for(manifest, workspace, dataset_name, tasks[0] if tasks else None)
+
+
+def _available_tasks(
+    workspace: Workspace, dataset_name: str, manifest: dict
+) -> tuple[list[str], bool]:
+    """Annotation tasks available from *either* MOS or contributed comparisons.
+
+    Returns ``(named_tasks, has_unnamed)`` where ``named_tasks`` are the named
+    tasks (manifest MOS tasks ∪ named BT tasks) and ``has_unnamed`` is True when
+    BT comparisons were collected for a dataset that has no sub-tasks (task=None).
+    """
+    mos_tasks = annotation_tasks_in_manifest(manifest)
+    with AnnotatorStore(workspace.annotations_path) as store:
+        bt_tasks = store.dataset_tasks(dataset_name)
+    named = sorted(set(mos_tasks) | {t for t in bt_tasks if t})
+    has_unnamed = None in bt_tasks
+    return named, has_unnamed
+
+
+def _resolve_active_task(task: str | None, named_tasks: list[str]) -> str | None:
+    """The task to analyse: caller's choice if valid, else the first named task.
+
+    ``None`` when there are no named tasks (a dataset annotated without sub-tasks).
+    """
+    if not named_tasks:
+        return None
+    return task if (task and task in named_tasks) else named_tasks[0]
 
 
 def _dataset_root(workspace: Workspace, dataset_name: str) -> Path:

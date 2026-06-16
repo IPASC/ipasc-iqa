@@ -103,6 +103,18 @@ class AnnotatorStore:
     def count_sessions(self, *, user_email: str | None = None) -> int:
         return len(self.sessions(user_email=user_email))
 
+    def dataset_tasks(self, dataset: str) -> set[str | None]:
+        """Distinct task values among completed sessions for a dataset.
+
+        May include ``None`` (a dataset annotated without sub-tasks).
+        """
+        out: set[str | None] = set()
+        for key in self._session_keys():
+            rec = self._cache.get(key)
+            if rec is not None and rec.get("dataset") == dataset:
+                out.add(rec.get("task"))
+        return out
+
     def leaderboard(self) -> list[dict]:
         """Per-annotator totals: ``[{name, rankings, comparisons}]``.
 

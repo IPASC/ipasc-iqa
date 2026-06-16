@@ -29,7 +29,7 @@
       <tbody>
         {% for row in rows %}
         <tr class="measure-row"
-            hx-get="/api/scatter?dataset={{ result.dataset | urlencode }}&task={{ task.task | urlencode }}&measure={{ row.measure | urlencode }}&source={{ result.active_source | urlencode }}"
+            hx-get="/api/scatter?dataset={{ result.dataset | urlencode }}&task={{ (task.task or '') | urlencode }}&measure={{ row.measure | urlencode }}&source={{ result.active_source | urlencode }}"
             hx-target="#scatter-result" hx-swap="innerHTML"
             title="Click to plot {{ row.measure }} against the human scores">
           <td class="mono">
