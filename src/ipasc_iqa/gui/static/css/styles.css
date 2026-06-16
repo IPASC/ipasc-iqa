@@ -386,6 +386,11 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
 }
 .annotate-finish:hover { background: #4a4a4a; }
 
+/* ---------- Standings ---------- */
+.standings-head { display: flex; align-items: flex-end; justify-content: space-between;
+                  gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.standings-endpoint { display: flex; flex-direction: column; gap: 0.25rem; }
+
 /* ---------- Download ---------- */
 .download-contents { color: var(--text); font-size: 0.9rem; margin: 0.5rem 0 1rem; padding-left: 1.2rem; }
 .download-contents li { margin: 0.25rem 0; }

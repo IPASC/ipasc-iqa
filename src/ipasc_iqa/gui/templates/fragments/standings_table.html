@@ -1,7 +1,11 @@
 {% if not result.entries %}
   <p class="muted">
-    No rankings yet — standings need a benchmark run on a dataset that has expert ratings.
-    Run a benchmark first.
+    {% if result.source == 'bt' %}
+      No rankings yet for the pairwise (BT) endpoint — needs a benchmark run on a
+      dataset that has contributed pairwise comparisons.
+    {% else %}
+      No rankings yet — standings need a benchmark run on a dataset that has expert ratings.
+    {% endif %}
   </p>
 {% else %}
   {% set medals = {1: '🥇', 2: '🥈', 3: '🥉'} %}
@@ -22,5 +26,7 @@
     </div>
     {% endfor %}
   </div>
-  <p class="legend">IQA measures ranked by |SRCC| against expert z-MOS (higher = better aligned with experts).</p>
+  <p class="legend">IQA measures ranked by |SRCC| against
+    {{ 'Bradley–Terry pairwise scores' if result.source == 'bt' else 'expert z-MOS' }}
+    (higher = better aligned with humans).</p>
 {% endif %}

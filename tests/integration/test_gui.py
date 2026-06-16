@@ -246,6 +246,27 @@ def test_bt_source_absent_without_contributions(client: TestClient) -> None:
     assert "Pairwise (Bradley" not in frag.text
 
 
+def test_standings_endpoint_switch(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+
+    # The page exposes the MOS/BT endpoint dropdown.
+    page = client.get("/standings")
+    assert 'name="source"' in page.text and ">BT (pairwise)<" in page.text
+
+    # MOS ranks measures against z-MOS by default.
+    mos = client.get("/api/standings")
+    assert "overall_quality" in mos.text and "z-MOS" in mos.text
+
+    # BT has nothing until pairwise comparisons are contributed.
+    bt_empty = client.get("/api/standings", params={"source": "bt"})
+    assert "No rankings yet for the pairwise" in bt_empty.text
+
+    _seed_bt_comparisons(client)
+    bt = client.get("/api/standings", params={"source": "bt"})
+    assert "overall_quality" in bt.text
+    assert "Bradley" in bt.text and ("PSNR" in bt.text or "SSIM" in bt.text)
+
+
 def test_download_page_and_export(client: TestClient) -> None:
     _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
     _seed_bt_comparisons(client)

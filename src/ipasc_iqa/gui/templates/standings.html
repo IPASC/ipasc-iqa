@@ -1,10 +1,21 @@
 {% extends "base.html" %}
 {% block title %}IPASC IQA — Standings{% endblock %}
 {% block content %}
-<h1 class="page-title">Standings</h1>
+<div class="standings-head">
+  <h1 class="page-title" style="margin: 0;">Standings</h1>
+  <label class="standings-endpoint">
+    <span class="field__label">Endpoint</span>
+    <select class="select" name="source"
+            hx-get="/api/standings" hx-target="#standings-result"
+            hx-swap="innerHTML" hx-trigger="change">
+      <option value="mos">MOS (expert ratings)</option>
+      <option value="bt">BT (pairwise)</option>
+    </select>
+  </label>
+</div>
 <p class="muted">
-  IQA measures ranked by how well they correlate (SRCC) with expert ratings —
-  one leaderboard per dataset and quality task.
+  IQA measures ranked by how well they correlate (SRCC) with the selected human
+  endpoint — one leaderboard per dataset and quality task.
 </p>
 
 <div id="standings-result" class="result-area"

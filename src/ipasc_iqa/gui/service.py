@@ -530,22 +530,39 @@ def scatter_for_measure(
 # ---------------------------------------------------------------------------
 
 
-def standings(workspace: Workspace) -> dict:
-    """For each prepared+annotated dataset with a run, rank measures by |SRCC|.
+def standings(workspace: Workspace, source: str = "mos") -> dict:
+    """Rank measures by |SRCC| against a human-score endpoint, per dataset+task.
 
-    Produces one ranked leaderboard per (dataset, task). Correlation rows arrive
-    already sorted by ``|srcc|`` descending, so list position is the rank.
+    ``source`` selects the human scores to rank against: ``"mos"`` (expert
+    absolute ratings) or ``"bt"`` (continuous Bradley-Terry scores from
+    contributed pairwise comparisons). Correlation rows arrive already sorted by
+    ``|srcc|`` descending, so list position is the rank.
     """
+    source = "bt" if source == "bt" else "mos"
     entries: list[dict] = []
     for ds in discover_datasets(workspace):
-        if not ds["prepared"] or not ds["has_annotations"]:
+        if not ds["prepared"]:
             continue
         run = _merged_run(workspace, ds["name"])
         if run is None:
             continue
         manifest = load_manifest(dataset_registry.manifest_path(ds["name"], workspace.data_dir))
-        for task in ds["annotation_tasks"]:
-            values = annotation_values_from_manifest(manifest, task, "zscore_mos")
+
+        if source == "bt":
+            named, has_unnamed = _available_tasks(workspace, ds["name"], manifest)
+            tasks: list[str | None] = [*named]
+            if has_unnamed:
+                tasks.append(None)
+        else:
+            tasks = list(annotation_tasks_in_manifest(manifest))
+
+        for task in tasks:
+            if source == "bt":
+                values = bt_scores_for_dataset_task(workspace, ds["name"], task)["scores"]
+            else:
+                values = annotation_values_from_manifest(manifest, task, "zscore_mos")
+            if not values:
+                continue
             rows = correlate_measures_with_annotations(run, values, dataset=ds["name"])
             ranked = [
                 {"rank": i + 1, **r.as_dict()}
@@ -553,9 +570,9 @@ def standings(workspace: Workspace) -> dict:
                 if r.srcc is not None
             ]
             if ranked:
-                entries.append({"dataset": ds["name"], "task": task, "rows": ranked})
+                entries.append({"dataset": ds["name"], "task": task or "overall", "rows": ranked})
 
-    return {"entries": entries}
+    return {"entries": entries, "source": source}
 
 
 # ---------------------------------------------------------------------------
