@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Contribute annotations{% endblock %}
+{% block content %}
+<h1 class="page-title">Contribute annotations</h1>
+
+<div id="contribute-root">
+  {% if account %}
+    {% include "fragments/annotate_picker.html" %}
+  {% else %}
+    {% include "fragments/annotate_login.html" %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{# Sub-task <select>. Empty `tasks` (e.g. dataset = random) → just "any". #}
+<label class="field">
+  <span class="field__label">Sub-task</span>
+  <select class="select" name="task">
+    <option value="random">Random / any</option>
+    {% for t in tasks %}
+    <option value="{{ t }}">{{ t.replace('_', ' ') }}</option>
+    {% endfor %}
+  </select>
+</label>

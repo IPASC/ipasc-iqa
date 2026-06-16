@@ -1,0 +1,38 @@
+{# Dataset + sub-task picker shown to a signed-in annotator. Expects `account`
+   ({user, count}), `eligible_datasets`, and optional `message`. #}
+<div class="panel annotate-picker">
+  <h2 class="panel__title">Welcome, {{ account.user.name }}</h2>
+  {% if message %}<p class="notice notice--ok">{{ message }}</p>{% endif %}
+  <p class="panel__hint">You have contributed {{ account.count }} ranking{{ '' if account.count == 1 else 's' }} so far.</p>
+
+  {% if not eligible_datasets %}
+    <p class="empty">No datasets with rankable image variants are prepared yet.
+      Run a benchmark on such a dataset first.</p>
+  {% else %}
+  <form hx-post="/contribute/start" hx-target="#contribute-root" hx-swap="innerHTML">
+    <label class="field">
+      <span class="field__label">Dataset</span>
+      <select class="select" name="dataset"
+              hx-get="/api/annotate/tasks" hx-target="#annotate-task-field"
+              hx-swap="innerHTML" hx-trigger="change">
+        <option value="random">Random</option>
+        {% for d in eligible_datasets %}
+        <option value="{{ d.name }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div id="annotate-task-field">
+      {% include "fragments/annotate_task_field.html" %}
+    </div>
+
+    <p class="panel__hint">
+      You'll compare two images at a time and pick the higher-quality one, until a
+      full ranking emerges. It takes only a handful of clicks per image set.
+    </p>
+    <div class="actions">
+      <button type="submit" class="btn btn--primary">Start annotating ▶</button>
+    </div>
+  </form>
+  {% endif %}
+</div>

@@ -11,11 +11,17 @@ run outputs (``<run_id>.json``).
 
 from __future__ import annotations
 
+import io
 import json
+import random
+import uuid
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+import numpy as np
 
 from ipasc_iqa.analysis.aggregate import measure_stats
 from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
@@ -25,7 +31,8 @@ from ipasc_iqa.analysis.manifest_query import (
     groups_from_manifest,
 )
 from ipasc_iqa.analysis.scatter import build_scatter
-from ipasc_iqa.gui.charts import scatter_chart
+from ipasc_iqa.contrib.ranking import RankingSession
+from ipasc_iqa.contrib.store import AnnotatorStore, normalize_email
 from ipasc_iqa.core.cache import ResultStore
 from ipasc_iqa.core.measure import MeasureType
 from ipasc_iqa.core.registry import registry as measure_registry
@@ -33,6 +40,7 @@ from ipasc_iqa.core.result import EnvironmentInfo, RunConfig, RunResults
 from ipasc_iqa.core.runner import run_evaluation
 from ipasc_iqa.datasets.registry import default_data_dir
 from ipasc_iqa.datasets.registry import registry as dataset_registry
+from ipasc_iqa.gui.charts import scatter_chart
 from ipasc_iqa.io.manifest import load_manifest
 from ipasc_iqa.io.results import load_results
 
@@ -55,6 +63,11 @@ class Workspace:
         A diskcache directory (SQLite-backed), not a single file.
         """
         return self.results_dir / "cache"
+
+    @property
+    def annotations_path(self) -> Path:
+        """diskcache directory for contributed annotators + their rankings."""
+        return self.root / "annotations"
 
     def ensure(self) -> None:
         self.results_dir.mkdir(parents=True, exist_ok=True)
@@ -509,3 +522,257 @@ def standings(workspace: Workspace) -> dict:
                 entries.append({"dataset": ds["name"], "task": task, "rows": ranked})
 
     return {"entries": entries}
+
+
+# ---------------------------------------------------------------------------
+# Contributed annotations — lightweight login + 2AFC pairwise ranking
+# ---------------------------------------------------------------------------
+
+_REF_PREFIX = "__ref__"
+
+
+def annotator_login(workspace: Workspace, name: str, email: str) -> dict:
+    """Recognise/create an annotator by email. Returns user + is_new + count."""
+    with AnnotatorStore(workspace.annotations_path) as store:
+        user, is_new = store.upsert_user(email, name)
+        count = store.count_sessions(user_email=email)
+    return {"user": user, "is_new": is_new, "count": count}
+
+
+def annotator_for(workspace: Workspace, email: str | None) -> dict | None:
+    if not email:
+        return None
+    with AnnotatorStore(workspace.annotations_path) as store:
+        user = store.get_user(email)
+        if user is None:
+            return None
+        return {"user": user, "count": store.count_sessions(user_email=email)}
+
+
+def _dataset_root(workspace: Workspace, dataset_name: str) -> Path:
+    return dataset_registry.manifest_path(dataset_name, workspace.data_dir).parent
+
+
+def _reference_groups(manifest: dict) -> dict[str, list[dict]]:
+    """Group manifest image entries by their shared reference (``metadata.stem``)."""
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for entry in manifest.get("images", []):
+        stem = entry.get("metadata", {}).get("stem")
+        if stem is not None:
+            groups[str(stem)].append(entry)
+    return groups
+
+
+def _items_for_stem(entries: list[dict]) -> list[str]:
+    """Rankable item ids for one reference group: each variant + the reference."""
+    items = [e["id"] for e in entries]
+    for e in entries:
+        if e.get("references"):
+            items.append(f"{_REF_PREFIX}{e['metadata']['stem']}")
+            break
+    return items
+
+
+def eligible_annotation_datasets(workspace: Workspace) -> list[dict]:
+    """Prepared datasets that have at least one reference group of ≥2 items."""
+    out: list[dict] = []
+    for ds in discover_datasets(workspace):
+        if not ds["prepared"]:
+            continue
+        try:
+            manifest = load_manifest(dataset_registry.manifest_path(ds["name"], workspace.data_dir))
+        except Exception:
+            continue
+        groups = _reference_groups(manifest)
+        if any(len(_items_for_stem(v)) >= 2 for v in groups.values()):
+            out.append({"name": ds["name"], "tasks": ds["annotation_tasks"]})
+    return out
+
+
+def annotation_tasks_for(workspace: Workspace, dataset_name: str | None) -> list[str]:
+    """Sub-tasks offered for a dataset ('random'/empty → none, decided per draw)."""
+    if not dataset_name or dataset_name == "random":
+        return []
+    try:
+        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    except Exception:
+        return []
+    return annotation_tasks_in_manifest(manifest)
+
+
+def start_ranking(
+    workspace: Workspace,
+    sessions: dict[str, dict],
+    *,
+    user_email: str,
+    dataset_choice: str,
+    task_choice: str,
+    rng: random.Random | None = None,
+) -> dict:
+    """Draw a random reference set and create a new :class:`RankingSession`.
+
+    ``dataset_choice`` / ``task_choice`` may be ``"random"``; they are remembered
+    so the *next* set after this one is drawn the same way. Returns
+    ``{"error": ...}`` on failure or ``{"session_id": ...}`` on success.
+    """
+    rng = rng or random.Random()
+    eligible = {e["name"] for e in eligible_annotation_datasets(workspace)}
+    if not eligible:
+        return {"error": "No datasets with rankable variants are prepared yet."}
+
+    dataset_name = dataset_choice
+    if dataset_name in (None, "", "random"):
+        dataset_name = rng.choice(sorted(eligible))
+    elif dataset_name not in eligible:
+        return {"error": "That dataset isn't available for annotation."}
+
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    groups = _reference_groups(manifest)
+    rankable = {
+        stem: items
+        for stem, entries in groups.items()
+        if len(items := _items_for_stem(entries)) >= 2
+    }
+    if not rankable:
+        return {"error": "That dataset has no rankable reference sets."}
+
+    stem = rng.choice(sorted(rankable))
+    item_ids = rankable[stem]
+
+    tasks = annotation_tasks_in_manifest(manifest)
+    chosen_task: str | None = None
+    if tasks:
+        chosen_task = task_choice if task_choice in tasks else rng.choice(sorted(tasks))
+
+    session = RankingSession(
+        items=item_ids,
+        dataset=dataset_name,
+        reference=stem,
+        task=chosen_task,
+        user_email=normalize_email(user_email),
+    )
+    sid = uuid.uuid4().hex
+    sessions[sid] = {
+        "session": session,
+        "dataset_choice": dataset_choice,
+        "task_choice": task_choice,
+    }
+    return {"error": None, "session_id": sid}
+
+
+def compare_view(sessions: dict[str, dict], session_id: str) -> dict | None:
+    """Build the template context for the current comparison, or ``None``."""
+    wrapper = sessions.get(session_id)
+    if wrapper is None:
+        return None
+    session: RankingSession = wrapper["session"]
+    pair = session.current_pair()
+    if pair is None:
+        return None
+    prompt = "Click on the image that has higher quality"
+    if session.task:
+        prompt += f" for the task: {session.task.replace('_', ' ')}"
+    placed = len(session.sorted_ids)
+    return {
+        "session_id": session_id,
+        "dataset": session.dataset,
+        "prompt": prompt,
+        "left_item": pair["left"],
+        "right_item": pair["right"],
+        "placed": placed,
+        "n_items": session.n_items,
+        "n_comparisons": len(session.comparisons),
+    }
+
+
+def submit_choice(
+    workspace: Workspace,
+    sessions: dict[str, dict],
+    session_id: str,
+    winner: str,
+) -> dict:
+    """Record a choice. Returns ``{"status": "continue"|"completed"|"missing", ...}``.
+
+    On completion the ranking is persisted, a fresh set is drawn with the same
+    dataset/task choice, and the new ``session_id`` is returned.
+    """
+    wrapper = sessions.get(session_id)
+    if wrapper is None:
+        return {"status": "missing"}
+    session: RankingSession = wrapper["session"]
+    try:
+        session.submit(winner)
+    except ValueError:
+        # Stale/duplicate click that no longer matches the current pair — ignore.
+        return {"status": "continue", "session_id": session_id}
+
+    if not session.is_complete:
+        return {"status": "continue", "session_id": session_id}
+
+    # Persist the finished ranking and immediately draw the next set.
+    with AnnotatorStore(workspace.annotations_path) as store:
+        store.add_session(session.result())
+        count = store.count_sessions(user_email=session.user_email)
+    sessions.pop(session_id, None)
+
+    nxt = start_ranking(
+        workspace,
+        sessions,
+        user_email=session.user_email,
+        dataset_choice=wrapper["dataset_choice"],
+        task_choice=wrapper["task_choice"],
+    )
+    return {
+        "status": "completed",
+        "count": count,
+        "next_session_id": nxt.get("session_id"),
+        "error": nxt.get("error"),
+    }
+
+
+def resolve_item_path(workspace: Workspace, dataset_name: str, item_id: str) -> Path | None:
+    """Map an annotation item id back to its on-disk ``.npy`` (via the manifest)."""
+    try:
+        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    except Exception:
+        return None
+    root = _dataset_root(workspace, dataset_name)
+
+    rel: str | None = None
+    if item_id.startswith(_REF_PREFIX):
+        stem = item_id[len(_REF_PREFIX):]
+        for e in manifest.get("images", []):
+            if str(e.get("metadata", {}).get("stem")) == stem and e.get("references"):
+                refs = e["references"]
+                ref = refs.get("ground_truth") or next(iter(refs.values()))
+                rel = ref["path"]
+                break
+    else:
+        for e in manifest.get("images", []):
+            if e["id"] == item_id:
+                rel = e["path"]
+                break
+
+    if rel is None:
+        return None
+    # Defensive: the resolved path must stay within the dataset root.
+    path = (root / rel).resolve()
+    if root.resolve() not in path.parents:
+        return None
+    return path
+
+
+def render_item_png(path: Path) -> bytes:
+    """Load a stored ``.npy`` and encode it as a display PNG (min-max to 8-bit)."""
+    from PIL import Image
+
+    arr = np.load(path)
+    arr = np.asarray(arr, dtype=np.float64)
+    if arr.ndim == 3 and arr.shape[2] == 1:
+        arr = arr[:, :, 0]
+    lo, hi = float(arr.min()), float(arr.max())
+    scaled = (arr - lo) / (hi - lo) if hi > lo else np.zeros_like(arr)
+    img = (scaled * 255.0).clip(0, 255).astype(np.uint8)
+    buf = io.BytesIO()
+    Image.fromarray(img).save(buf, format="PNG")
+    return buf.getvalue()

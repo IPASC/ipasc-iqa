@@ -70,3 +70,19 @@ def standings_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request, "standings.html", {"active": "standings"}
     )
+
+
+@router.get("/contribute", response_class=HTMLResponse)
+def contribute_page(request: Request) -> HTMLResponse:
+    ws = _ws(request)
+    # Recognised by an email cookie (no password); falls back to the login form.
+    account = service.annotator_for(ws, request.cookies.get("annotator_email"))
+    return templates.TemplateResponse(
+        request,
+        "contribute.html",
+        {
+            "active": "contribute",
+            "account": account,
+            "eligible_datasets": service.eligible_annotation_datasets(ws),
+        },
+    )

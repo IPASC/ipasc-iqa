@@ -7,6 +7,7 @@ pre-prepared on disk (download is a no-op).
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -85,6 +86,30 @@ def client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(workspace_root=workspace_root, data_dir=data_dir))
 
 
+def _run_and_wait(
+    client: TestClient,
+    datasets: list[str],
+    measures: list[str],
+    *,
+    timeout: float = 30.0,
+):
+    """POST /run (which launches a background job) and block until it finishes.
+
+    Returns the final status-endpoint response, which carries the ``HX-Redirect``
+    header once the run is done.
+    """
+    resp = client.post("/run", data={"datasets": datasets, "measures": measures})
+    assert resp.status_code == 200
+    jobs = client.app.state.jobs
+    job_id = next(reversed(jobs))  # the most recently launched job
+    deadline = time.time() + timeout
+    while jobs[job_id].snapshot()["status"] == "running":
+        if time.time() > deadline:
+            raise AssertionError("benchmark job did not finish in time")
+        time.sleep(0.02)
+    return client.get(f"/api/run/{job_id}/status")
+
+
 def test_pages_render(client: TestClient) -> None:
     for path in ("/", "/run", "/results", "/standings"):
         resp = client.get(path)
@@ -108,9 +133,10 @@ def test_measures_listed(client: TestClient) -> None:
 
 
 def test_run_then_analysis_all_tasks(client: TestClient) -> None:
-    resp = client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR", "SSIM"]})
-    assert resp.status_code == 200
-    assert resp.headers.get("HX-Redirect") == "/results"
+    # /run launches a background job; the HX-Redirect is emitted by the status
+    # endpoint once the job completes.
+    status = _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+    assert status.headers.get("HX-Redirect") == "/results"
 
     frag = client.get("/api/analysis", params={"dataset": "mini"})
     assert frag.status_code == 200
@@ -139,8 +165,8 @@ def test_measure_options_reflect_capabilities(client: TestClient) -> None:
 
 def test_partial_runs_merge_in_analysis(client: TestClient) -> None:
     # Run only psnr, then only ssim — analysis should show BOTH (merged store).
-    client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR"]})
-    client.post("/run", data={"datasets": ["mini"], "measures": ["SSIM"]})
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    _run_and_wait(client, ["mini"], ["SSIM"])
 
     frag = client.get("/api/analysis", params={"dataset": "mini"})
     assert frag.status_code == 200
@@ -156,7 +182,7 @@ def test_run_requires_selection(client: TestClient) -> None:
 
 
 def test_standings_ranks_measures(client: TestClient) -> None:
-    client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR", "SSIM"]})
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
     frag = client.get("/api/standings")
     assert frag.status_code == 200
     # Measures (not algorithms) are ranked; both tasks appear.
