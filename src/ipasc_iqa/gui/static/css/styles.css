@@ -314,6 +314,23 @@ body {
 .annotate-login, .annotate-picker { max-width: 34rem; }
 .annotate-login .field, .annotate-picker .field { margin-bottom: 0.9rem; }
 
+/* While a comparison is on screen, dark-theme the WHOLE page (BT.500 controlled
+   surround), not just the stage. `:has()` flips it on automatically when the
+   compare fragment is present and reverts for the picker/login. */
+body:has(.annotate-stage) {
+  background: #1a1a1a;
+  color: #ececec;
+}
+body:has(.annotate-stage) .topbar {
+  background: #262626; border-bottom-color: #3a3a3a;
+}
+body:has(.annotate-stage) .brand__sub { color: #cbd5e1; }
+body:has(.annotate-stage) .nav__link { color: #d8dee9; }
+body:has(.annotate-stage) .nav__link:hover { background: #333333; }
+body:has(.annotate-stage) .nav__link.is-active { background: var(--navy-700); color: #fff; }
+body:has(.annotate-stage) .page-title { color: #ffffff; }
+body:has(.annotate-stage) .footer { color: #8a8a8a; }
+
 /* Dark, neutral-grey annotation stage (ITU-R BT.500-style controlled surround). */
 .annotate-stage {
   background: #2b2b2b; color: #ececec;
