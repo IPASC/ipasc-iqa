@@ -141,6 +141,7 @@ def _picker_response(request: Request, account: dict, *, message: str | None = N
         {
             "account": account,
             "eligible_datasets": service.eligible_annotation_datasets(_ws(request)),
+            "annotators": service.annotators_leaderboard(_ws(request)),
             "message": message,
         },
     )

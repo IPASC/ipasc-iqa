@@ -311,8 +311,21 @@ body {
 .scatter__swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; }
 
 /* ---------- Contribute annotations ---------- */
-.annotate-login, .annotate-picker { max-width: 34rem; }
+.annotate-login { max-width: 34rem; }
 .annotate-login .field, .annotate-picker .field { margin-bottom: 0.9rem; }
+
+/* Picker beside a scrollable annotators leaderboard. The columns share a height
+   (grid stretch); the picker drives that height and the table scrolls within it. */
+.contribute-layout {
+  display: grid; grid-template-columns: minmax(0, 34rem) 1fr;
+  gap: 1.25rem; align-items: stretch;
+}
+@media (max-width: 820px) { .contribute-layout { grid-template-columns: 1fr; } }
+
+.annotators-panel { display: flex; flex-direction: column; min-height: 0; }
+.annotators-panel .panel__title { margin-bottom: 0.75rem; }
+.annotators-scroll { flex: 1 1 0; min-height: 0; max-height: 60vh; overflow-y: auto; }
+.annotators-table thead th { position: sticky; top: 0; }  /* keep header visible while scrolling */
 
 /* While a comparison is on screen, dark-theme the WHOLE page (BT.500 controlled
    surround), not just the stage. `:has()` flips it on automatically when the

@@ -83,6 +83,11 @@ class AnnotatorStore:
             if isinstance(k, tuple) and k and k[0] == "session":
                 yield k
 
+    def _user_keys(self) -> Iterator[tuple]:
+        for k in self._cache:
+            if isinstance(k, tuple) and k and k[0] == "user":
+                yield k
+
     def sessions(self, *, user_email: str | None = None) -> list[dict]:
         out: list[dict] = []
         target = normalize_email(user_email) if user_email else None
@@ -97,3 +102,33 @@ class AnnotatorStore:
 
     def count_sessions(self, *, user_email: str | None = None) -> int:
         return len(self.sessions(user_email=user_email))
+
+    def leaderboard(self) -> list[dict]:
+        """Per-annotator totals: ``[{name, rankings, comparisons}]``.
+
+        Includes registered annotators with zero completed rankings. Sorted by
+        rankings (desc), then name.
+        """
+        users = {k[1]: self._cache.get(k) for k in self._user_keys()}
+        agg: dict[str, dict[str, int]] = {
+            email: {"rankings": 0, "comparisons": 0} for email in users
+        }
+        for key in self._session_keys():
+            rec = self._cache.get(key)
+            if rec is None:
+                continue
+            email = rec.get("user_email")
+            stats = agg.setdefault(email, {"rankings": 0, "comparisons": 0})
+            stats["rankings"] += 1
+            stats["comparisons"] += int(rec.get("n_comparisons", 0))
+
+        rows = [
+            {
+                "name": (users.get(email) or {}).get("name") or email,
+                "rankings": stats["rankings"],
+                "comparisons": stats["comparisons"],
+            }
+            for email, stats in agg.items()
+        ]
+        rows.sort(key=lambda r: (-r["rankings"], r["name"].lower()))
+        return rows

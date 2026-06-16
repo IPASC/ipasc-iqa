@@ -84,5 +84,6 @@ def contribute_page(request: Request) -> HTMLResponse:
             "active": "contribute",
             "account": account,
             "eligible_datasets": service.eligible_annotation_datasets(ws),
+            "annotators": service.annotators_leaderboard(ws),
         },
     )

@@ -549,6 +549,12 @@ def annotator_for(workspace: Workspace, email: str | None) -> dict | None:
         return {"user": user, "count": store.count_sessions(user_email=email)}
 
 
+def annotators_leaderboard(workspace: Workspace) -> list[dict]:
+    """Per-annotator ranking/comparison totals for the contribute screen."""
+    with AnnotatorStore(workspace.annotations_path) as store:
+        return store.leaderboard()
+
+
 def _dataset_root(workspace: Workspace, dataset_name: str) -> Path:
     return dataset_registry.manifest_path(dataset_name, workspace.data_dir).parent
 
