@@ -10,6 +10,7 @@ import pytest
 
 from ipasc_iqa.datasets.digital_twin import (
     RECON_ALGORITHMS,
+    RECON_SOURCE,
     SPLITS,
     DigitalTwinDataset,
 )
@@ -18,7 +19,9 @@ from ipasc_iqa.datasets.digital_twin import (
 def _build_source(root: Path, *, drop: tuple[str, str, str] | None = None) -> None:
     """Materialise a tiny copy of the source layout under ``<root>/data/``.
 
-    ``drop`` optionally omits one (split, stem, algo) reconstruction.
+    ``drop`` optionally omits one (split, stem, algo) reconstruction. Both the
+    calibration and testing splits are built (calibration is used to fit the
+    per-algorithm calibration factors that are applied to the testing split).
     """
     rng = np.random.default_rng(0)
     data = root / "data"
@@ -30,23 +33,22 @@ def _build_source(root: Path, *, drop: tuple[str, str, str] | None = None) -> No
             for algo in RECON_ALGORITHMS:
                 if drop == (split, str(stem), algo):
                     continue
-                d = data / split / "recons" / algo / "sim"
+                d = data / split / "recons" / algo / RECON_SOURCE
                 d.mkdir(parents=True, exist_ok=True)
                 np.save(d / f"{stem}.npy", rng.random((8, 8)).astype(np.float32))
 
 
-def test_converts_and_pools_splits(tmp_path: Path) -> None:
+def test_converts_testing_split(tmp_path: Path) -> None:
     _build_source(tmp_path)
     DigitalTwinDataset(tmp_path, download=False)
 
     manifest = json.loads((tmp_path / "converted" / "manifest.json").read_text())
     ids = [e["id"] for e in manifest["images"]]
 
-    # 2 splits × 2 scenes × 6 algos = 24 reconstructions, all unique.
-    assert len(ids) == 24
-    assert len(set(ids)) == 24
-    assert any(i.startswith("calibration_") for i in ids)
-    assert any(i.startswith("testing_") for i in ids)
+    # Only the (calibrated) testing split is emitted: 2 scenes × 6 algos = 12.
+    assert len(ids) == 12
+    assert len(set(ids)) == 12
+    assert all(i.startswith("testing_") for i in ids)
 
     entry = manifest["images"][0]
     assert entry["shape"] == [8, 8, 1]  # channel axis added per the contract
@@ -107,31 +109,30 @@ def test_bt_only_dataset_is_analysable(tmp_path: Path) -> None:
     before = service.analysis_for_dataset(ws, "digital_twin")
     assert before["error"] is not None
 
-    # Contribute pairwise comparisons with task=None (no sub-tasks).
+    # Contribute pairwise comparisons (task=None) for the emitted testing scenes.
     with AnnotatorStore(ws.annotations_path) as store:
         store.upsert_user("u@x.com", "U")
-        for split in SPLITS:
-            for stem in range(2):
-                scene = f"{split}_{stem}"
-                algos = [f"{scene}_{a}" for a in RECON_ALGORITHMS]
-                ref = f"__ref__{scene}"
-                comps = [{"winner": ref, "loser": a} for a in algos]
-                comps += [
-                    {"winner": algos[i], "loser": algos[j]}
-                    for i in range(len(algos))
-                    for j in range(i + 1, len(algos))
-                ]
-                store.add_session(
-                    {
-                        "user_email": "u@x.com",
-                        "dataset": "digital_twin",
-                        "task": None,
-                        "reference": scene,
-                        "order": [ref, *algos],
-                        "comparisons": comps,
-                        "n_comparisons": len(comps),
-                    }
-                )
+        for stem in range(2):
+            scene = f"testing_{stem}"
+            algos = [f"{scene}_{a}" for a in RECON_ALGORITHMS]
+            ref = f"__ref__{scene}"
+            comps = [{"winner": ref, "loser": a} for a in algos]
+            comps += [
+                {"winner": algos[i], "loser": algos[j]}
+                for i in range(len(algos))
+                for j in range(i + 1, len(algos))
+            ]
+            store.add_session(
+                {
+                    "user_email": "u@x.com",
+                    "dataset": "digital_twin",
+                    "task": None,
+                    "reference": scene,
+                    "order": [ref, *algos],
+                    "comparisons": comps,
+                    "n_comparisons": len(comps),
+                }
+            )
 
     after = service.analysis_for_dataset(ws, "digital_twin")
     assert after["error"] is None

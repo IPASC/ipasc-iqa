@@ -385,3 +385,8 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
   background: #3f3f3f; color: #ececec; border: 1px solid #5a5a5a;
 }
 .annotate-finish:hover { background: #4a4a4a; }
+
+/* ---------- Download ---------- */
+.download-contents { color: var(--text); font-size: 0.9rem; margin: 0.5rem 0 1rem; padding-left: 1.2rem; }
+.download-contents li { margin: 0.25rem 0; }
+.download-contents code { font-size: 0.85em; }

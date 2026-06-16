@@ -130,6 +130,22 @@ def api_runs(request: Request) -> JSONResponse:
     return JSONResponse(service.list_runs(_ws(request)))
 
 
+@router.get("/api/download")
+def api_download(request: Request, dataset: str = Query(default="all")) -> JSONResponse:
+    """Download cached metric results + annotations as a JSON file (attachment)."""
+    from datetime import UTC, datetime
+
+    ws = _ws(request)
+    payload = service.export_payload(ws, None if dataset == "all" else dataset)
+    label = "all" if dataset == "all" else dataset
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    filename = f"ipasc_iqa_export_{label}_{stamp}.json"
+    return JSONResponse(
+        payload,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Contributed annotations — login, 2AFC ranking, image rendering
 # ---------------------------------------------------------------------------

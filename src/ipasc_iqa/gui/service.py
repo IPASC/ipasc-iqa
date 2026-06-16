@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import random
 import uuid
 from collections import defaultdict
@@ -20,9 +21,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
+from ipasc_iqa import __version__
 from ipasc_iqa.analysis.aggregate import measure_stats
 from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
 from ipasc_iqa.analysis.manifest_query import (
@@ -920,3 +923,146 @@ def render_item_png(path: Path) -> bytes:
     buf = io.BytesIO()
     Image.fromarray(img).save(buf, format="PNG")
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Data export — bundle cached metric results + annotations as downloadable JSON
+# ---------------------------------------------------------------------------
+
+# Runtime-only fields not useful to downstream consumers of an export.
+_EXPORT_DROP_FIELDS = {"wall_time_s", "device", "from_cache"}
+
+
+def _anonymise(emails: set[str]) -> dict[str, str]:
+    """Stable pseudonyms for annotators (sorted), so exports carry no PII."""
+    return {email: f"annotator_{i + 1:03d}" for i, email in enumerate(sorted(emails))}
+
+
+def _json_safe(obj: Any) -> Any:
+    """Recursively replace non-finite floats (NaN/Inf) with None for JSON output.
+
+    Cached metric values can be NaN/Inf (e.g. a measure on degenerate input, or an
+    infinite PSNR), which ``json.dumps(allow_nan=False)`` — used by the response —
+    rejects. Mapping them to null keeps the export serialisable; consumers read it
+    back as a missing value (e.g. NaN in pandas).
+    """
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+def _manifest_annotations(manifest: dict) -> dict[str, dict[str, dict]]:
+    """Expert ratings embedded in the manifest: ``{task: {image_id: {kind: value}}}``."""
+    out: dict[str, dict[str, dict]] = {}
+    for entry in manifest.get("images", []):
+        ann = entry.get("metadata", {}).get("annotations", {})
+        for task, kinds in ann.items():
+            out.setdefault(task, {})[entry["id"]] = kinds
+    return out
+
+
+def _bt_blocks(workspace: Workspace, dataset_name: str, manifest: dict) -> list[dict]:
+    """Bradley-Terry scores per task (named tasks + the unnamed one, if any)."""
+    named, has_unnamed = _available_tasks(workspace, dataset_name, manifest or {"images": []})
+    tasks: list[str | None] = [*named]
+    if has_unnamed:
+        tasks.append(None)
+
+    blocks: list[dict] = []
+    for task in tasks:
+        bt = bt_scores_for_dataset_task(workspace, dataset_name, task)
+        if not bt["scores"]:
+            continue
+        blocks.append(
+            {
+                "task": task,
+                "n_comparisons": bt["n_comparisons"],
+                "n_sets": bt["n_sets"],
+                "scores": {
+                    img: {"beta": round(beta, 6), "se": round(bt["se"][img], 6)}
+                    for img, beta in bt["scores"].items()
+                },
+            }
+        )
+    return blocks
+
+
+def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dict:
+    """Bundle cached metric results + annotations into a self-contained dict.
+
+    With ``dataset_name`` None (or "all") every dataset that has any data is
+    included; otherwise only the named one. Annotators are anonymised so the
+    bundle is safe to publish (e.g. to Zenodo).
+    """
+    all_names = [d["name"] for d in discover_datasets(workspace)]
+    if dataset_name and dataset_name != "all":
+        names = [dataset_name] if dataset_name in all_names else []
+    else:
+        names = all_names
+
+    with AnnotatorStore(workspace.annotations_path) as astore:
+        all_sessions = astore.sessions()
+    anon = _anonymise({s.get("user_email") for s in all_sessions if s.get("user_email")})
+
+    records_by_ds: dict[str, list] = {}
+    if workspace.store_path.exists():
+        with ResultStore(workspace.store_path) as rstore:
+            for name in names:
+                records_by_ds[name] = rstore.records_for_dataset(name)
+
+    datasets_out: list[dict] = []
+    for name in names:
+        ds = get_dataset(workspace, name)
+        manifest: dict = {}
+        if ds and ds["prepared"]:
+            manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+
+        measure_results = [
+            {k: v for k, v in r.model_dump(mode="json").items() if k not in _EXPORT_DROP_FIELDS}
+            for r in records_by_ds.get(name, [])
+        ]
+        expert_annotations = _manifest_annotations(manifest)
+        pairwise_annotations = [
+            {
+                "annotator": anon.get(s.get("user_email")),
+                "task": s.get("task"),
+                "reference": s.get("reference"),
+                "order": s.get("order"),
+                "comparisons": s.get("comparisons"),
+                "n_comparisons": s.get("n_comparisons"),
+                "created": s.get("created"),
+            }
+            for s in all_sessions
+            if s.get("dataset") == name
+        ]
+        bradley_terry = _bt_blocks(workspace, name, manifest)
+
+        # Skip datasets with nothing to export (e.g. not-yet-downloaded ones).
+        if not (measure_results or expert_annotations or pairwise_annotations or bradley_terry):
+            continue
+
+        datasets_out.append(
+            {
+                "name": name,
+                "version": ds["version"] if ds else None,
+                "n_measure_results": len(measure_results),
+                "measure_results": measure_results,
+                "expert_annotations": expert_annotations,
+                "pairwise_annotations": pairwise_annotations,
+                "bradley_terry": bradley_terry,
+            }
+        )
+
+    return _json_safe(
+        {
+            "tool": {"name": "ipasc_iqa", "version": __version__},
+            "exported": datetime.now(UTC).isoformat(),
+            "anonymised": True,
+            "n_annotators": len(anon),
+            "datasets": datasets_out,
+        }
+    )

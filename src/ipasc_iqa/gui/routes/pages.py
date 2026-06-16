@@ -74,6 +74,16 @@ def standings_page(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/download", response_class=HTMLResponse)
+def download_page(request: Request) -> HTMLResponse:
+    ws = _ws(request)
+    return templates.TemplateResponse(
+        request,
+        "download.html",
+        {"active": "download", "datasets": service.discover_datasets(ws)},
+    )
+
+
 @router.get("/contribute", response_class=HTMLResponse)
 def contribute_page(request: Request) -> HTMLResponse:
     ws = _ws(request)

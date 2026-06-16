@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+from scipy.stats import linregress
 
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
@@ -53,7 +54,7 @@ DATA_ZIP = "data.zip"
 REFERENCE_TYPE = "ground_truth"
 RECON_ALGORITHMS = ("bp", "bph", "fft", "ittr", "mb", "tr")
 SPLITS = ("calibration", "testing")
-RECON_SOURCE = "sim"  # only the calibrated-simulation reconstructions are used
+RECON_SOURCE = "sim_raw"  # only the calibrated-simulation reconstructions are used
 
 
 class DigitalTwinDataset(LocalDataset):
@@ -76,6 +77,18 @@ class DigitalTwinDataset(LocalDataset):
         "Digital Twin Dataset: photoacoustic reconstructions (bp, bph, fft, ittr, mb, tr) "
         "of calibrated simulations, with the simulated initial pressure (p0) as full-reference "
         "ground truth. No human quality ratings (Zenodo 15388429)."
+    )
+    DATASET_BIBTEX = (
+        "@article{grohl2025digital,\n"
+        "  title     = {Digital twins enable full-reference quality assessment of photoacoustic image reconstructions},\n"
+        "  author    = {Gr{\\\"o}hl, Janek and Kunyansky, Leonid and Poimala, Jenni and Else, Thomas R and Di Cecio, Francesca and Bohndiek, Sarah E and Cox, Ben T and Hauptmann, Andreas},\n"
+        "  journal   = {The Journal of the Acoustical Society of America},\n"
+        "  volume    = {158},\n"
+        "  number    = {1},\n"
+        "  pages     = {590--601},\n"
+        "  year      = {2025},\n"
+        "  publisher = {AIP Publishing}\n"
+        "}"
     )
 
     @classmethod
@@ -155,10 +168,27 @@ class DigitalTwinDataset(LocalDataset):
 
     @staticmethod
     def _to_npy_array(path: Path) -> np.ndarray:
-        arr = np.load(path).astype(np.float32)
+        """Load a source array as float32 ``(H, W, 1)``, repairing corrupt pixels.
+
+        NaN/Inf and absurd magnitudes (``|x| > 1e10``) are replaced with the median
+        of the *valid* pixels. If no pixel is valid (e.g. an all-NaN
+        reconstruction) the array is returned still non-finite, so the caller can
+        exclude that entry.
+        """
+        arr = np.load(path).astype(np.float64)
         if arr.ndim == 2:
             arr = arr[:, :, np.newaxis]
-        return arr
+
+        valid = np.isfinite(arr) & (np.abs(arr) <= 1e10)
+        if not valid.all() and valid.any():
+            # Fill from valid pixels only (avoids an Inf/NaN-polluted median).
+            arr[~valid] = float(np.median(arr[valid]))
+        return arr.astype(np.float32)
+
+    @staticmethod
+    def _is_clean(arr: np.ndarray) -> bool:
+        """True if every pixel is finite (i.e. the array is usable)."""
+        return bool(np.isfinite(arr).all())
 
     def _convert(self, data_root: Path, converted_dir: Path) -> None:
         images_out = converted_dir / "images"
@@ -166,8 +196,44 @@ class DigitalTwinDataset(LocalDataset):
 
         manifest_entries: list[dict] = []
         n_scenes = 0
+        n_excluded = 0  # reconstructions dropped for still being non-finite
 
-        for split in SPLITS:
+        # --------------------------------------------------------------
+        # Per-algorithm calibration from the calibration split.
+        # Fit p0 = slope * recon + intercept, then apply only to testing.
+        # --------------------------------------------------------------
+        calibration_factors: dict[str, tuple[float, float]] = {}
+
+        calibration_dir = self._find_split_dir(data_root, "calibration")
+        if calibration_dir is not None:
+            p0_dir = calibration_dir / "p0"
+
+            for algo in RECON_ALGORITHMS:
+                xs = []
+                ys = []
+
+                for p0_path in sorted(p0_dir.glob("*.npy")):
+                    recon_path = (
+                        calibration_dir / "recons" / algo / RECON_SOURCE / p0_path.name
+                    )
+                    if not recon_path.exists():
+                        continue
+
+                    p0 = np.load(p0_path).astype(np.float32).reshape(-1)
+                    recon = np.load(recon_path).astype(np.float32).reshape(-1)
+
+                    mask = np.isfinite(p0) & np.isfinite(recon)
+                    if np.any(mask):
+                        ys.append(p0[mask])
+                        xs.append(recon[mask])
+
+                if xs:
+                    x = np.concatenate(xs)
+                    y = np.concatenate(ys)
+                    slope, intercept, *_ = linregress(x, y)
+                    calibration_factors[algo] = (float(slope), float(intercept))
+
+        for split in ("testing",):
             split_dir = self._find_split_dir(data_root, split)
             if split_dir is None:
                 print(f"  · split '{split}' not found under {data_root}; skipping")
@@ -179,9 +245,13 @@ class DigitalTwinDataset(LocalDataset):
                 stem = p0_path.stem
                 scene = f"{split}_{stem}"
 
-                # Reference (ground truth) — written once per scene.
+                # Reference (ground truth) — skip the whole scene if unsalvageable.
+                ref_arr = self._to_npy_array(p0_path)
+                if not self._is_clean(ref_arr):
+                    print(f"  · excluding scene {scene}: reference still non-finite")
+                    continue
                 ref_rel = f"images/{scene}.ref.{REFERENCE_TYPE}.npy"
-                np.save(converted_dir / ref_rel, self._to_npy_array(p0_path))
+                np.save(converted_dir / ref_rel, ref_arr)
                 ref_sha = hash_file(converted_dir / ref_rel)
 
                 wrote_any_variant = False
@@ -189,8 +259,20 @@ class DigitalTwinDataset(LocalDataset):
                     recon_path = split_dir / "recons" / algo / RECON_SOURCE / name
                     if not recon_path.exists():
                         continue
-                    var_rel = f"images/{scene}.var.{algo}.npy"
                     arr = self._to_npy_array(recon_path)
+
+                    if algo in calibration_factors:
+                        slope, intercept = calibration_factors[algo]
+                        arr = arr * slope + intercept
+
+                    # Exclude reconstructions that remain non-finite after repair
+                    # (e.g. an all-NaN reconstruction with no valid pixels).
+                    if not self._is_clean(arr):
+                        print(f"  · excluding {scene}/{algo}: non-finite after repair")
+                        n_excluded += 1
+                        continue
+
+                    var_rel = f"images/{scene}.var.{algo}.npy"
                     np.save(converted_dir / var_rel, arr)
                     manifest_entries.append(
                         {
@@ -224,8 +306,8 @@ class DigitalTwinDataset(LocalDataset):
             "dataset_version": self.DATASET_VERSION,
             "description": self.DATASET_DESCRIPTION,
             "citation": (
-                "Digital twins enable full-reference quality assessment of photoacoustic "
-                "image reconstructions. https://zenodo.org/records/15388429"
+                "J. Groehl et al. Digital twins enable full-reference quality assessment of photoacoustic image reconstructions. "
+                "The Journal of the Acoustical Society of America 158.1 (2025): 590-601."
             ),
             "license": "CC-BY-4.0",
             "created": datetime.now(UTC).isoformat(),
@@ -235,5 +317,6 @@ class DigitalTwinDataset(LocalDataset):
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         print(
             f"Manifest written to {manifest_path} "
-            f"({len(manifest_entries)} reconstructions across {n_scenes} scenes)"
+            f"({len(manifest_entries)} reconstructions across {n_scenes} scenes; "
+            f"{n_excluded} non-finite reconstructions excluded)"
         )

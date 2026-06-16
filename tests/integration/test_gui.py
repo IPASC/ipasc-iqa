@@ -244,3 +244,80 @@ def test_bt_source_absent_without_contributions(client: TestClient) -> None:
     _run_and_wait(client, ["mini"], ["PSNR"])
     frag = client.get("/api/analysis", params={"dataset": "mini", "task": "overall_quality"})
     assert "Pairwise (Bradley" not in frag.text
+
+
+def test_download_page_and_export(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+    _seed_bt_comparisons(client)
+
+    # Page renders with the dataset picker and the download form.
+    page = client.get("/download")
+    assert page.status_code == 200
+    assert "/api/download" in page.text and ">Download<" in page.text
+
+    # Export returns a JSON attachment with the expected sections.
+    resp = client.get("/api/download", params={"dataset": "mini"})
+    assert resp.status_code == 200
+    assert "attachment" in resp.headers.get("content-disposition", "")
+    assert resp.headers["content-type"].startswith("application/json")
+
+    payload = resp.json()
+    assert payload["anonymised"] is True
+    ds = payload["datasets"][0]
+    assert ds["name"] == "mini"
+    assert ds["n_measure_results"] > 0
+    assert "overall_quality" in ds["expert_annotations"]
+    assert ds["pairwise_annotations"] and ds["bradley_terry"]
+    # Annotators are pseudonymised — the seeded email never appears.
+    assert ds["pairwise_annotations"][0]["annotator"].startswith("annotator_")
+    assert "u@x.com" not in resp.text
+
+
+def test_download_all_datasets(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    payload = client.get("/api/download", params={"dataset": "all"}).json()
+    assert "mini" in [d["name"] for d in payload["datasets"]]
+
+
+def test_download_handles_non_finite_values(client: TestClient) -> None:
+    # Non-finite cached values (NaN/Inf) must export as null, not crash the
+    # JSON response (which disallows NaN/Inf).
+    import math
+
+    from ipasc_iqa.core.cache import ResultStore, make_cache_key
+    from ipasc_iqa.core.result import ResultRecord
+
+    ws = client.app.state.workspace
+    with ResultStore(ws.store_path) as store:
+        for img, val in [("image0_alg0", float("nan")), ("image1_alg0", float("inf"))]:
+            key = make_cache_key(
+                measure_name="PSNR",
+                measure_version="1.0.0",
+                image_sha256=img,
+                reference_type="pseudo_reference",
+                reference_sha256="r",
+                signal_roi_sha256=None,
+                noise_roi_sha256=None,
+            )
+            store.set(
+                key,
+                ResultRecord(
+                    dataset="mini",
+                    image_id=img,
+                    image_sha256=img,
+                    measure="PSNR",
+                    measure_version="1.0.0",
+                    reference_type="pseudo_reference",
+                    signal_roi_sha256=None,
+                    noise_roi_sha256=None,
+                    value=val,
+                    sub_scores=None,
+                    wall_time_s=0.0,
+                    device="cpu",
+                ),
+            )
+
+    resp = client.get("/api/download", params={"dataset": "mini"})
+    assert resp.status_code == 200
+    values = [r["value"] for r in resp.json()["datasets"][0]["measure_results"]]
+    assert all(v is None or math.isfinite(v) for v in values)
