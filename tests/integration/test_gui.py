@@ -75,8 +75,10 @@ def _write_mini_dataset(root: Path) -> None:
     (ds_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
-@pytest.fixture()
-def client(tmp_path: Path) -> TestClient:
+ADMIN_EMAIL, ADMIN_PW = "admin@test.com", "password123"
+
+
+def _make_client(tmp_path: Path) -> TestClient:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     _write_mini_dataset(data_dir)
@@ -84,6 +86,28 @@ def client(tmp_path: Path) -> TestClient:
         dataset_registry.register(MiniDataset, distribution="tests")
     workspace_root = tmp_path / "ws"
     return TestClient(create_app(workspace_root=workspace_root, data_dir=data_dir))
+
+
+def _login(client: TestClient, email: str, password: str) -> None:
+    resp = client.post("/login", data={"email": email, "password": password})
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.fixture()
+def anon_client(tmp_path: Path) -> TestClient:
+    """An unauthenticated client (for auth-flow / access-control tests)."""
+    return _make_client(tmp_path)
+
+
+@pytest.fixture()
+def client(tmp_path: Path) -> TestClient:
+    """A client logged in as an admin (most tests exercise admin-level access)."""
+    from ipasc_iqa.gui import auth
+
+    c = _make_client(tmp_path)
+    auth.promote_admin(c.app.state.workspace, ADMIN_EMAIL, name="Admin", password=ADMIN_PW)
+    _login(c, ADMIN_EMAIL, ADMIN_PW)
+    return c
 
 
 def _run_and_wait(
@@ -192,11 +216,13 @@ def test_standings_ranks_measures(client: TestClient) -> None:
 
 def _seed_bt_comparisons(client: TestClient, task: str = "overall_quality") -> None:
     """Seed contributed pairwise comparisons for the 'mini' dataset (ref best)."""
-    from ipasc_iqa.contrib.store import AnnotatorStore
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
 
     ws = client.app.state.workspace
     with AnnotatorStore(ws.annotations_path) as store:
-        store.upsert_user("u@x.com", "U")
+        user = store.create_user(
+            email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None
+        )
         for stem in range(3):
             a0, a1, ref = f"image{stem}_alg0", f"image{stem}_alg1", f"__ref__{stem}"
             comps = [
@@ -206,7 +232,7 @@ def _seed_bt_comparisons(client: TestClient, task: str = "overall_quality") -> N
             ] * 4
             store.add_session(
                 {
-                    "user_email": "u@x.com",
+                    "user_uid": user["uid"],
                     "dataset": "mini",
                     "task": task,
                     "reference": str(stem),
@@ -293,6 +319,45 @@ def test_download_page_and_export(client: TestClient) -> None:
     # Annotators are pseudonymised — the seeded email never appears.
     assert ds["pairwise_annotations"][0]["annotator"].startswith("annotator_")
     assert "u@x.com" not in resp.text
+
+
+def test_login_required_for_protected_pages(anon_client: TestClient) -> None:
+    for path in ("/", "/results", "/contribute", "/run", "/download"):
+        resp = anon_client.get(path, follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/login"
+
+
+def test_standings_is_public(anon_client: TestClient) -> None:
+    assert anon_client.get("/standings").status_code == 200
+    assert anon_client.get("/api/standings").status_code == 200
+
+
+def test_hx_unauthenticated_gets_redirect_header(anon_client: TestClient) -> None:
+    resp = anon_client.get(
+        "/api/analysis",
+        params={"dataset": "mini"},
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 401
+    assert resp.headers.get("HX-Redirect") == "/login"
+
+
+def test_annotator_cannot_access_admin_areas(anon_client: TestClient) -> None:
+    # Open self-registration creates an annotator and logs them in.
+    anon_client.post(
+        "/register",
+        data={"name": "Ann", "email": "ann@test.com", "password": "password123"},
+    )
+    assert anon_client.get("/results").status_code == 200  # annotators allowed
+    assert anon_client.get("/run", follow_redirects=False).status_code == 403
+    assert (
+        anon_client.get(
+            "/api/download", params={"dataset": "all"}, follow_redirects=False
+        ).status_code
+        == 403
+    )
 
 
 def test_download_all_datasets(client: TestClient) -> None:

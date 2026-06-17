@@ -38,7 +38,7 @@ from ipasc_iqa.analysis.mos import composite_mos
 from ipasc_iqa.analysis.scatter import build_scatter
 from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
 from ipasc_iqa.contrib.ranking import RankingSession
-from ipasc_iqa.contrib.store import AnnotatorStore, normalize_email
+from ipasc_iqa.contrib.store import AnnotatorStore
 from ipasc_iqa.core.cache import ResultStore
 from ipasc_iqa.core.measure import MeasureType
 from ipasc_iqa.core.registry import registry as measure_registry
@@ -673,22 +673,12 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
 _REF_PREFIX = "__ref__"
 
 
-def annotator_login(workspace: Workspace, name: str, email: str) -> dict:
-    """Recognise/create an annotator by email. Returns user + is_new + count."""
-    with AnnotatorStore(workspace.annotations_path) as store:
-        user, is_new = store.upsert_user(email, name)
-        count = store.count_sessions(user_email=email)
-    return {"user": user, "is_new": is_new, "count": count}
-
-
-def annotator_for(workspace: Workspace, email: str | None) -> dict | None:
-    if not email:
+def account_for(workspace: Workspace, user: dict | None) -> dict | None:
+    """Wrap the logged-in user with their contribution count for the templates."""
+    if not user:
         return None
     with AnnotatorStore(workspace.annotations_path) as store:
-        user = store.get_user(email)
-        if user is None:
-            return None
-        return {"user": user, "count": store.count_sessions(user_email=email)}
+        return {"user": user, "count": store.count_sessions(user_uid=user["uid"])}
 
 
 def annotators_leaderboard(workspace: Workspace) -> list[dict]:
@@ -711,12 +701,16 @@ def _mos_annotator_scores(
     if task is not None:
         for image_id, raters in annotator_ratings_from_manifest(manifest, task).items():
             scores.setdefault(image_id, {}).update(raters)
-    # Pool in contributed quantitative ratings (one annotator per email).
+    # Pool in contributed quantitative ratings (one annotator per uid, so a
+    # rater's identity — and their MOS contribution — survives a profile edit).
     with AnnotatorStore(workspace.annotations_path) as store:
         for r in store.ratings(dataset=dataset_name):
+            uid = r.get("user_uid")
             if r.get("task") != task or r.get("image_id") is None or r.get("score") is None:
                 continue
-            scores.setdefault(r["image_id"], {})[f"user:{r['user_email']}"] = float(r["score"])
+            if not uid:
+                continue
+            scores.setdefault(r["image_id"], {})[f"user:{uid}"] = float(r["score"])
     return scores
 
 
@@ -903,7 +897,7 @@ def start_ranking(
     workspace: Workspace,
     sessions: dict[str, dict],
     *,
-    user_email: str,
+    user_uid: str,
     dataset_choice: str,
     task_choice: str,
     rng: random.Random | None = None,
@@ -948,7 +942,7 @@ def start_ranking(
         dataset=dataset_name,
         reference=stem,
         task=chosen_task,
-        user_email=normalize_email(user_email),
+        user_uid=user_uid,
     )
     sid = uuid.uuid4().hex
     sessions[sid] = {
@@ -1011,13 +1005,13 @@ def submit_choice(
     # Persist the finished ranking and immediately draw the next set.
     with AnnotatorStore(workspace.annotations_path) as store:
         store.add_session(session.result())
-        count = store.count_sessions(user_email=session.user_email)
+        count = store.count_sessions(user_uid=session.user_uid)
     sessions.pop(session_id, None)
 
     nxt = start_ranking(
         workspace,
         sessions,
-        user_email=session.user_email,
+        user_uid=session.user_uid,
         dataset_choice=wrapper["dataset_choice"],
         task_choice=wrapper["task_choice"],
     )
@@ -1087,7 +1081,7 @@ def draw_rating_item(
 def record_rating(
     workspace: Workspace,
     *,
-    user_email: str,
+    user_uid: str,
     dataset: str,
     image_id: str,
     task: str | None,
@@ -1095,18 +1089,17 @@ def record_rating(
 ) -> int:
     """Persist one 1-4 rating; returns the annotator's total rating count."""
     score = max(1, min(4, int(score)))
-    email = normalize_email(user_email)
     with AnnotatorStore(workspace.annotations_path) as store:
         store.add_rating(
             {
-                "user_email": email,
+                "user_uid": user_uid,
                 "dataset": dataset,
                 "image_id": image_id,
                 "task": task,
                 "score": score,
             }
         )
-        return sum(1 for r in store.ratings() if r.get("user_email") == email)
+        return sum(1 for r in store.ratings() if r.get("user_uid") == user_uid)
 
 
 def resolve_item_path(workspace: Workspace, dataset_name: str, item_id: str) -> Path | None:
@@ -1238,7 +1231,7 @@ def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dic
 
     with AnnotatorStore(workspace.annotations_path) as astore:
         all_sessions = astore.sessions()
-    anon = _anonymise({s.get("user_email") for s in all_sessions if s.get("user_email")})
+    anon = _anonymise({s.get("user_uid") for s in all_sessions if s.get("user_uid")})
 
     records_by_ds: dict[str, list] = {}
     if workspace.store_path.exists():
@@ -1260,7 +1253,7 @@ def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dic
         expert_annotations = _manifest_annotations(manifest)
         pairwise_annotations = [
             {
-                "annotator": anon.get(s.get("user_email")),
+                "annotator": anon.get(s.get("user_uid")),
                 "task": s.get("task"),
                 "reference": s.get("reference"),
                 "order": s.get("order"),

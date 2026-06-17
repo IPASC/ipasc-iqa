@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Profile{% endblock %}
+{% block content %}
+<h1 class="page-title">Your profile</h1>
+
+<div class="auth-wrap auth-wrap--wide">
+  <form class="panel auth-form" method="post" action="/profile">
+    <h2 class="panel__title">Account details</h2>
+    {% if message %}<p class="notice notice--ok">{{ message }}</p>{% endif %}
+    {% if error %}<p class="notice notice--warn">{{ error }}</p>{% endif %}
+
+    <p class="panel__hint">Role: <strong>{{ profile.role }}</strong>. Changing your name or
+      email does not affect annotations you've already contributed.</p>
+
+    <label class="field">
+      <span class="field__label">Name</span>
+      <input class="select" name="name" required value="{{ profile.name }}">
+    </label>
+    <label class="field">
+      <span class="field__label">Email</span>
+      <input class="select" name="email" type="email" required value="{{ profile.email }}">
+    </label>
+    <label class="field">
+      <span class="field__label">New password <small>(leave blank to keep current)</small></span>
+      <input class="select" name="new_password" type="password" minlength="8"
+             autocomplete="new-password">
+    </label>
+
+    <div class="actions">
+      <button type="submit" class="btn btn--primary">Save changes</button>
+    </div>
+  </form>
+
+  <form class="panel auth-form" method="post" action="/profile/delete"
+        onsubmit="return confirm('Delete your account? Your name and email will be erased and you will no longer be able to sign in. This cannot be undone by you.');">
+    <h2 class="panel__title">Delete account</h2>
+    <p class="panel__hint">This erases your profile metadata and disables sign-in. Your
+      contributed annotations remain (attributed to an anonymous id) for data integrity.</p>
+    <div class="actions">
+      <button type="submit" class="btn btn--danger">Delete my account</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

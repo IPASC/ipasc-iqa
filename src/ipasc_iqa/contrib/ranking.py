@@ -33,7 +33,7 @@ class RankingSession:
     dataset: str
     reference: str  # stem / reference group id
     task: str | None
-    user_email: str
+    user_uid: str
     seed: int | None = None
 
     # --- internal state (initialised in __post_init__) ---
@@ -132,7 +132,7 @@ class RankingSession:
             "dataset": self.dataset,
             "reference": self.reference,
             "task": self.task,
-            "user_email": self.user_email,
+            "user_uid": self.user_uid,
             "order": list(self.sorted_ids),
             "comparisons": list(self.comparisons),
             "n_comparisons": len(self.comparisons),

@@ -18,12 +18,29 @@
       <img src="/static/img/logo.svg" alt="IPASC" height="28">
       <span class="brand__sub">Benchmarking: Image Quality Assessment</span>
     </a>
+    {% set user = request.state.user %}
     <nav class="nav">
+      {% if user and user.role == 'admin' %}
       <a href="/run"        class="nav__link {{ 'is-active' if active == 'run' }}">Run benchmark</a>
+      {% endif %}
+      {% if user %}
       <a href="/results"    class="nav__link {{ 'is-active' if active == 'results' }}">Detailed analysis</a>
+      {% endif %}
       <a href="/standings"  class="nav__link {{ 'is-active' if active == 'standings' }}">Standings</a>
+      {% if user %}
       <a href="/contribute" class="nav__link {{ 'is-active' if active == 'contribute' }}">Contribute annotations</a>
+      {% endif %}
+      {% if user and user.role == 'admin' %}
       <a href="/download"   class="nav__link {{ 'is-active' if active == 'download' }}">Download</a>
+      {% endif %}
+      {% if user %}
+      <a href="/profile"    class="nav__link {{ 'is-active' if active == 'profile' }}">Profile</a>
+      <form method="post" action="/logout" class="nav__logout">
+        <button type="submit" class="nav__link nav__link--button">Log out</button>
+      </form>
+      {% else %}
+      <a href="/login"      class="nav__link {{ 'is-active' if active == 'login' }}">Log in</a>
+      {% endif %}
     </nav>
   </header>
 

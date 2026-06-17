@@ -11,20 +11,37 @@
 </section>
 
 <section class="cards">
+  {% if request.state.user and request.state.user.role == 'admin' %}
   <a class="card" href="/run">
-    <div class="card__icon">▶</div>
+    <div class="card__icon">🚀</div>
     <h2 class="card__title">Run benchmark</h2>
     <p class="card__text">Pick datasets and measures, then evaluate.</p>
   </a>
+  <a class="card" href="/download">
+    <div class="card__icon">💾</div>
+    <h2 class="card__title">Download Data</h2>
+    <p class="card__text">Download dataset annotations.</p>
+  </a>
+  {% endif %}
   <a class="card card--accent" href="/results">
-    <div class="card__icon">▤</div>
+    <div class="card__icon">📊</div>
     <h2 class="card__title">Detailed analysis</h2>
     <p class="card__text">Correlate measures against expert ratings (SRCC / KRCC).</p>
   </a>
   <a class="card" href="/standings">
-    <div class="card__icon">★</div>
+    <div class="card__icon">🎖️</div>
     <h2 class="card__title">Standings</h2>
     <p class="card__text">Rank reconstruction algorithms per dataset.</p>
+  </a>
+  <a class="card" href="/contribute">
+    <div class="card__icon">✍️</div>
+    <h2 class="card__title">Contribute Annotations</h2>
+    <p class="card__text">Rank or rate the quality of photoacoustic images.</p>
+  </a>
+  <a class="card" href="/profile">
+    <div class="card__icon">🧙</div>
+    <h2 class="card__title">User Profile</h2>
+    <p class="card__text">Edit or delete your profile data.</p>
   </a>
 </section>
 {% endblock %}

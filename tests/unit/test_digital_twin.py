@@ -92,7 +92,7 @@ def test_bt_only_dataset_is_analysable(tmp_path: Path) -> None:
     Regression: previously the analysis bailed with 'no expert annotations'
     before ever consulting contributed Bradley-Terry comparisons.
     """
-    from ipasc_iqa.contrib.store import AnnotatorStore
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
     from ipasc_iqa.datasets.registry import registry
     from ipasc_iqa.gui import service
 
@@ -111,7 +111,9 @@ def test_bt_only_dataset_is_analysable(tmp_path: Path) -> None:
 
     # Contribute pairwise comparisons (task=None) for the emitted testing scenes.
     with AnnotatorStore(ws.annotations_path) as store:
-        store.upsert_user("u@x.com", "U")
+        user = store.create_user(
+            email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None
+        )
         for stem in range(2):
             scene = f"testing_{stem}"
             algos = [f"{scene}_{a}" for a in RECON_ALGORITHMS]
@@ -124,7 +126,7 @@ def test_bt_only_dataset_is_analysable(tmp_path: Path) -> None:
             ]
             store.add_session(
                 {
-                    "user_email": "u@x.com",
+                    "user_uid": user["uid"],
                     "dataset": "digital_twin",
                     "task": None,
                     "reference": scene,

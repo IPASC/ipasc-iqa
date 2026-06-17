@@ -94,8 +94,8 @@ def download_page(request: Request) -> HTMLResponse:
 @router.get("/contribute", response_class=HTMLResponse)
 def contribute_page(request: Request) -> HTMLResponse:
     ws = _ws(request)
-    # Recognised by an email cookie (no password); falls back to the login form.
-    account = service.annotator_for(ws, request.cookies.get("annotator_email"))
+    # The auth middleware guarantees a logged-in user on this protected route.
+    account = service.account_for(ws, request.state.user)
     return templates.TemplateResponse(
         request,
         "contribute.html",

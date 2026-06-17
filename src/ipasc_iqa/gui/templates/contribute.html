@@ -4,10 +4,6 @@
 <h1 class="page-title">Contribute annotations</h1>
 
 <div id="contribute-root">
-  {% if account %}
-    {% include "fragments/annotate_picker.html" %}
-  {% else %}
-    {% include "fragments/annotate_login.html" %}
-  {% endif %}
+  {% include "fragments/annotate_picker.html" %}
 </div>
 {% endblock %}

@@ -176,31 +176,6 @@ def _compare_or_picker(request: Request, account: dict, session_id: str | None) 
     return templates.TemplateResponse(request, "fragments/annotate_compare.html", ctx)
 
 
-@router.post("/contribute/login")
-def contribute_login(
-    request: Request,
-    name: str = Form(...),
-    email: str = Form(...),
-) -> Response:
-    ws = _ws(request)
-    info = service.annotator_login(ws, name, email)
-    account = {"user": info["user"], "count": info["count"]}
-    greeting = (
-        f"Welcome, {info['user']['name']} — starting a new annotator profile."
-        if info["is_new"]
-        else f"Welcome back, {info['user']['name']}."
-    )
-    resp = _picker_response(request, account, message=greeting)
-    # Lightweight identity: remember the email so later posts know who is annotating.
-    resp.set_cookie(
-        "annotator_email",
-        info["user"]["email"],
-        max_age=60 * 60 * 24 * 90,
-        samesite="lax",
-    )
-    return resp
-
-
 @router.get("/api/annotate/tasks", response_class=HTMLResponse)
 def contribute_tasks(request: Request, dataset: str = Query(default="random")) -> HTMLResponse:
     """Sub-task <select> for the chosen dataset (empty for 'random')."""
@@ -252,10 +227,7 @@ def contribute_start(
     rating_type: str = Form(default="comparative"),
 ) -> Response:
     ws = _ws(request)
-    email = request.cookies.get("annotator_email")
-    account = service.annotator_for(ws, email)
-    if account is None:
-        return templates.TemplateResponse(request, "fragments/annotate_login.html", {})
+    account = service.account_for(ws, request.state.user)
 
     if rating_type == "quantitative":
         draw = service.draw_rating_item(ws, dataset)
@@ -265,7 +237,7 @@ def contribute_start(
     res = service.start_ranking(
         ws,
         request.app.state.ranking_sessions,
-        user_email=email,
+        user_uid=request.state.user["uid"],
         dataset_choice=dataset,
         task_choice="random",
     )
@@ -284,14 +256,11 @@ def contribute_rate(
     dataset_choice: str = Form(default="random"),
 ) -> Response:
     ws = _ws(request)
-    email = request.cookies.get("annotator_email")
-    account = service.annotator_for(ws, email)
-    if account is None:
-        return templates.TemplateResponse(request, "fragments/annotate_login.html", {})
+    account = service.account_for(ws, request.state.user)
 
     count = service.record_rating(
         ws,
-        user_email=email,
+        user_uid=request.state.user["uid"],
         dataset=dataset,
         image_id=image_id,
         task=task or None,
@@ -309,10 +278,7 @@ def contribute_choose(
     winner: str = Form(...),
 ) -> Response:
     ws = _ws(request)
-    email = request.cookies.get("annotator_email")
-    account = service.annotator_for(ws, email)
-    if account is None:
-        return templates.TemplateResponse(request, "fragments/annotate_login.html", {})
+    account = service.account_for(ws, request.state.user)
 
     outcome = service.submit_choice(ws, request.app.state.ranking_sessions, session_id, winner)
     if outcome["status"] == "missing":
@@ -339,9 +305,7 @@ def contribute_choose(
 @router.post("/contribute/finish")
 def contribute_finish(request: Request) -> Response:
     ws = _ws(request)
-    account = service.annotator_for(ws, request.cookies.get("annotator_email"))
-    if account is None:
-        return templates.TemplateResponse(request, "fragments/annotate_login.html", {})
+    account = service.account_for(ws, request.state.user)
     return _picker_response(
         request, account, message="Session ended. Start another whenever you like."
     )

@@ -164,6 +164,18 @@ body {
        font-weight: 600; cursor: pointer; }
 .btn--primary { background: var(--navy); color: #fff; }
 .btn--primary:hover { background: var(--navy-700); }
+.btn--danger { background: #dc2626; color: #fff; }
+.btn--danger:hover { background: #b91c1c; }
+
+/* Logout sits in the nav as a button styled like a link. */
+.nav__logout { margin: 0; display: inline; }
+.nav__link--button { background: none; border: none; cursor: pointer; font-family: inherit; }
+
+/* Auth pages (login / register / reset / profile): a centred narrow column. */
+.auth-wrap { max-width: 26rem; margin: 1.5rem auto; display: flex; flex-direction: column; gap: 1.25rem; }
+.auth-wrap--wide { max-width: 32rem; }
+.auth-form { display: flex; flex-direction: column; gap: 0.9rem; }
+.auth-form .field { margin: 0; }
 
 .status { margin-top: 1rem; }
 .notice { padding: 0.75rem 1rem; border-radius: 8px; margin: 0; }

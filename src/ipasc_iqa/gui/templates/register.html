@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Register{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <form class="panel auth-form" method="post" action="/register">
+    <h2 class="panel__title">Create an account</h2>
+    <p class="panel__hint">New accounts can contribute annotations and view the detailed
+      analysis. Running benchmarks and downloads are reserved for admins.</p>
+    {% if error %}<p class="notice notice--warn">{{ error }}</p>{% endif %}
+
+    <label class="field">
+      <span class="field__label">Name</span>
+      <input class="select" name="name" required autocomplete="name" value="{{ name or '' }}">
+    </label>
+    <label class="field">
+      <span class="field__label">Email</span>
+      <input class="select" name="email" type="email" required autocomplete="email"
+             value="{{ email or '' }}">
+    </label>
+    <label class="field">
+      <span class="field__label">Password</span>
+      <input class="select" name="password" type="password" required minlength="8"
+             autocomplete="new-password">
+    </label>
+
+    <div class="actions">
+      <button type="submit" class="btn btn--primary">Create account</button>
+    </div>
+    <p class="panel__hint"><a href="/login">Already have an account? Sign in</a></p>
+  </form>
+</div>
+{% endblock %}
