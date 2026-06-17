@@ -156,6 +156,7 @@ class AnnotatorStore:
         role: str,
         password_hash: str | None,
         approved: bool = False,
+        expertise: str | None = None,
     ) -> dict:
         """Create an account. Raises ``ValueError`` if the email is in use."""
         email = normalize_email(email)
@@ -170,6 +171,7 @@ class AnnotatorStore:
             "role": role,
             "password_hash": password_hash,
             "approved": approved,
+            "expertise": expertise,
             "created": now,
             "updated": now,
         }
@@ -235,6 +237,18 @@ class AnnotatorStore:
             if rec is not None:
                 out.append(rec)
         return out
+
+    def approved_uids(self) -> set[str]:
+        """UIDs allowed to contribute to results: admins + approved annotators.
+
+        Excludes pending (unapproved) and ``DELETED_USER`` accounts, so their
+        annotations can be filtered out of the live aggregates.
+        """
+        return {
+            u["uid"]
+            for u in self.all_users()
+            if u.get("role") == ROLE_ADMIN or bool(u.get("approved"))
+        }
 
     # -- auth sessions -----------------------------------------------------
 

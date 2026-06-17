@@ -130,6 +130,18 @@ def test_set_approved_and_admin_always_approved(tmp_path: Path) -> None:
     assert admin["approved"] is True and auth.is_approved(admin) is True
 
 
+def test_expertise_captured_validated_and_editable(tmp_path: Path) -> None:
+    ws = _ws(tmp_path)
+    u = auth.register_user(ws, "A", "a@b.com", "password123", "Expert")
+    assert u["expertise"] == "expert"  # normalised to canonical key
+    with pytest.raises(ValueError):
+        auth.register_user(ws, "B", "b@b.com", "password123", "wizard")
+    updated = auth.update_profile(ws, u["uid"], name="A", email="a@b.com", expertise="novice")
+    assert updated["expertise"] == "novice"
+    by_email = {a["email"]: a["expertise"] for a in auth.list_accounts(ws)}
+    assert by_email["a@b.com"] == "novice"
+
+
 def test_migration_v2_to_v3_grandfathers_approval(tmp_path: Path) -> None:
     import diskcache
 

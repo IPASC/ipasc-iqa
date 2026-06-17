@@ -324,7 +324,11 @@ def contribute_finish(request: Request) -> Response:
 
 @router.get("/api/annotate/image")
 def contribute_image(request: Request, dataset: str, item: str) -> Response:
-    path = service.resolve_item_path(_ws(request), dataset, item)
+    ws = _ws(request)
+    path = service.resolve_item_path(ws, dataset, item)
     if path is None or not path.exists():
         return Response(status_code=404)
-    return Response(content=service.render_item_png(path), media_type="image/png")
+    # Window both images of a comparison/rating to their shared reference range so
+    # they are displayed on the same dynamic range (fair subjective assessment).
+    window = service.display_window_for(ws, dataset, item)
+    return Response(content=service.render_item_png(path, window=window), media_type="image/png")

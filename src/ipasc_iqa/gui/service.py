@@ -512,12 +512,16 @@ def task_annotation_summary(
     rated = _mos_annotator_scores(workspace, dataset_name, task, manifest)
     n_ratings = sum(len(raters) for img, raters in rated.items() if not img.startswith(_REF_PREFIX))
 
-    # Rankings: total variant placements across sessions for this task.
+    # Rankings: total variant placements across sessions for this task. Counts
+    # only approved contributors, to match the filtered result aggregates.
     with AnnotatorStore(workspace.annotations_path) as store:
         sessions = store.sessions()
+        approved = store.approved_uids()
     n_rankings = 0
     for s in sessions:
         if s.get("dataset") != dataset_name or s.get("task") != task:
+            continue
+        if s.get("user_uid") not in approved:
             continue
         n_rankings += sum(1 for i in s.get("order", []) if not i.startswith(_REF_PREFIX))
 
@@ -698,11 +702,13 @@ def _mos_annotator_scores(
     # Pool in contributed quantitative ratings (one annotator per uid, so a
     # rater's identity — and their MOS contribution — survives a profile edit).
     with AnnotatorStore(workspace.annotations_path) as store:
+        approved = store.approved_uids()
         for r in store.ratings(dataset=dataset_name):
             uid = r.get("user_uid")
             if r.get("task") != task or r.get("image_id") is None or r.get("score") is None:
                 continue
-            if not uid:
+            # Hard-exclude pending/unapproved/deleted contributors from results.
+            if not uid or uid not in approved:
                 continue
             scores.setdefault(r["image_id"], {})[f"user:{uid}"] = float(r["score"])
     return scores
@@ -744,11 +750,15 @@ def bt_scores_for_dataset_task(workspace: Workspace, dataset_name: str, task: st
     """
     with AnnotatorStore(workspace.annotations_path) as store:
         sessions = store.sessions()
+        approved = store.approved_uids()
 
     by_ref: dict[str, list[tuple[str, str]]] = defaultdict(list)
     items_by_ref: dict[str, set[str]] = defaultdict(set)
     for s in sessions:
         if s.get("dataset") != dataset_name or s.get("task") != task:
+            continue
+        # Hard-exclude pending/unapproved/deleted contributors from results.
+        if s.get("user_uid") not in approved:
             continue
         ref = s.get("reference")
         for c in s.get("comparisons", []):
@@ -1128,15 +1138,64 @@ def resolve_item_path(workspace: Workspace, dataset_name: str, item_id: str) -> 
     return path
 
 
-def render_item_png(path: Path) -> bytes:
-    """Load a stored ``.npy`` and encode it as a display PNG (min-max to 8-bit)."""
+def display_window_for(
+    workspace: Workspace, dataset_name: str, item_id: str
+) -> tuple[float, float] | None:
+    """Shared display intensity window (lo, hi) for an annotation item.
+
+    Returns the reference (ground-truth) array's min/max for the item's reference
+    group, so every item shown together — the two variants in a 2AFC comparison,
+    or a variant and its reference in a rating — is rendered on the *same* dynamic
+    range. Without this, per-image min-max stretching would hide systematic
+    brightness differences and bias subjective quality judgements.
+
+    ``None`` if no reference can be resolved (caller falls back to per-image).
+    """
+    try:
+        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    except Exception:
+        return None
+    root = _dataset_root(workspace, dataset_name)
+
+    ref_rel: str | None = None
+    if item_id.startswith(_REF_PREFIX):
+        stem = item_id[len(_REF_PREFIX) :]
+        for e in manifest.get("images", []):
+            if str(e.get("metadata", {}).get("stem")) == stem and e.get("references"):
+                refs = e["references"]
+                ref_rel = (refs.get("ground_truth") or next(iter(refs.values())))["path"]
+                break
+    else:
+        for e in manifest.get("images", []):
+            if e["id"] == item_id and e.get("references"):
+                refs = e["references"]
+                ref_rel = (refs.get("ground_truth") or next(iter(refs.values())))["path"]
+                break
+
+    if ref_rel is None:
+        return None
+    ref_path = (root / ref_rel).resolve()
+    if root.resolve() not in ref_path.parents or not ref_path.exists():
+        return None
+    arr = np.load(ref_path).astype(np.float64)
+    lo, hi = float(arr.min()), float(arr.max())
+    return (lo, hi) if hi > lo else None
+
+
+def render_item_png(path: Path, window: tuple[float, float] | None = None) -> bytes:
+    """Load a stored ``.npy`` and encode it as a display PNG (scaled to 8-bit).
+
+    ``window`` is an explicit ``(lo, hi)`` intensity range to map to [0, 255]
+    (so paired images share one dynamic range); when ``None`` the image's own
+    min/max is used.
+    """
     from PIL import Image
 
     arr = np.load(path)
     arr = np.asarray(arr, dtype=np.float64)
     if arr.ndim == 3 and arr.shape[2] == 1:
         arr = arr[:, :, 0]
-    lo, hi = float(arr.min()), float(arr.max())
+    lo, hi = window if window is not None else (float(arr.min()), float(arr.max()))
     scaled = (arr - lo) / (hi - lo) if hi > lo else np.zeros_like(arr)
     img = (scaled * 255.0).clip(0, 255).astype(np.uint8)
     buf = io.BytesIO()
@@ -1225,7 +1284,20 @@ def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dic
 
     with AnnotatorStore(workspace.annotations_path) as astore:
         all_sessions = astore.sessions()
+        expertise_by_uid = {u["uid"]: u.get("expertise") for u in astore.all_users()}
+        approved_uids = astore.approved_uids()
     anon = _anonymise({s.get("user_uid") for s in all_sessions if s.get("user_uid")})
+    # Pseudonym → rater metadata (no PII). Contributions are kept in full and
+    # *tagged* with expertise + approval, so downstream analysis can filter by
+    # either. (The live platform aggregates hard-exclude unapproved raters; the
+    # derived ``bradley_terry`` block below mirrors that approved-only view.)
+    annotators_meta = {
+        pseudonym: {
+            "expertise": expertise_by_uid.get(uid),
+            "approved": uid in approved_uids,
+        }
+        for uid, pseudonym in anon.items()
+    }
 
     records_by_ds: dict[str, list] = {}
     if workspace.store_path.exists():
@@ -1248,6 +1320,8 @@ def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dic
         pairwise_annotations = [
             {
                 "annotator": anon.get(s.get("user_uid")),
+                "expertise": expertise_by_uid.get(s.get("user_uid")),
+                "approved": s.get("user_uid") in approved_uids,
                 "task": s.get("task"),
                 "reference": s.get("reference"),
                 "order": s.get("order"),
@@ -1282,6 +1356,7 @@ def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dic
             "exported": datetime.now(UTC).isoformat(),
             "anonymised": True,
             "n_annotators": len(anon),
+            "annotators": annotators_meta,
             "datasets": datasets_out,
         }
     )

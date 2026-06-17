@@ -37,6 +37,19 @@ RESET_TTL_SECONDS = 60 * 60  # 1 hour
 # immediately (handy for testing or a conference sign-up spike). Off by default.
 AUTO_APPROVE_KEY = "auto_approve_registrations"
 
+# Self-assessed photoacoustic-imaging (PAI) expertise, captured at sign-up so the
+# contributed data can later be filtered by rater expertise for a publication.
+EXPERTISE_LEVELS = ("expert", "knowledgeable", "novice")
+EXPERTISE_LABELS = {"expert": "Expert", "knowledgeable": "Knowledgeable", "novice": "Novice"}
+
+
+def normalize_expertise(value: str | None) -> str:
+    """Validate a self-assessed expertise choice, returning the canonical key."""
+    key = (value or "").strip().lower()
+    if key not in EXPERTISE_LEVELS:
+        raise ValueError("Please select your PAI expertise.")
+    return key
+
 
 # ---------------------------------------------------------------------------
 # Password hashing
@@ -61,18 +74,27 @@ def verify_password(password: str, password_hash: str | None) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def register_user(workspace: Workspace, name: str, email: str, password: str) -> dict:
+def register_user(
+    workspace: Workspace,
+    name: str,
+    email: str,
+    password: str,
+    expertise: str | None = None,
+) -> dict:
     """Self-registration: create an annotator account. Raises ``ValueError``.
 
-    The account is approved immediately only when the instance's auto-approve
-    flag is on (see :func:`auto_approve_enabled`); otherwise it starts pending
-    and an admin must approve it before it can contribute annotations.
+    ``expertise`` is the rater's self-assessed PAI expertise (required by the
+    sign-up form; ``None`` only for programmatic callers). The account is
+    approved immediately only when the instance's auto-approve flag is on (see
+    :func:`auto_approve_enabled`); otherwise it starts pending and an admin must
+    approve it before it can contribute annotations.
     """
     name, email = name.strip(), normalize_email(email)
     if not name or "@" not in email:
         raise ValueError("A name and a valid email are required.")
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters.")
+    expertise = normalize_expertise(expertise) if expertise is not None else None
     with AnnotatorStore(workspace.annotations_path) as store:
         approved = bool(store.get_setting(AUTO_APPROVE_KEY, False))
         # email_taken covers DELETED_USER too (their index entry is removed, so a
@@ -83,6 +105,7 @@ def register_user(workspace: Workspace, name: str, email: str, password: str) ->
             role=ROLE_ANNOTATOR,
             password_hash=hash_password(password),
             approved=approved,
+            expertise=expertise,
         )
 
 
@@ -177,8 +200,9 @@ def update_profile(
     name: str,
     email: str,
     new_password: str | None = None,
+    expertise: str | None = None,
 ) -> dict:
-    """Update a user's name/email/password. Raises ``ValueError`` on conflict."""
+    """Update a user's name/email/password/expertise. Raises ``ValueError``."""
     name, email = name.strip(), normalize_email(email)
     if not name or "@" not in email:
         raise ValueError("A name and a valid email are required.")
@@ -189,6 +213,8 @@ def update_profile(
         if email != normalize_email(user.get("email", "")) and store.email_taken(email):
             raise ValueError("That email is already in use.")
         fields: dict[str, object] = {"name": name, "email": email}
+        if expertise is not None:
+            fields["expertise"] = normalize_expertise(expertise)
         if new_password:
             if len(new_password) < 8:
                 raise ValueError("Password must be at least 8 characters.")
@@ -259,6 +285,7 @@ def list_accounts(workspace: Workspace) -> list[dict]:
             "role": u.get("role"),
             "approved": is_approved(u),
             "deleted": u.get("role") == ROLE_DELETED,
+            "expertise": u.get("expertise"),
         }
         for u in users
     ]

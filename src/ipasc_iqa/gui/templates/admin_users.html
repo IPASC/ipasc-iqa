@@ -33,7 +33,7 @@
   {% else %}
   <table class="data-table">
     <thead>
-      <tr><th>Name</th><th>Email</th><th>Role</th><th>Approved</th><th>Action</th></tr>
+      <tr><th>Name</th><th>Email</th><th>Role</th><th>PAI expertise</th><th>Approved</th><th>Action</th></tr>
     </thead>
     <tbody>
       {% for u in users %}
@@ -41,6 +41,7 @@
         <td>{{ u.name or '—' }}</td>
         <td class="mono">{{ u.email or '—' }}</td>
         <td>{{ u.role }}</td>
+        <td>{{ (u.expertise or '—') | capitalize }}</td>
         <td>{{ '✓' if u.approved else '—' }}</td>
         <td>
           {% if u.deleted %}

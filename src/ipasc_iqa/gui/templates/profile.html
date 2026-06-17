@@ -21,6 +21,15 @@
       <input class="select" name="email" type="email" required value="{{ profile.email }}">
     </label>
     <label class="field">
+      <span class="field__label">How do you rate your PAI expertise?</span>
+      <select class="select" name="expertise" required>
+        <option value="" disabled {{ 'selected' if not profile.expertise }}>Select…</option>
+        <option value="expert" {{ 'selected' if profile.expertise == 'expert' }}>Expert</option>
+        <option value="knowledgeable" {{ 'selected' if profile.expertise == 'knowledgeable' }}>Knowledgeable</option>
+        <option value="novice" {{ 'selected' if profile.expertise == 'novice' }}>Novice</option>
+      </select>
+    </label>
+    <label class="field">
       <span class="field__label">New password <small>(leave blank to keep current)</small></span>
       <input class="select" name="new_password" type="password" minlength="8"
              autocomplete="new-password">

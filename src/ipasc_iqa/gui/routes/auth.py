@@ -91,14 +91,15 @@ def register_submit(
     name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    expertise: str = Form(...),
 ) -> Response:
     try:
-        user = auth.register_user(_ws(request), name, email, password)
+        user = auth.register_user(_ws(request), name, email, password, expertise)
     except ValueError as exc:
         return templates.TemplateResponse(
             request,
             "register.html",
-            {"error": str(exc), "name": name, "email": email},
+            {"error": str(exc), "name": name, "email": email, "expertise": expertise},
             status_code=400,
         )
     return _redirect_with_session(request, user["uid"])
@@ -181,6 +182,7 @@ def profile_submit(
     request: Request,
     name: str = Form(...),
     email: str = Form(...),
+    expertise: str = Form(...),
     new_password: str = Form(default=""),
 ) -> Response:
     user = request.state.user
@@ -191,12 +193,16 @@ def profile_submit(
             name=name,
             email=email,
             new_password=new_password or None,
+            expertise=expertise,
         )
     except ValueError as exc:
         return templates.TemplateResponse(
             request,
             "profile.html",
-            {"profile": {**user, "name": name, "email": email}, "error": str(exc)},
+            {
+                "profile": {**user, "name": name, "email": email, "expertise": expertise},
+                "error": str(exc),
+            },
             status_code=400,
         )
     return templates.TemplateResponse(
