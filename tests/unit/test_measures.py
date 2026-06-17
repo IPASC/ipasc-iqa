@@ -214,7 +214,6 @@ class TestMSSSIM:
         m = MSSSIMMeasure()
         weights = m._adaptive_scale_weights(64)
         assert len(weights) == 3
-        import torch
         assert abs(float(weights.sum().item()) - 1.0) < 1e-5
 
     def test_adaptive_scales_large_image(self) -> None:
@@ -366,8 +365,6 @@ class TestMSGMSD:
 
     def test_adaptive_scales_small_image(self) -> None:
         # 8×8 image → only 2 of the default 4 scales fit (min_dim=8, threshold=4)
-        import torch
-
         m = MSGMSDMeasure()
         weights = m._adaptive_scale_weights(8)
         assert len(weights) == 2
@@ -375,7 +372,6 @@ class TestMSGMSD:
 
     def test_adaptive_scales_normal_image(self) -> None:
         # 64×64 → all 4 scales fit (64/4 = 16 ≥ 4 after 3 halvings)
-        import torch
 
         weights = MSGMSDMeasure()._adaptive_scale_weights(64)
         assert len(weights) == 4

@@ -43,9 +43,7 @@ def annotation_values_from_manifest(
     return out
 
 
-def annotator_ratings_from_manifest(
-    manifest: dict, task: str
-) -> dict[str, dict[str, float]]:
+def annotator_ratings_from_manifest(manifest: dict, task: str) -> dict[str, dict[str, float]]:
     """Return ``{image_id: {annotator_id: raw_score}}`` for one task.
 
     Reads the per-rater scores embedded under each image's

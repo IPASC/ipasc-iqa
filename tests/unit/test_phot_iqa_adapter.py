@@ -39,9 +39,7 @@ def fake_source(tmp_path: Path) -> Path:
 
 def test_manifest_registers_rois(fake_source: Path) -> None:
     PhotIQADataset(fake_source, download=False, force_convert=True)
-    manifest = json.loads(
-        (fake_source / "converted" / "manifest.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((fake_source / "converted" / "manifest.json").read_text(encoding="utf-8"))
 
     assert len(manifest["images"]) == 2  # two algorithm variants
     for entry in manifest["images"]:

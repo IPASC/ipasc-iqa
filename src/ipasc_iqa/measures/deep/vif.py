@@ -83,8 +83,7 @@ class VIFMeasure(BaseMeasure):
             from piq import vif_p
         except ImportError as exc:
             raise ImportError(
-                "VIF requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "VIF requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

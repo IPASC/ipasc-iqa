@@ -37,9 +37,7 @@ class CorrelationRow:
         return {"measure": self.measure, "n": self.n, "srcc": self.srcc, "krcc": self.krcc}
 
 
-def measure_values_by_image(
-    run: RunResults, measure: str, dataset: str | None
-) -> dict[str, float]:
+def measure_values_by_image(run: RunResults, measure: str, dataset: str | None) -> dict[str, float]:
     """Collect {image_id: value} for one measure (optionally one dataset)."""
     out: dict[str, float] = {}
     for rec in run.results:

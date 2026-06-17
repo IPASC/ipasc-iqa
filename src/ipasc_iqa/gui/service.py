@@ -138,7 +138,9 @@ def _capabilities_from_manifest(manifest: dict) -> dict:
 
 def _measure_usable(measure_meta: dict, caps: dict) -> bool:
     """True if the dataset can satisfy a measure's requirements."""
-    if measure_meta["measure_type"] == MeasureType.FULL_REFERENCE and not caps.get("has_references"):
+    if measure_meta["measure_type"] == MeasureType.FULL_REFERENCE and not caps.get(
+        "has_references"
+    ):
         return False
     if measure_meta["requires_signal_roi"] and not caps.get("has_signal_roi"):
         return False
@@ -417,9 +419,7 @@ def analysis_for_dataset(
     active_source = source if source in source_keys else (sources[0]["key"] if sources else "mos")
     values = bt["scores"] if active_source == "bt" else mos_values
 
-    rows = correlate_measures_with_annotations(
-        run, values, measures=chosen, dataset=dataset_name
-    )
+    rows = correlate_measures_with_annotations(run, values, measures=chosen, dataset=dataset_name)
 
     # Annotate each row with its measure's BibTeX (for the citation icon) and the
     # pre-computed per-dataset mean/std of its values.
@@ -567,9 +567,7 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
                 continue
             rows = correlate_measures_with_annotations(run, values, dataset=ds["name"])
             ranked = [
-                {"rank": i + 1, **r.as_dict()}
-                for i, r in enumerate(rows)
-                if r.srcc is not None
+                {"rank": i + 1, **r.as_dict()} for i, r in enumerate(rows) if r.srcc is not None
             ]
             if ranked:
                 entries.append({"dataset": ds["name"], "task": task or "overall", "rows": ranked})
@@ -653,9 +651,7 @@ def mos_values_for_dataset_task(
     return {}
 
 
-def bt_scores_for_dataset_task(
-    workspace: Workspace, dataset_name: str, task: str | None
-) -> dict:
+def bt_scores_for_dataset_task(workspace: Workspace, dataset_name: str, task: str | None) -> dict:
     """Per-image Bradley-Terry quality scores from contributed comparisons.
 
     Comparisons are aggregated per reference set (across all annotators), and each
@@ -1032,7 +1028,7 @@ def resolve_item_path(workspace: Workspace, dataset_name: str, item_id: str) -> 
 
     rel: str | None = None
     if item_id.startswith(_REF_PREFIX):
-        stem = item_id[len(_REF_PREFIX):]
+        stem = item_id[len(_REF_PREFIX) :]
         for e in manifest.get("images", []):
             if str(e.get("metadata", {}).get("stem")) == stem and e.get("references"):
                 refs = e["references"]

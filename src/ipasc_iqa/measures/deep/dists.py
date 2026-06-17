@@ -66,8 +66,7 @@ class DISTSMeasure(BaseMeasure):
             from DISTS_pytorch import DISTS
         except ImportError as exc:
             raise ImportError(
-                "DISTS requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "DISTS requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

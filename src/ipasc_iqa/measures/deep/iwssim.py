@@ -69,7 +69,7 @@ class IWSSIMMeasure(BaseMeasure):
         ),
     )
 
-    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device = None) -> None:
+    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device=None) -> None:
         # Pass hyperparameters to super() so config_canonical_json() picks them
         # up and they contribute to the cache key.
         super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
@@ -115,8 +115,7 @@ class IWSSIMMeasure(BaseMeasure):
             from piq import information_weighted_ssim
         except ImportError as exc:
             raise ImportError(
-                "IW-SSIM requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "IW-SSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

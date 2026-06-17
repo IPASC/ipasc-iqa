@@ -17,9 +17,7 @@ class MSEMeasure(BaseMeasure):
         accepted_reference_types=None,
         higher_is_better=False,
         value_range=(0.0, float("inf")),
-        description=(
-            "Mean Squared Error: mean((signal - reference)**2). "
-        ),
+        description=("Mean Squared Error: mean((signal - reference)**2). "),
     )
 
     def evaluate(

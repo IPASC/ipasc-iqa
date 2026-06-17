@@ -73,7 +73,7 @@ class MSGMSDMeasure(BaseMeasure):
         ),
     )
 
-    def _adaptive_scale_weights(self, min_dim: int) -> "torch.Tensor":
+    def _adaptive_scale_weights(self, min_dim: int):
         """Return weights for as many scales as the image can support.
 
         GMSD uses a 3×3 Prewitt-like gradient kernel; we require
@@ -106,8 +106,7 @@ class MSGMSDMeasure(BaseMeasure):
             from piq import multi_scale_gmsd
         except ImportError as exc:
             raise ImportError(
-                "MS-GMSD requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "MS-GMSD requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

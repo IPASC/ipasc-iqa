@@ -30,11 +30,13 @@ class MeasureRegistry:
                 cls = ep.load()
             except Exception as exc:
                 import warnings
+
                 warnings.warn(f"Failed to load measure '{ep.name}': {exc}", stacklevel=2)
                 continue
 
             if not (isinstance(cls, type) and issubclass(cls, BaseMeasure)):
                 import warnings
+
                 warnings.warn(
                     f"Entry point '{ep.name}' does not point to a BaseMeasure subclass.",
                     stacklevel=2,
@@ -43,6 +45,7 @@ class MeasureRegistry:
 
             if not hasattr(cls, "metadata"):
                 import warnings
+
                 warnings.warn(
                     f"Measure class '{cls.__name__}' has no metadata attribute, skipping.",
                     stacklevel=2,

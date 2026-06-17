@@ -77,7 +77,7 @@ class TVMeasure(BaseMeasure):
         img = image.astype(np.float64)
         # Horizontal and vertical first-order differences summed over all channels
         tv = float(
-            np.sum(np.abs(np.diff(img, axis=0)))   # vertical  (H-1, W, C)
+            np.sum(np.abs(np.diff(img, axis=0)))  # vertical  (H-1, W, C)
             + np.sum(np.abs(np.diff(img, axis=1)))  # horizontal (H, W-1, C)
         )
         # Normalise by pixel count so the score is resolution-independent

@@ -37,9 +37,7 @@ def composite_mos(per_image_scores: dict[str, dict[str, float]]) -> dict[str, fl
         arr = np.asarray(list(image_scores.values()), dtype=float)
         mean = float(arr.mean())
         std = float(arr.std(ddof=0)) or 1.0
-        z_by_annotator[annotator] = {
-            img: (val - mean) / std for img, val in image_scores.items()
-        }
+        z_by_annotator[annotator] = {img: (val - mean) / std for img, val in image_scores.items()}
 
     out: dict[str, float] = {}
     for image_id, scores in per_image_scores.items():

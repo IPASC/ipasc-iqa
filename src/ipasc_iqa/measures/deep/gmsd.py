@@ -77,8 +77,7 @@ class GMSDMeasure(BaseMeasure):
             from piq import gmsd
         except ImportError as exc:
             raise ImportError(
-                "GMSD requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "GMSD requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

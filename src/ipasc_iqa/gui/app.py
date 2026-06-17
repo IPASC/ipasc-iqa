@@ -40,7 +40,7 @@ def create_app(
 
     app = FastAPI(title="ipasc_iqa", version=__version__)
     app.state.workspace = workspace
-    app.state.jobs = {}   # job_id → _JobState; populated by gui.jobs.launch_run
+    app.state.jobs = {}  # job_id → _JobState; populated by gui.jobs.launch_run
     app.state.ranking_sessions = {}  # session_id → {session, dataset_choice, task_choice}
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

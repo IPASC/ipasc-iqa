@@ -105,9 +105,7 @@ def analysis_fragment(
 def standings_fragment(request: Request, source: str = Query(default="mos")) -> HTMLResponse:
     ws = _ws(request)
     result = service.standings(ws, source=source)
-    return templates.TemplateResponse(
-        request, "fragments/standings_table.html", {"result": result}
-    )
+    return templates.TemplateResponse(request, "fragments/standings_table.html", {"result": result})
 
 
 # ---------------------------------------------------------------------------

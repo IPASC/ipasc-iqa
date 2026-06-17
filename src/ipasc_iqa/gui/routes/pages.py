@@ -69,9 +69,7 @@ def results_page(request: Request) -> HTMLResponse:
 
 @router.get("/standings", response_class=HTMLResponse)
 def standings_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request, "standings.html", {"active": "standings"}
-    )
+    return templates.TemplateResponse(request, "standings.html", {"active": "standings"})
 
 
 @router.get("/download", response_class=HTMLResponse)

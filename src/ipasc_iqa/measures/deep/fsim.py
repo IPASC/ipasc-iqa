@@ -67,7 +67,7 @@ class FSIMMeasure(BaseMeasure):
         ),
     )
 
-    def __init__(self, chromatic: bool = False, device = None) -> None:
+    def __init__(self, chromatic: bool = False, device=None) -> None:
         # chromatic enters the cache key so changing it invalidates cached results.
         super().__init__(chromatic=chromatic)
         self._chromatic = chromatic
@@ -88,8 +88,7 @@ class FSIMMeasure(BaseMeasure):
             from piq import fsim
         except ImportError as exc:
             raise ImportError(
-                "FSIM requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "FSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

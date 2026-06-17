@@ -19,9 +19,7 @@ def main() -> None:
         "--data-dir",
         type=Path,
         default=(
-            Path(os.environ["IPASC_IQA_DATA_DIR"])
-            if os.environ.get("IPASC_IQA_DATA_DIR")
-            else None
+            Path(os.environ["IPASC_IQA_DATA_DIR"]) if os.environ.get("IPASC_IQA_DATA_DIR") else None
         ),
         help="Managed directory for downloaded datasets (default: platform data dir).",
     )

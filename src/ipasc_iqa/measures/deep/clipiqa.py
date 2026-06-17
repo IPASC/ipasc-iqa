@@ -87,8 +87,7 @@ class CLIPIQAMeasure(BaseMeasure):
             from piq import CLIPIQA
         except ImportError as exc:
             raise ImportError(
-                "CLIP-IQA requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "CLIP-IQA requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

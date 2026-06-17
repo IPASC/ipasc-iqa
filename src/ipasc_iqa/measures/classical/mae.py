@@ -17,9 +17,7 @@ class MAEMeasure(BaseMeasure):
         accepted_reference_types=None,
         higher_is_better=False,
         value_range=(0.0, float("inf")),
-        description=(
-            "Median Absolute Error: median(abs(signal - reference)). "
-        ),
+        description=("Median Absolute Error: median(abs(signal - reference)). "),
     )
 
     def evaluate(

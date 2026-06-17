@@ -1,17 +1,19 @@
 """BaseMeasure, MeasureMetadata, and EvaluationInput."""
 
 from __future__ import annotations
-from enum import Enum
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 import numpy as np
+
 
 class MeasureType(Enum):
     FULL_REFERENCE = 1
     REDUCED_REFERENCE = 2
     NO_REFERENCE = 3
+
 
 @dataclass(frozen=True)
 class MeasureMetadata:
@@ -85,9 +87,7 @@ class BaseMeasure:
     ) -> float | dict[str, float]:
         raise NotImplementedError
 
-    def batch_evaluate(
-        self, items: list[EvaluationInput]
-    ) -> list[float | dict[str, float]]:
+    def batch_evaluate(self, items: list[EvaluationInput]) -> list[float | dict[str, float]]:
         return [self.evaluate(**it.as_kwargs()) for it in items]
 
     def get_bibtex_citation(self) -> str:
@@ -98,7 +98,5 @@ class BaseMeasure:
         """
         bibtex = self.metadata.bibtex
         if bibtex is None:
-            raise NotImplementedError(
-                f"{type(self).__name__} does not provide a BibTeX citation."
-            )
+            raise NotImplementedError(f"{type(self).__name__} does not provide a BibTeX citation.")
         return bibtex

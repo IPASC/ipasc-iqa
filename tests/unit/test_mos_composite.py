@@ -27,9 +27,7 @@ def test_matches_average_of_per_annotator_zscores() -> None:
         arr = np.array(list(vals.values()))
         mu, sd = arr.mean(), arr.std(ddof=0)
         z[ann] = {img: (v - mu) / sd for img, v in vals.items()}
-    expected = {
-        img: float(np.mean([z[a][img] for a in scores])) for img, scores in raw.items()
-    }
+    expected = {img: float(np.mean([z[a][img] for a in scores])) for img, scores in raw.items()}
     for img in raw:
         assert abs(comp[img] - expected[img]) < 1e-12
 

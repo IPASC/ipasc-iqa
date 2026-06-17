@@ -41,6 +41,7 @@ def _env_info() -> EnvironmentInfo:
     cuda_ver: str | None = None
     try:
         import torch
+
         torch_ver = torch.__version__
         if torch.cuda.is_available():
             cuda_ver = torch.version.cuda
@@ -60,7 +61,7 @@ def _pick_reference(
     reference_preference: list[str] | None,
 ) -> tuple[object, str | None]:
     """Return (array_or_None, reference_type_or_None)."""
-    if not measure.metadata.measure_type == MeasureType.FULL_REFERENCE:
+    if measure.metadata.measure_type != MeasureType.FULL_REFERENCE:
         return None, None
 
     accepted = measure.metadata.accepted_reference_types
@@ -163,7 +164,10 @@ def run_evaluation(
                     record.references, measure, reference_preference
                 )
 
-                if measure.metadata.measure_type == MeasureType.FULL_REFERENCE and reference is None:
+                if (
+                    measure.metadata.measure_type == MeasureType.FULL_REFERENCE
+                    and reference is None
+                ):
                     skipped.append(
                         SkippedRecord(
                             dataset=ds.name,

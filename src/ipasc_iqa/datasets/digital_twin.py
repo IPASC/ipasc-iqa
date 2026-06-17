@@ -80,8 +80,11 @@ class DigitalTwinDataset(LocalDataset):
     )
     DATASET_BIBTEX = (
         "@article{grohl2025digital,\n"
-        "  title     = {Digital twins enable full-reference quality assessment of photoacoustic image reconstructions},\n"
-        "  author    = {Gr{\\\"o}hl, Janek and Kunyansky, Leonid and Poimala, Jenni and Else, Thomas R and Di Cecio, Francesca and Bohndiek, Sarah E and Cox, Ben T and Hauptmann, Andreas},\n"
+        "  title     = {Digital twins enable full-reference quality assessment of photoacoustic "
+        "image reconstructions},\n"
+        '  author    = {Gr{\\"o}hl, Janek and Kunyansky, Leonid and Poimala, Jenni and '
+        "Else, Thomas R and Di Cecio, Francesca and Bohndiek, Sarah E and Cox, "
+        "Ben T and Hauptmann, Andreas},\n"
         "  journal   = {The Journal of the Acoustical Society of America},\n"
         "  volume    = {158},\n"
         "  number    = {1},\n"
@@ -213,9 +216,7 @@ class DigitalTwinDataset(LocalDataset):
                 ys = []
 
                 for p0_path in sorted(p0_dir.glob("*.npy")):
-                    recon_path = (
-                        calibration_dir / "recons" / algo / RECON_SOURCE / p0_path.name
-                    )
+                    recon_path = calibration_dir / "recons" / algo / RECON_SOURCE / p0_path.name
                     if not recon_path.exists():
                         continue
 
@@ -281,9 +282,7 @@ class DigitalTwinDataset(LocalDataset):
                             "sha256": hash_file(converted_dir / var_rel),
                             "shape": list(arr.shape),
                             "dtype": str(arr.dtype),
-                            "references": {
-                                REFERENCE_TYPE: {"path": ref_rel, "sha256": ref_sha}
-                            },
+                            "references": {REFERENCE_TYPE: {"path": ref_rel, "sha256": ref_sha}},
                             "metadata": {
                                 "split": split,
                                 "stem": scene,  # groups variants of one reference
@@ -306,7 +305,8 @@ class DigitalTwinDataset(LocalDataset):
             "dataset_version": self.DATASET_VERSION,
             "description": self.DATASET_DESCRIPTION,
             "citation": (
-                "J. Groehl et al. Digital twins enable full-reference quality assessment of photoacoustic image reconstructions. "
+                "J. Groehl et al. Digital twins enable full-reference quality assessment of "
+                "photoacoustic image reconstructions. "
                 "The Journal of the Acoustical Society of America 158.1 (2025): 590-601."
             ),
             "license": "CC-BY-4.0",

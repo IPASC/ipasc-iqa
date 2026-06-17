@@ -31,9 +31,7 @@ class _JobState:
 
     def record_result(self, measure_name: str) -> None:
         with self._lock:
-            self._done_per_measure[measure_name] = (
-                self._done_per_measure.get(measure_name, 0) + 1
-            )
+            self._done_per_measure[measure_name] = self._done_per_measure.get(measure_name, 0) + 1
 
     def finish(self, run_id: str) -> None:
         with self._lock:

@@ -1,6 +1,7 @@
 """HaarPSI optimised for medical images.
 
-Karner, Clemens, et al. "Parameter choices in HaarPSI for IQA with medical images." 2025 IEEE 22nd International Symposium on Biomedical Imaging (ISBI). IEEE, 2025.
+Karner, Clemens, et al. "Parameter choices in HaarPSI for IQA with medical images."
+2025 IEEE 22nd International Symposium on Biomedical Imaging (ISBI). IEEE, 2025.
 """
 
 from __future__ import annotations
@@ -65,8 +66,7 @@ class HaarPSIMedMeasure(BaseMeasure):
             from piq import haarpsi
         except ImportError as exc:
             raise ImportError(
-                "HaarPSI requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "HaarPSI requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 
