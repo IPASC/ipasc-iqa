@@ -55,8 +55,7 @@ def _create_admin(argv: list[str]) -> None:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
     print(
-        f"Admin ready: {user['name']} <{user['email']}> "
-        f"(uid {user['uid']}, role {user['role']})."
+        f"Admin ready: {user['name']} <{user['email']}> (uid {user['uid']}, role {user['role']})."
     )
 
 

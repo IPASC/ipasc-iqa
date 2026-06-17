@@ -139,9 +139,7 @@ class AnnotatorStore:
     def email_taken(self, email: str) -> bool:
         return self._cache.get(("email", normalize_email(email))) is not None
 
-    def create_user(
-        self, *, email: str, name: str, role: str, password_hash: str | None
-    ) -> dict:
+    def create_user(self, *, email: str, name: str, role: str, password_hash: str | None) -> dict:
         """Create an account. Raises ``ValueError`` if the email is in use."""
         email = normalize_email(email)
         if self.email_taken(email):

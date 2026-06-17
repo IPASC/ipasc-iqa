@@ -220,9 +220,7 @@ def _seed_bt_comparisons(client: TestClient, task: str = "overall_quality") -> N
 
     ws = client.app.state.workspace
     with AnnotatorStore(ws.annotations_path) as store:
-        user = store.create_user(
-            email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None
-        )
+        user = store.create_user(email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None)
         for stem in range(3):
             a0, a1, ref = f"image{stem}_alg0", f"image{stem}_alg1", f"__ref__{stem}"
             comps = [

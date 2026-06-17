@@ -52,9 +52,7 @@ def results_page(request: Request) -> HTMLResponse:
     last_datasets = [d for d in last["datasets"] if d in available]
     prepared = [d for d in datasets if d["prepared"]]
     selected = (
-        last_datasets[0]
-        if last_datasets
-        else (prepared or datasets or [{"name": None}])[0]["name"]
+        last_datasets[0] if last_datasets else (prepared or datasets or [{"name": None}])[0]["name"]
     )
     selected_measures = last["measures"] or None
     # Provide the annotation tasks for the initially selected dataset so the

@@ -220,9 +220,7 @@ def _last_selection_path(workspace: Workspace) -> Path:
     return workspace.results_dir / "last_selection.json"
 
 
-def save_last_selection(
-    workspace: Workspace, datasets: list[str], measures: list[str]
-) -> None:
+def save_last_selection(workspace: Workspace, datasets: list[str], measures: list[str]) -> None:
     """Persist the dataset/measure selection from the most recent benchmark run."""
     workspace.ensure()
     _last_selection_path(workspace).write_text(
@@ -512,9 +510,7 @@ def task_annotation_summary(
 
     # Ratings: per-image annotator counts (manifest per-rater + contributed).
     rated = _mos_annotator_scores(workspace, dataset_name, task, manifest)
-    n_ratings = sum(
-        len(raters) for img, raters in rated.items() if not img.startswith(_REF_PREFIX)
-    )
+    n_ratings = sum(len(raters) for img, raters in rated.items() if not img.startswith(_REF_PREFIX))
 
     # Rankings: total variant placements across sessions for this task.
     with AnnotatorStore(workspace.annotations_path) as store:
@@ -523,9 +519,7 @@ def task_annotation_summary(
     for s in sessions:
         if s.get("dataset") != dataset_name or s.get("task") != task:
             continue
-        n_rankings += sum(
-            1 for i in s.get("order", []) if not i.startswith(_REF_PREFIX)
-        )
+        n_rankings += sum(1 for i in s.get("order", []) if not i.startswith(_REF_PREFIX))
 
     return {
         "n_images": n_images,

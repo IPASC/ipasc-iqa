@@ -111,9 +111,7 @@ def test_bt_only_dataset_is_analysable(tmp_path: Path) -> None:
 
     # Contribute pairwise comparisons (task=None) for the emitted testing scenes.
     with AnnotatorStore(ws.annotations_path) as store:
-        user = store.create_user(
-            email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None
-        )
+        user = store.create_user(email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None)
         for stem in range(2):
             scene = f"testing_{stem}"
             algos = [f"{scene}_{a}" for a in RECON_ALGORITHMS]
