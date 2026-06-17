@@ -65,7 +65,6 @@ class IWSSIMMeasure(BaseMeasure):
             "Computed via piq.information_weighted_ssim — no reference implementation "
             "exists in scipy or scikit-image. "
             "Minimum recommended image size: 32×32. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 

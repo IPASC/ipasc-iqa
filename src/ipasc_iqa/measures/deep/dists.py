@@ -44,7 +44,6 @@ class DISTSMeasure(BaseMeasure):
         description=(
             "Deep Image Structure and Texture Similarity. "
             "Invariant to texture resampling; lower distance = more similar. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 

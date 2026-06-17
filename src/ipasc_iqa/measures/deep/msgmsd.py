@@ -69,7 +69,7 @@ class MSGMSDMeasure(BaseMeasure):
         description=(
             "Multi-Scale Gradient Magnitude Similarity Deviation (MS-GMSD). "
             "Computed via piq.multi_scale_gmsd with adaptive scale selection. "
-            "Lower deviation = better quality. Requires ipasc_iqa[deep]."
+            "Lower deviation = better quality."
         ),
     )
 

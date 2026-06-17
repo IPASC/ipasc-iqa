@@ -46,7 +46,6 @@ class HaarPSIMedMeasure(BaseMeasure):
             "Haar Wavelet-Based Perceptual Similarity Index (HaarPSI). "
             "Computed via piq.haarpsi. "
             "Minimum recommended image size: ~16×16 for the default 3-scale decomposition. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 

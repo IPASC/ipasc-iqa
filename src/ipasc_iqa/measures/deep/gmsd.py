@@ -57,7 +57,7 @@ class GMSDMeasure(BaseMeasure):
         description=(
             "Gradient Magnitude Similarity Deviation (GMSD). "
             "Computed via piq.gmsd. "
-            "Lower deviation = better quality. Requires ipasc_iqa[deep]."
+            "Lower deviation = better quality."
         ),
     )
 

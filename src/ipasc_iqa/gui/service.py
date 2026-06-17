@@ -199,8 +199,51 @@ def measure_options(
     for m in list_measures():
         usable = _measure_usable(m, ds) if ds and ds["prepared"] else True
         checked = usable if selected is None else (usable and m["name"] in selected)
-        options.append({"name": m["name"], "usable": usable, "checked": checked})
+        options.append(
+            {
+                "name": m["name"],
+                "measure_type": m["measure_type"],
+                "usable": usable,
+                "checked": checked,
+            }
+        )
     return options
+
+
+# ---------------------------------------------------------------------------
+# Last benchmark selection — remembered so the analysis page can default to the
+# measures/dataset the user just ran, instead of "all measures, first dataset".
+# ---------------------------------------------------------------------------
+
+
+def _last_selection_path(workspace: Workspace) -> Path:
+    return workspace.results_dir / "last_selection.json"
+
+
+def save_last_selection(
+    workspace: Workspace, datasets: list[str], measures: list[str]
+) -> None:
+    """Persist the dataset/measure selection from the most recent benchmark run."""
+    workspace.ensure()
+    _last_selection_path(workspace).write_text(
+        json.dumps({"datasets": list(datasets), "measures": list(measures)}),
+        encoding="utf-8",
+    )
+
+
+def load_last_selection(workspace: Workspace) -> dict:
+    """Most recent benchmark selection, or empty lists if none was recorded."""
+    path = _last_selection_path(workspace)
+    if not path.exists():
+        return {"datasets": [], "measures": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"datasets": [], "measures": []}
+    return {
+        "datasets": list(data.get("datasets", [])),
+        "measures": list(data.get("measures", [])),
+    }
 
 
 def get_dataset(workspace: Workspace, name: str) -> dict | None:
@@ -436,13 +479,60 @@ def analysis_for_dataset(
 
     return {
         "dataset": dataset_name,
+        "description": ds.get("description"),
+        "bibtex": ds.get("bibtex"),
         "run_id": run.run_id,
         "tasks": [{"task": active_task, "rows": row_dicts}],
         "all_tasks": task_names,
         "active_task": active_task,
+        "meta": task_annotation_summary(workspace, dataset_name, active_task, manifest),
         "sources": sources,
         "active_source": active_source,
         "error": None,
+    }
+
+
+def task_annotation_summary(
+    workspace: Workspace, dataset_name: str, task: str | None, manifest: dict
+) -> dict:
+    """Annotation-density metadata for one (dataset, task), for methods reporting.
+
+    Averages are over the *whole dataset* (``n_images``, same count the run page
+    reports) so they read as a coverage fraction — e.g. 36 rankings over 471
+    images is 0.08, not 1. Ranking/rating observations exclude reference
+    (ground-truth) pseudo-items, since those aren't assessed. Returns:
+
+    - ``n_images``: total images in the dataset.
+    - ``n_ratings`` / ``n_rankings``: total rating / ranking observations for this
+      task (a ranking session contributes one observation per variant it ranks).
+    - ``avg_ratings`` / ``avg_rankings``: those totals divided by ``n_images``;
+      ``None`` if the dataset has no images.
+    """
+    n_images = len(manifest.get("images", []))
+
+    # Ratings: per-image annotator counts (manifest per-rater + contributed).
+    rated = _mos_annotator_scores(workspace, dataset_name, task, manifest)
+    n_ratings = sum(
+        len(raters) for img, raters in rated.items() if not img.startswith(_REF_PREFIX)
+    )
+
+    # Rankings: total variant placements across sessions for this task.
+    with AnnotatorStore(workspace.annotations_path) as store:
+        sessions = store.sessions()
+    n_rankings = 0
+    for s in sessions:
+        if s.get("dataset") != dataset_name or s.get("task") != task:
+            continue
+        n_rankings += sum(
+            1 for i in s.get("order", []) if not i.startswith(_REF_PREFIX)
+        )
+
+    return {
+        "n_images": n_images,
+        "n_ratings": n_ratings,
+        "n_rankings": n_rankings,
+        "avg_ratings": (n_ratings / n_images) if n_images else None,
+        "avg_rankings": (n_rankings / n_images) if n_images else None,
     }
 
 
@@ -550,13 +640,14 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
             continue
         manifest = load_manifest(dataset_registry.manifest_path(ds["name"], workspace.data_dir))
 
-        if source == "bt":
-            named, has_unnamed = _available_tasks(workspace, ds["name"], manifest)
-            tasks: list[str | None] = [*named]
-            if has_unnamed:
-                tasks.append(None)
-        else:
-            tasks = list(annotation_tasks_in_manifest(manifest))
+        # Enumerate tasks from both manifest MOS *and* contributed annotations
+        # (ratings/comparisons), so a dataset whose only human scores are
+        # contributed — e.g. ratings recorded under the unnamed task=None —
+        # still appears for either source.
+        named, has_unnamed = _available_tasks(workspace, ds["name"], manifest)
+        tasks: list[str | None] = [*named]
+        if has_unnamed:
+            tasks.append(None)
 
         for task in tasks:
             if source == "bt":

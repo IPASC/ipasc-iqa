@@ -44,7 +44,7 @@ class LPIPSMeasure(BaseMeasure):
         ),
         description=(
             "Learned Perceptual Image Patch Similarity (AlexNet backbone). "
-            "Lower distance = more similar. Requires ipasc_iqa[deep]."
+            "Lower distance = more similar."
         ),
     )
 

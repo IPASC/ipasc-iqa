@@ -4,11 +4,45 @@
   <p class="muted">No annotation tasks to analyse.</p>
 {% else %}
   <div class="result-head">
-    <h2 class="result-head__title">{{ result.dataset }}</h2>
-    {% if result.run_id == 'merged' %}
-      <span class="badge badge--muted">merged results (newest per image)</span>
-    {% elif result.run_id %}
-      <span class="badge badge--muted">run: {{ result.run_id }}</span>
+    <div class="result-head__top">
+      <h2 class="result-head__title">{{ result.dataset }}</h2>
+      {% if result.bibtex %}
+      <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ result.bibtex }}"
+              title="Show dataset BibTeX citation" aria-label="Citation for {{ result.dataset }}">
+        <i class="fa-solid fa-quote-right"></i>
+      </button>
+      {% endif %}
+    </div>
+
+    {% if result.description %}
+    <p class="result-head__desc">{{ result.description }}</p>
+    {% endif %}
+
+    {% if result.meta %}
+    <dl class="result-meta">
+      <div class="result-meta__item">
+        <dt>Images{% if result.active_task %} ({{ result.active_task.replace('_', ' ') }}){% endif %}</dt>
+        <dd>{{ result.meta.n_images }}</dd>
+      </div>
+      <div class="result-meta__item">
+        <dt>Avg rankings / image</dt>
+        <dd>
+          {%- if result.meta.avg_rankings is not none -%}
+            {{ '%.2f'|format(result.meta.avg_rankings) }}
+            <span class="result-meta__sub">({{ result.meta.n_rankings }} total)</span>
+          {%- else -%}—{%- endif -%}
+        </dd>
+      </div>
+      <div class="result-meta__item">
+        <dt>Avg ratings / image</dt>
+        <dd>
+          {%- if result.meta.avg_ratings is not none -%}
+            {{ '%.2f'|format(result.meta.avg_ratings) }}
+            <span class="result-meta__sub">({{ result.meta.n_ratings }} total)</span>
+          {%- else -%}—{%- endif -%}
+        </dd>
+      </div>
+    </dl>
     {% endif %}
   </div>
 
@@ -23,7 +57,7 @@
     {% else %}
     <table class="data-table">
       <thead>
-        <tr><th>Measure</th><th class="num">n</th><th class="num">Mean</th><th class="num">Std</th>
+        <tr><th>Measure</th><th class="num">Mean</th><th class="num">Std</th>
             <th class="num">SRCC</th><th class="num">KRCC</th></tr>
       </thead>
       <tbody>
@@ -45,7 +79,6 @@
               <span>{{ row.measure }}</span>
             </span>
           </td>
-          <td class="num">{{ row.n }}</td>
           <td class="num mono">{{ '%.3g'|format(row.mean) if row.mean is not none else '—' }}</td>
           <td class="num mono">{{ '%.3g'|format(row.std) if row.std is not none else '—' }}</td>
           {% for key in ['srcc', 'krcc'] %}

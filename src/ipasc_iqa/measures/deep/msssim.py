@@ -63,7 +63,6 @@ class MSSSIMMeasure(BaseMeasure):
             "Multi-Scale Structural Similarity Index (MS-SSIM). "
             "Computed via piq.multi_scale_ssim — no reference implementation "
             "exists in scipy or scikit-image. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 

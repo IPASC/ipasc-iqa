@@ -63,7 +63,6 @@ class FSIMMeasure(BaseMeasure):
             "Feature Similarity Index (FSIM). "
             "Computed via piq.fsim with chromatic=False (luminance only). "
             "Set chromatic=True for colour images (requires C=3). "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 

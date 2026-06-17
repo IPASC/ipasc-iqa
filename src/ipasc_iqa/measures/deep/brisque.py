@@ -38,7 +38,7 @@ class BRISQUEMeasure(BaseMeasure):
         ),
         description=(
             "Blind/Referenceless Image Spatial Quality Evaluator (BRISQUE). "
-            "Lower score = better quality. Requires ipasc_iqa[deep]."
+            "Lower score = better quality."
         ),
     )
 

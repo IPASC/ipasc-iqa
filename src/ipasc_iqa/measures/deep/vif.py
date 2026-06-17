@@ -63,7 +63,6 @@ class VIFMeasure(BaseMeasure):
             "Computed via piq.vif_p. "
             "Typical range [0, 1]; values above 1 possible for enhanced images. "
             "Minimum recommended image size: 41×41. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 

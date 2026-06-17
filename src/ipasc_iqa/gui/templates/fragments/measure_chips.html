@@ -4,6 +4,7 @@
 <label class="chip {{ 'chip--disabled' if not m.usable }}"
        {% if not m.usable %}title="Not usable with this dataset (missing reference or ROI)"{% endif %}>
   <input type="checkbox" name="measures" value="{{ m.name }}"
+         data-measure-type="{{ m.measure_type }}"
          {{ 'checked' if m.checked }} {{ 'disabled' if not m.usable }}>
   <span>{{ m.name }}</span>
 </label>

@@ -39,6 +39,8 @@ def run_benchmark(
             {"error": "Select at least one dataset and one measure.", "run_id": None},
             status_code=400,
         )
+    # Remember this selection so the analysis page can default to it.
+    service.save_last_selection(ws, datasets, measures)
     job_id = launch_run(ws, request.app.state.jobs, datasets, measures)
     snap = request.app.state.jobs[job_id].snapshot()
     return templates.TemplateResponse(request, "fragments/job_progress.html", snap)

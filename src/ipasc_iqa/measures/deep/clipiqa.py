@@ -67,7 +67,6 @@ class CLIPIQAMeasure(BaseMeasure):
             "No-reference image quality via CLIP (CLIP-IQA). "
             "Computed via piq.CLIPIQA — piq bundles its own CLIP weights. "
             "Model downloaded on first evaluate() call. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 

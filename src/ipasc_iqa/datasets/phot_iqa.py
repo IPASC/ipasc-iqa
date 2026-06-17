@@ -305,8 +305,22 @@ class PhotIQADataset(LocalDataset):
         ann_dir = candidates[0].parent
 
         tables = load_annotation_dir(ann_dir)
+
+        # The project starts with a single generic "overall quality" task. The
+        # other PhotIQA sub-tasks are disabled for now — re-enable one by
+        # uncommenting its name below.
+        enabled_tasks = {
+            "overall_quality",
+            # "edge_visibility",
+            # "object_homogeneity",
+            # "object_intensity_(inclusions)",
+            # "object_intensity_(background)",
+        }
+
         per_image: dict[str, dict[str, dict]] = {}
         for task, table in tables.items():
+            if task not in enabled_tasks:
+                continue
             for key in table.image_keys():
                 slot = per_image.setdefault(key, {})
                 slot[task] = {}

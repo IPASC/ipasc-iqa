@@ -45,9 +45,18 @@ def run_page(request: Request) -> HTMLResponse:
 def results_page(request: Request) -> HTMLResponse:
     ws = _ws(request)
     datasets = service.discover_datasets(ws)
-    # Prefer a prepared dataset as the initial selection.
+    # Default to what the user last ran a benchmark on: its first dataset and the
+    # measures it covered. Fall back to a prepared dataset / all usable measures.
+    last = service.load_last_selection(ws)
+    available = {d["name"] for d in datasets}
+    last_datasets = [d for d in last["datasets"] if d in available]
     prepared = [d for d in datasets if d["prepared"]]
-    selected = (prepared or datasets or [{"name": None}])[0]["name"]
+    selected = (
+        last_datasets[0]
+        if last_datasets
+        else (prepared or datasets or [{"name": None}])[0]["name"]
+    )
+    selected_measures = last["measures"] or None
     # Provide the annotation tasks for the initially selected dataset so the
     # sub-task dropdown can be rendered on first load without an extra request.
     sel_ds = next((d for d in datasets if d["name"] == selected), None)
@@ -59,7 +68,7 @@ def results_page(request: Request) -> HTMLResponse:
         {
             "active": "results",
             "datasets": datasets,
-            "measure_options": service.measure_options(ws, selected),
+            "measure_options": service.measure_options(ws, selected, selected=selected_measures),
             "selected_dataset": selected,
             "initial_tasks": initial_tasks,
             "initial_sources": initial_sources,

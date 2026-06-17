@@ -61,7 +61,7 @@ class TVMeasure(BaseMeasure):
         description=(
             "Total Variation (anisotropic L1), normalised by H×W. "
             "Measures image smoothness without a reference. "
-            "Lower = smoother. Implemented with NumPy; no ipasc_iqa[deep] required."
+            "Lower = smoother."
         ),
     )
 

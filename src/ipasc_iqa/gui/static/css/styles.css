@@ -187,6 +187,7 @@ body {
 .field__label { font-weight: 600; color: var(--navy); font-size: 0.85rem; }
 .select { padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px;
           background: #fff; font-size: 0.95rem; }
+.field--preset { margin: 0.2rem 0 0.6rem; }
 .measure-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.6rem;
         border: 1px solid var(--border); border-radius: 999px; font-size: 0.85rem; cursor: pointer; }
@@ -200,8 +201,18 @@ body {
 .task-block__title { color: var(--navy); font-size: 1rem; margin: 0 0 0.5rem;
                      text-transform: capitalize; }
 .check__desc { color: var(--muted); font-weight: 400; font-size: 0.74rem; margin-top: 0.15rem; }
-.result-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+.result-head { margin-bottom: 0.75rem; }
+.result-head__top { display: flex; align-items: center; gap: 0.6rem; }
 .result-head__title { color: var(--navy); margin: 0; font-size: 1.2rem; }
+.result-head__desc { color: var(--muted); margin: 0.4rem 0 0; font-size: 0.9rem;
+                     max-width: 60ch; line-height: 1.4; }
+
+/* Methodological metadata for the active task (image/annotation counts). */
+.result-meta { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin: 0.7rem 0 0; }
+.result-meta__item dt { color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
+                        letter-spacing: 0.03em; margin-bottom: 0.1rem; }
+.result-meta__item dd { color: var(--navy); margin: 0; font-size: 1.05rem; font-weight: 600; }
+.result-meta__sub { color: var(--muted); font-size: 0.78rem; font-weight: 400; }
 .badge { background: var(--bg); border: 1px solid var(--border); color: var(--muted);
          border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.75rem; }
 .badge--muted { color: #94a3b8; }
