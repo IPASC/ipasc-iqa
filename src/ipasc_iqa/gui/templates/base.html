@@ -32,6 +32,7 @@
       {% endif %}
       {% if user and user.role == 'admin' %}
       <a href="/download"   class="nav__link {{ 'is-active' if active == 'download' }}">Download</a>
+      <a href="/admin/users" class="nav__link {{ 'is-active' if active == 'admin' }}">Users</a>
       {% endif %}
       {% if user %}
       <a href="/profile"    class="nav__link {{ 'is-active' if active == 'profile' }}">Profile</a>

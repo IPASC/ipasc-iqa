@@ -33,6 +33,10 @@ COOKIE_NAME = "ipasc_session"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 14  # 14 days
 RESET_TTL_SECONDS = 60 * 60  # 1 hour
 
+# Instance setting: when on, newly self-registered accounts are approved
+# immediately (handy for testing or a conference sign-up spike). Off by default.
+AUTO_APPROVE_KEY = "auto_approve_registrations"
+
 
 # ---------------------------------------------------------------------------
 # Password hashing
@@ -58,13 +62,19 @@ def verify_password(password: str, password_hash: str | None) -> bool:
 
 
 def register_user(workspace: Workspace, name: str, email: str, password: str) -> dict:
-    """Self-registration: create an annotator account. Raises ``ValueError``."""
+    """Self-registration: create an annotator account. Raises ``ValueError``.
+
+    The account is approved immediately only when the instance's auto-approve
+    flag is on (see :func:`auto_approve_enabled`); otherwise it starts pending
+    and an admin must approve it before it can contribute annotations.
+    """
     name, email = name.strip(), normalize_email(email)
     if not name or "@" not in email:
         raise ValueError("A name and a valid email are required.")
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters.")
     with AnnotatorStore(workspace.annotations_path) as store:
+        approved = bool(store.get_setting(AUTO_APPROVE_KEY, False))
         # email_taken covers DELETED_USER too (their index entry is removed, so a
         # freed email can be reused — which is the desired behaviour).
         return store.create_user(
@@ -72,6 +82,7 @@ def register_user(workspace: Workspace, name: str, email: str, password: str) ->
             name=name,
             role=ROLE_ANNOTATOR,
             password_hash=hash_password(password),
+            approved=approved,
         )
 
 
@@ -194,6 +205,68 @@ def delete_account(workspace: Workspace, uid: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Approval gate + instance settings
+# ---------------------------------------------------------------------------
+
+
+def is_approved(user: dict | None) -> bool:
+    """Whether a user may contribute annotations. Admins are always approved."""
+    if not user:
+        return False
+    if user.get("role") == ROLE_ADMIN:
+        return True
+    return bool(user.get("approved"))
+
+
+def auto_approve_enabled(workspace: Workspace) -> bool:
+    with AnnotatorStore(workspace.annotations_path) as store:
+        return bool(store.get_setting(AUTO_APPROVE_KEY, False))
+
+
+def set_auto_approve(workspace: Workspace, enabled: bool) -> None:
+    """Toggle the instance-wide auto-approval flag for new registrations."""
+    with AnnotatorStore(workspace.annotations_path) as store:
+        store.set_setting(AUTO_APPROVE_KEY, bool(enabled))
+
+
+def set_user_approved(workspace: Workspace, uid: str, approved: bool) -> dict | None:
+    with AnnotatorStore(workspace.annotations_path) as store:
+        return store.update_user(uid, approved=bool(approved))
+
+
+def approve_user_by_email(workspace: Workspace, email: str) -> bool:
+    """Approve the account with this email (used by the CLI). Returns success."""
+    with AnnotatorStore(workspace.annotations_path) as store:
+        user = store.get_user_by_email(email)
+        if user is None:
+            return False
+        store.update_user(user["uid"], approved=True)
+        return True
+
+
+def list_accounts(workspace: Workspace) -> list[dict]:
+    """All accounts (without password hashes) for the admin users page.
+
+    Pending (unapproved, non-deleted) accounts are surfaced first, then by name.
+    """
+    with AnnotatorStore(workspace.annotations_path) as store:
+        users = store.all_users()
+    out = [
+        {
+            "uid": u["uid"],
+            "name": u.get("name", ""),
+            "email": u.get("email", ""),
+            "role": u.get("role"),
+            "approved": is_approved(u),
+            "deleted": u.get("role") == ROLE_DELETED,
+        }
+        for u in users
+    ]
+    out.sort(key=lambda u: (u["deleted"], u["approved"], u["name"].lower()))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Admin bootstrap (used by the CLI)
 # ---------------------------------------------------------------------------
 
@@ -220,8 +293,9 @@ def promote_admin(
                 name=(name or email).strip(),
                 role=ROLE_ADMIN,
                 password_hash=hash_password(password),
+                approved=True,
             )
-        fields: dict[str, object] = {"role": ROLE_ADMIN}
+        fields: dict[str, object] = {"role": ROLE_ADMIN, "approved": True}
         if name:
             fields["name"] = name.strip()
         if password:
@@ -235,16 +309,22 @@ __all__ = [
     "ROLE_ADMIN",
     "ROLE_ANNOTATOR",
     "ROLE_DELETED",
+    "approve_user_by_email",
     "authenticate",
+    "auto_approve_enabled",
     "consume_reset_token",
     "create_session",
     "delete_account",
     "destroy_session",
     "get_session_user",
     "hash_password",
+    "is_approved",
     "issue_reset_token",
+    "list_accounts",
     "promote_admin",
     "register_user",
+    "set_auto_approve",
+    "set_user_approved",
     "update_profile",
     "verify_password",
 ]

@@ -34,13 +34,14 @@ PUBLIC_PREFIXES = (
     "/static",
     "/favicon.ico",
 )
-# Admin-only: running benchmarks and downloading/exporting data.
+# Admin-only: running benchmarks, downloading/exporting data, user management.
 ADMIN_PREFIXES = (
     "/run",
     "/api/run",
     "/api/runs",
     "/download",
     "/api/download",
+    "/admin",
 )
 
 

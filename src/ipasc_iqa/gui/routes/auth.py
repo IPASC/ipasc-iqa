@@ -214,3 +214,40 @@ def profile_delete(request: Request) -> Response:
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(auth.COOKIE_NAME)
     return resp
+
+
+# ---------------------------------------------------------------------------
+# Admin: user management (the /admin/* prefix is admin-gated by the middleware)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+def admin_users(request: Request) -> Response:
+    ws = _ws(request)
+    return templates.TemplateResponse(
+        request,
+        "admin_users.html",
+        {
+            "active": "admin",
+            "users": auth.list_accounts(ws),
+            "auto_approve": auth.auto_approve_enabled(ws),
+        },
+    )
+
+
+@router.post("/admin/auto-approve")
+def admin_set_auto_approve(request: Request, enabled: str = Form(default="off")) -> Response:
+    auth.set_auto_approve(_ws(request), enabled == "on")
+    return RedirectResponse("/admin/users", status_code=303)
+
+
+@router.post("/admin/users/{uid}/approve")
+def admin_approve(request: Request, uid: str) -> Response:
+    auth.set_user_approved(_ws(request), uid, True)
+    return RedirectResponse("/admin/users", status_code=303)
+
+
+@router.post("/admin/users/{uid}/revoke")
+def admin_revoke(request: Request, uid: str) -> Response:
+    auth.set_user_approved(_ws(request), uid, False)
+    return RedirectResponse("/admin/users", status_code=303)

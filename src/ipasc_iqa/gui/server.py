@@ -59,6 +59,47 @@ def _create_admin(argv: list[str]) -> None:
     )
 
 
+def _approve_user(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(
+        prog="ipasc_iqa-gui approve-user",
+        description="Approve an account so it can contribute annotations.",
+    )
+    parser.add_argument("--email", required=True, help="Email of the account to approve.")
+    _workspace_args(parser)
+    args = parser.parse_args(argv)
+
+    from ipasc_iqa.gui import auth
+    from ipasc_iqa.gui.service import Workspace
+
+    ws = Workspace.resolve(args.workspace, args.data_dir)
+    ws.ensure()
+    if auth.approve_user_by_email(ws, args.email):
+        print(f"Approved: {args.email}")
+    else:
+        print(f"error: no account found for {args.email}", file=sys.stderr)
+        raise SystemExit(2)
+
+
+def _set_auto_approve(argv: list[str]) -> None:
+    parser = argparse.ArgumentParser(
+        prog="ipasc_iqa-gui set-auto-approve",
+        description="Toggle auto-approval of newly self-registered accounts.",
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--on", action="store_true", help="Enable auto-approval.")
+    group.add_argument("--off", action="store_true", help="Disable auto-approval.")
+    _workspace_args(parser)
+    args = parser.parse_args(argv)
+
+    from ipasc_iqa.gui import auth
+    from ipasc_iqa.gui.service import Workspace
+
+    ws = Workspace.resolve(args.workspace, args.data_dir)
+    ws.ensure()
+    auth.set_auto_approve(ws, args.on)
+    print(f"Auto-approval is now {'ON' if args.on else 'OFF'}.")
+
+
 def _serve(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description="Launch the ipasc_iqa web GUI.")
     _workspace_args(parser)
@@ -83,10 +124,17 @@ def _serve(argv: list[str]) -> None:
     )
 
 
+_SUBCOMMANDS = {
+    "create-admin": _create_admin,
+    "approve-user": _approve_user,
+    "set-auto-approve": _set_auto_approve,
+}
+
+
 def main() -> None:
     argv = sys.argv[1:]
-    if argv and argv[0] == "create-admin":
-        _create_admin(argv[1:])
+    if argv and argv[0] in _SUBCOMMANDS:
+        _SUBCOMMANDS[argv[0]](argv[1:])
     else:
         _serve(argv)
 

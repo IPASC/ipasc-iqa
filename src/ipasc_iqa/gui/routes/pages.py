@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from ipasc_iqa.gui import service
+from ipasc_iqa.gui import auth, service
 from ipasc_iqa.gui.app import templates
 
 router = APIRouter()
@@ -100,6 +100,7 @@ def contribute_page(request: Request) -> HTMLResponse:
         {
             "active": "contribute",
             "account": account,
+            "pending": not auth.is_approved(request.state.user),
             "eligible_datasets": service.eligible_annotation_datasets(ws),
             "annotators": service.annotators_leaderboard(ws),
         },

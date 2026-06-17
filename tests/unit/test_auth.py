@@ -104,6 +104,55 @@ def test_promote_admin_creates_and_promotes(tmp_path: Path) -> None:
     assert auth.authenticate(ws, "a@b.com", "password123")["role"] == ROLE_ADMIN
 
 
+def test_registration_pending_until_auto_approve(tmp_path: Path) -> None:
+    ws = _ws(tmp_path)
+    assert auth.auto_approve_enabled(ws) is False
+    pending = auth.register_user(ws, "A", "a@b.com", "password123")
+    assert auth.is_approved(pending) is False
+
+    auth.set_auto_approve(ws, True)
+    assert auth.auto_approve_enabled(ws) is True
+    approved = auth.register_user(ws, "B", "b@b.com", "password123")
+    assert auth.is_approved(approved) is True
+
+    auth.set_auto_approve(ws, False)
+    assert auth.register_user(ws, "C", "c@b.com", "password123")["approved"] is False
+
+
+def test_set_approved_and_admin_always_approved(tmp_path: Path) -> None:
+    ws = _ws(tmp_path)
+    u = auth.register_user(ws, "A", "a@b.com", "password123")
+    assert auth.is_approved(u) is False
+    auth.set_user_approved(ws, u["uid"], True)
+    assert auth.is_approved(auth.authenticate(ws, "a@b.com", "password123")) is True
+    assert auth.approve_user_by_email(ws, "nobody@b.com") is False
+    admin = auth.promote_admin(ws, "boss@b.com", name="Boss", password="password123")
+    assert admin["approved"] is True and auth.is_approved(admin) is True
+
+
+def test_migration_v2_to_v3_grandfathers_approval(tmp_path: Path) -> None:
+    import diskcache
+
+    ws = _ws(tmp_path)
+    cache = diskcache.Cache(str(ws.annotations_path))
+    cache.set(("schema", "version"), 2)
+    cache.set(
+        ("user", "abc"),
+        {
+            "uid": "abc",
+            "email": "old@b.com",
+            "name": "Old",
+            "role": "annotator",
+            "password_hash": None,
+        },
+    )
+    cache.set(("email", "old@b.com"), "abc")
+    cache.close()
+    with AnnotatorStore(ws.annotations_path) as store:
+        assert store._cache.get(("schema", "version")) == SCHEMA_VERSION
+        assert store.get_user("abc")["approved"] is True  # grandfathered
+
+
 def test_migration_from_legacy_v1(tmp_path: Path) -> None:
     import diskcache
 
@@ -123,5 +172,6 @@ def test_migration_from_legacy_v1(tmp_path: Path) -> None:
         user = store.get_user_by_email("legacy@b.com")
         assert user is not None
         assert user["role"] == ROLE_ANNOTATOR and user["password_hash"] is None
+        assert user["approved"] is True  # legacy contributors grandfathered in
         sessions = store.sessions()
         assert sessions and sessions[0]["user_uid"] == user["uid"]

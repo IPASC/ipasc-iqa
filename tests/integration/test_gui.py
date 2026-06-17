@@ -358,6 +358,53 @@ def test_annotator_cannot_access_admin_areas(anon_client: TestClient) -> None:
     )
 
 
+def test_approval_gate_end_to_end(tmp_path: Path) -> None:
+    from ipasc_iqa.gui import auth
+
+    c = _make_client(tmp_path)
+    ws = c.app.state.workspace
+    auth.promote_admin(ws, ADMIN_EMAIL, name="Admin", password=ADMIN_PW)
+
+    # Annotator self-registers (auto-approve off) → pending: can view analysis,
+    # but cannot contribute and cannot reach the admin area.
+    c.post("/register", data={"name": "Ann", "email": "ann@test.com", "password": "password123"})
+    assert c.get("/results").status_code == 200
+    assert "Awaiting approval" in c.get("/contribute").text
+    blocked = c.post("/contribute/start", data={"dataset": "random", "rating_type": "comparative"})
+    assert "Awaiting approval" in blocked.text
+    assert c.get("/admin/users", follow_redirects=False).status_code == 403
+
+    # Admin approves the pending annotator.
+    c.post("/logout")
+    _login(c, ADMIN_EMAIL, ADMIN_PW)
+    accounts = {u["email"]: u for u in auth.list_accounts(ws)}
+    assert accounts["ann@test.com"]["approved"] is False
+    uid = accounts["ann@test.com"]["uid"]
+    assert c.post(f"/admin/users/{uid}/approve").status_code == 200
+
+    # The annotator can now start contributing.
+    c.post("/logout")
+    _login(c, "ann@test.com", "password123")
+    started = c.post("/contribute/start", data={"dataset": "random", "rating_type": "comparative"})
+    assert "Awaiting approval" not in started.text
+
+
+def test_auto_approve_flag_lets_new_users_contribute(tmp_path: Path) -> None:
+    from ipasc_iqa.gui import auth
+
+    c = _make_client(tmp_path)
+    ws = c.app.state.workspace
+    auth.promote_admin(ws, ADMIN_EMAIL, name="Admin", password=ADMIN_PW)
+    _login(c, ADMIN_EMAIL, ADMIN_PW)
+    c.post("/admin/auto-approve", data={"enabled": "on"})
+    assert auth.auto_approve_enabled(ws) is True
+
+    c.post("/logout")
+    c.post("/register", data={"name": "Bob", "email": "bob@test.com", "password": "password123"})
+    started = c.post("/contribute/start", data={"dataset": "random", "rating_type": "comparative"})
+    assert "Awaiting approval" not in started.text
+
+
 def test_download_all_datasets(client: TestClient) -> None:
     _run_and_wait(client, ["mini"], ["PSNR"])
     payload = client.get("/api/download", params={"dataset": "all"}).json()

@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from ipasc_iqa.gui import service
+from ipasc_iqa.gui import auth, service
 from ipasc_iqa.gui.app import templates
 from ipasc_iqa.gui.jobs import launch_run
 
@@ -151,6 +151,11 @@ def api_download(request: Request, dataset: str = Query(default="all")) -> JSONR
 # ---------------------------------------------------------------------------
 
 
+def _pending_response(request: Request) -> Response:
+    """Block annotation for signed-in but unapproved accounts (HTMX fragment)."""
+    return templates.TemplateResponse(request, "fragments/annotate_pending.html", {})
+
+
 def _picker_response(request: Request, account: dict, *, message: str | None = None) -> Response:
     """Render the dataset/sub-task picker fragment for a logged-in annotator."""
     return templates.TemplateResponse(
@@ -227,6 +232,8 @@ def contribute_start(
     rating_type: str = Form(default="comparative"),
 ) -> Response:
     ws = _ws(request)
+    if not auth.is_approved(request.state.user):
+        return _pending_response(request)
     account = service.account_for(ws, request.state.user)
 
     if rating_type == "quantitative":
@@ -256,6 +263,8 @@ def contribute_rate(
     dataset_choice: str = Form(default="random"),
 ) -> Response:
     ws = _ws(request)
+    if not auth.is_approved(request.state.user):
+        return _pending_response(request)
     account = service.account_for(ws, request.state.user)
 
     count = service.record_rating(
@@ -278,6 +287,8 @@ def contribute_choose(
     winner: str = Form(...),
 ) -> Response:
     ws = _ws(request)
+    if not auth.is_approved(request.state.user):
+        return _pending_response(request)
     account = service.account_for(ws, request.state.user)
 
     outcome = service.submit_choice(ws, request.app.state.ranking_sessions, session_id, winner)

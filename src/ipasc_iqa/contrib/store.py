@@ -37,7 +37,7 @@ ROLE_ANNOTATOR = "annotator"
 ROLE_DELETED = "DELETED_USER"
 
 # Bumped when the on-disk layout changes; gates the one-time migration.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def normalize_email(email: str) -> str:
@@ -81,6 +81,9 @@ class AnnotatorStore:
         v2 keys users by uid and stamps annotations with ``user_uid``. Legacy
         accounts are migrated with ``role=annotator`` and no password, so they
         must use the reset flow to set one before they can log in.
+
+        v3 adds an ``approved`` gate for contributing. Accounts that predate it
+        are grandfathered in (``approved=True``) so the upgrade locks nobody out.
         """
         version = self._cache.get(("schema", "version"))
         if version == SCHEMA_VERSION:
@@ -125,6 +128,12 @@ class AnnotatorStore:
                 if uid:
                     self._cache.set(key, {**rec, "user_uid": uid})
 
+        # → v3: grandfather every existing account past the new approval gate.
+        for key in list(self._user_keys()):
+            rec = self._cache.get(key)
+            if rec is not None and "approved" not in rec:
+                self._cache.set(key, {**rec, "approved": True})
+
         self._cache.set(("schema", "version"), SCHEMA_VERSION)
 
     # -- users -------------------------------------------------------------
@@ -139,7 +148,15 @@ class AnnotatorStore:
     def email_taken(self, email: str) -> bool:
         return self._cache.get(("email", normalize_email(email))) is not None
 
-    def create_user(self, *, email: str, name: str, role: str, password_hash: str | None) -> dict:
+    def create_user(
+        self,
+        *,
+        email: str,
+        name: str,
+        role: str,
+        password_hash: str | None,
+        approved: bool = False,
+    ) -> dict:
         """Create an account. Raises ``ValueError`` if the email is in use."""
         email = normalize_email(email)
         if self.email_taken(email):
@@ -152,6 +169,7 @@ class AnnotatorStore:
             "name": name.strip(),
             "role": role,
             "password_hash": password_hash,
+            "approved": approved,
             "created": now,
             "updated": now,
         }
@@ -253,6 +271,14 @@ class AnnotatorStore:
             return None
         self._cache.delete(("reset", token))
         return rec.get("uid")
+
+    # -- instance settings (small, admin-toggled flags) --------------------
+
+    def get_setting(self, key: str, default: object = None) -> object:
+        return self._cache.get(("setting", key), default)
+
+    def set_setting(self, key: str, value: object) -> None:
+        self._cache.set(("setting", key), value)
 
     # -- sessions (ranking) ------------------------------------------------
 
