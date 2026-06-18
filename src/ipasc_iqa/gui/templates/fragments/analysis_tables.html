@@ -58,7 +58,7 @@
     <div class="table-scroll">
     <table class="data-table">
       <thead>
-        <tr><th>Measure</th><th class="num">Mean</th><th class="num">Std</th>
+        <tr><th>Measure</th><th class="num">Value</th>
             <th class="num">SRCC</th><th class="num">KRCC</th></tr>
       </thead>
       <tbody>
@@ -80,9 +80,8 @@
               <span>{{ row.measure }}</span>
             </span>
           </td>
-          <td class="num mono">{{ '%.3g'|format(row.mean) if row.mean is not none else '—' }}</td>
-          <td class="num mono">{{ '%.3g'|format(row.std) if row.std is not none else '—' }}</td>
-          {% for key in ['srcc', 'krcc'] %}
+          <td class="num mono">{{ '%.3g ± %d%%'|format(row.mean, (row.std/row.mean)*100) if row.mean is not none else '—' }}</td>
+          {% for key in ['srcc','krcc'] %}
             {% set val = row[key] %}
             {% if val is none %}
               <td class="num muted">—</td>
@@ -102,6 +101,12 @@
   </section>
   {% endfor %}
 
+  <p class="legend">
+    SRCC = Spearman's Rank-Order Correlation Coefficient
+  </p>
+  <p class="legend">
+    KRCC = Kendall's Rank-Order Correlation Coefficient
+  </p>
   <p class="legend">
     Cells shaded by correlation strength:
     <span class="legend__swatch" style="background:hsl(0,70%,90%)"></span> weak
