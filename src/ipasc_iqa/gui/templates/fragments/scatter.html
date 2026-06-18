@@ -1,5 +1,6 @@
 {# Scatter plot of one IQA measure (y) vs the human score (x), with a black
    rank-mean trend line and per-group mean±std crosshairs. Expects `s`. #}
+{% from "fragments/macros.html" import measure_desc %}
 {% if s.error %}
   <p class="notice notice--warn">{{ s.error }}</p>
 {% else %}
@@ -90,13 +91,7 @@
   </div>
   {% endif %}
 
-  <div class="measure-desc">
-    <p class="measure-desc__title">Description of {{ s.measure }}:</p>
-    {% if s.description %}<p>{{ s.description }}</p>{% endif %}
-    <p>This is a {{ s.measure_type }} measure.</p>
-    {% if s.value_range %}<p>The value range is defined between {{ s.value_range }}.</p>{% endif %}
-    <p>{{ 'Higher' if s.higher_is_better else 'Lower' }} values denote a better image quality.</p>
-  </div>
+  {{ measure_desc(s.measure, s.description, s.measure_type, s.value_range, s.higher_is_better) }}
 
 </div>
 {% endif %}

@@ -663,6 +663,19 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
     ``|srcc|`` descending, so list position is the rank.
     """
     source = "bt" if source == "bt" else "mos"
+    # Measure metadata for the per-row info/citation popups (same fields the
+    # detailed-analysis description block uses).
+    meta_by_measure: dict[str, dict] = {}
+    for name in measure_registry.list_measures():
+        m = measure_registry.get(name).metadata
+        meta_by_measure[name] = {
+            "bibtex": m.bibtex,
+            "description": m.description,
+            "measure_type": _MEASURE_TYPE_LABELS.get(m.measure_type, m.measure_type.name.lower()),
+            "value_range": _format_value_range(m.value_range),
+            "higher_is_better": m.higher_is_better,
+        }
+
     entries: list[dict] = []
     for ds in discover_datasets(workspace):
         if not ds["prepared"]:
@@ -690,10 +703,19 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
                 continue
             rows = correlate_measures_with_annotations(run, values, dataset=ds["name"])
             ranked = [
-                {"rank": i + 1, **r.as_dict()} for i, r in enumerate(rows) if r.srcc is not None
+                {"rank": i + 1, **r.as_dict(), **meta_by_measure.get(r.measure, {})}
+                for i, r in enumerate(rows)
+                if r.srcc is not None
             ]
             if ranked:
-                entries.append({"dataset": ds["name"], "task": task or "overall", "rows": ranked})
+                entries.append(
+                    {
+                        "dataset": ds["name"],
+                        "dataset_bibtex": ds.get("bibtex"),
+                        "task": task or "overall",
+                        "rows": ranked,
+                    }
+                )
 
     return {"entries": entries, "source": source}
 

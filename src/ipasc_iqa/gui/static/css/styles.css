@@ -304,12 +304,28 @@ img, svg, video, table { max-width: 100%; }
 .standings-card__title { color: var(--navy); margin: 0 0 0.5rem; font-size: 1.1rem; }
 .ranking { list-style: none; margin: 0.75rem 0 0; padding: 0; display: flex;
            flex-direction: column; gap: 0.4rem; }
-.ranking__row { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center;
+.ranking__row { display: grid; grid-template-columns: 2rem 1fr auto auto; align-items: center;
                 gap: 0.5rem; padding: 0.55rem 0.7rem; border-radius: 8px; background: var(--bg); }
 .ranking__row--1 { background: #fef9c3; }
 .ranking__medal { font-size: 1.2rem; text-align: center; }
 .ranking__group { font-weight: 600; }
 .ranking__score { font-variant-numeric: tabular-nums; color: var(--muted); }
+.ranking__actions { display: inline-flex; align-items: center; gap: 0.25rem; }
+/* Info button: same look as the inline citation button. */
+.info-btn {
+  width: 1.4rem; height: 1.4rem; padding: 0; font-size: 0.7rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--muted); cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.info-btn:hover { color: var(--accent); border-color: var(--accent); }
+.ranking__actions .cite-btn--inline { margin-left: 0; }
+
+/* Measure-info popup: reuse the citation dialog frame; the description block
+   shouldn't carry its scatter-context top divider here. */
+#measure-dialog .cite-dialog__card { max-width: 32rem; }
+.measure-dialog__body .measure-desc { margin-top: 0; padding-top: 0; border-top: none; }
 
 /* ---------- Run progress view ---------- */
 @keyframes spin { to { transform: rotate(360deg); } }

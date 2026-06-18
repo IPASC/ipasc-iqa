@@ -211,6 +211,12 @@ def test_standings_ranks_measures(client: TestClient) -> None:
     # Measures (not algorithms) are ranked; both tasks appear.
     assert "PSNR" in frag.text or "SSIM" in frag.text
     assert "overall_quality" in frag.text
+    # Each ranked measure carries an info button + its description template,
+    # and a citation button (PSNR has a bibtex).
+    assert "info-btn" in frag.text
+    assert "Description of PSNR" in frag.text
+    assert "values denote a better image quality" in frag.text
+    assert 'class="cite-btn' in frag.text
 
 
 def _seed_bt_comparisons(client: TestClient, task: str = "overall_quality") -> None:

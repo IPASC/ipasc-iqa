@@ -8,11 +8,20 @@
     {% endif %}
   </p>
 {% else %}
+  {% from "fragments/macros.html" import measure_desc %}
   {% set medals = {1: '🥇', 2: '🥈', 3: '🥉'} %}
   <div class="standings-grid">
     {% for entry in result.entries %}
     <div class="standings-card">
-      <h2 class="standings-card__title">{{ entry.dataset }}</h2>
+      <h2 class="standings-card__title">
+        {{ entry.dataset }}
+        {% if entry.dataset_bibtex %}
+        <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ entry.dataset_bibtex }}"
+                title="Show dataset BibTeX citation" aria-label="Citation for {{ entry.dataset }}">
+          <i class="fa-solid fa-quote-right"></i>
+        </button>
+        {% endif %}
+      </h2>
       <span class="badge">task: {{ entry.task }}</span>
       <ol class="ranking">
         {% for row in entry.rows[:5] %}
@@ -20,6 +29,22 @@
           <span class="ranking__medal">{{ medals.get(row.rank, '#' ~ row.rank) }}</span>
           <span class="ranking__group mono">{{ row.measure }}</span>
           <span class="ranking__score" title="SRCC">{{ '%+.3f'|format(row.srcc) }}</span>
+          <span class="ranking__actions">
+            <button type="button" class="info-btn" title="About {{ row.measure }}"
+                    aria-label="About {{ row.measure }}">
+              <i class="fa-solid fa-circle-info"></i>
+            </button>
+            {% if row.bibtex %}
+            <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ row.bibtex }}"
+                    title="Show BibTeX citation" aria-label="Citation for {{ row.measure }}">
+              <i class="fa-solid fa-quote-right"></i>
+            </button>
+            {% endif %}
+            <template class="measure-info">
+              {{ measure_desc(row.measure, row.description, row.measure_type,
+                              row.value_range, row.higher_is_better) }}
+            </template>
+          </span>
         </li>
         {% endfor %}
       </ol>
