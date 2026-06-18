@@ -597,6 +597,18 @@ def test_export_keeps_but_tags_unapproved_contributors(client: TestClient) -> No
     assert any(p["approved"] is False for p in ds["pairwise_annotations"])
 
 
+def test_admin_can_change_user_role(client: TestClient) -> None:
+    from ipasc_iqa.gui import auth
+
+    ws = client.app.state.workspace
+    ann = auth.register_user(ws, "Ann", "ann@test.com", "password123", "novice")
+    assert ann["role"] == "annotator"
+
+    resp = client.post(f"/admin/users/{ann['uid']}/role", data={"role": "admin"})
+    assert resp.status_code == 200  # PRG → followed redirect to /admin/users
+    assert {a["email"]: a["role"] for a in auth.list_accounts(ws)}["ann@test.com"] == "admin"
+
+
 def test_download_all_datasets(client: TestClient) -> None:
     _run_and_wait(client, ["mini"], ["PSNR"])
     payload = client.get("/api/download", params={"dataset": "all"}).json()

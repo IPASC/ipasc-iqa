@@ -260,6 +260,31 @@ def set_user_approved(workspace: Workspace, uid: str, approved: bool) -> dict | 
         return store.update_user(uid, approved=bool(approved))
 
 
+def set_user_role(workspace: Workspace, uid: str, role: str) -> dict:
+    """Change an account's role (admin ↔ annotator). Raises ``ValueError``.
+
+    Refuses to demote the last remaining admin (which would lock everyone out of
+    admin functions) and won't touch deleted accounts. Promoting to admin also
+    marks the account approved, since admins are always approved.
+    """
+    if role not in (ROLE_ADMIN, ROLE_ANNOTATOR):
+        raise ValueError("Invalid role.")
+    with AnnotatorStore(workspace.annotations_path) as store:
+        user = store.get_user(uid)
+        if user is None or user.get("role") == ROLE_DELETED:
+            raise ValueError("Account not found.")
+        if user.get("role") == ROLE_ADMIN and role != ROLE_ADMIN:
+            admins = [u for u in store.all_users() if u.get("role") == ROLE_ADMIN]
+            if len(admins) <= 1:
+                raise ValueError("Cannot demote the last remaining admin.")
+        fields: dict[str, object] = {"role": role}
+        if role == ROLE_ADMIN:
+            fields["approved"] = True
+        updated = store.update_user(uid, **fields)
+    assert updated is not None
+    return updated
+
+
 def approve_user_by_email(workspace: Workspace, email: str) -> bool:
     """Approve the account with this email (used by the CLI). Returns success."""
     with AnnotatorStore(workspace.annotations_path) as store:
@@ -352,6 +377,7 @@ __all__ = [
     "register_user",
     "set_auto_approve",
     "set_user_approved",
+    "set_user_role",
     "update_profile",
     "verify_password",
 ]

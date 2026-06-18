@@ -208,6 +208,11 @@ img, svg, video, table { max-width: 100%; }
 .btn--primary:hover { background: var(--navy-700); }
 .btn--danger { background: #dc2626; color: #fff; }
 .btn--danger:hover { background: #b91c1c; }
+.btn--sm { padding: 0.35rem 0.7rem; font-size: 0.85rem; }
+
+/* Inline role selector in the admin users table. */
+.role-form { display: flex; align-items: center; gap: 0.4rem; }
+.select--sm { padding: 0.3rem 0.45rem; font-size: 0.85rem; }
 
 /* Logout sits in the nav as a button styled like a link. */
 .nav__logout { margin: 0; display: inline; }

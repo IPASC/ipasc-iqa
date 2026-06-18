@@ -28,6 +28,7 @@
 
 <div class="panel" style="margin-top:1.25rem;">
   <h2 class="panel__title">Accounts</h2>
+  {% if error %}<p class="notice notice--warn">{{ error }}</p>{% endif %}
   {% if not users %}
     <p class="muted">No accounts yet.</p>
   {% else %}
@@ -41,7 +42,19 @@
       <tr>
         <td>{{ u.name or '—' }}</td>
         <td class="mono">{{ u.email or '—' }}</td>
-        <td>{{ u.role }}</td>
+        <td>
+          {% if u.deleted %}
+            <span class="muted">DELETED_USER</span>
+          {% else %}
+            <form method="post" action="/admin/users/{{ u.uid }}/role" class="role-form">
+              <select name="role" class="select select--sm">
+                <option value="annotator" {{ 'selected' if u.role == 'annotator' }}>Annotator</option>
+                <option value="admin" {{ 'selected' if u.role == 'admin' }}>Admin</option>
+              </select>
+              <button type="submit" class="btn btn--sm">Set</button>
+            </form>
+          {% endif %}
+        </td>
         <td>{{ (u.expertise or '—') | capitalize }}</td>
         <td>{{ '✓' if u.approved else '—' }}</td>
         <td>

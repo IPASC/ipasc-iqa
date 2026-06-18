@@ -142,6 +142,28 @@ def test_expertise_captured_validated_and_editable(tmp_path: Path) -> None:
     assert by_email["a@b.com"] == "novice"
 
 
+def test_set_user_role_promote_demote_and_last_admin_guard(tmp_path: Path) -> None:
+    ws = _ws(tmp_path)
+    admin = auth.promote_admin(ws, "boss@b.com", name="Boss", password="password123")
+    ann = auth.register_user(ws, "A", "a@b.com", "password123")
+
+    with pytest.raises(ValueError):
+        auth.set_user_role(ws, ann["uid"], "wizard")  # invalid role
+
+    # Promote the annotator → admin (also marks approved).
+    promoted = auth.set_user_role(ws, ann["uid"], "admin")
+    assert promoted["role"] == ROLE_ADMIN and promoted["approved"] is True
+
+    # Now two admins exist; demoting one is allowed.
+    demoted = auth.set_user_role(ws, ann["uid"], "annotator")
+    assert demoted["role"] == ROLE_ANNOTATOR
+
+    # The remaining sole admin cannot be demoted (would lock out admin access).
+    with pytest.raises(ValueError):
+        auth.set_user_role(ws, admin["uid"], "annotator")
+    assert auth.authenticate(ws, "boss@b.com", "password123")["role"] == ROLE_ADMIN
+
+
 def test_migration_v2_to_v3_grandfathers_approval(tmp_path: Path) -> None:
     import diskcache
 

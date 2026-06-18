@@ -227,8 +227,9 @@ def profile_delete(request: Request) -> Response:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/admin/users", response_class=HTMLResponse)
-def admin_users(request: Request) -> Response:
+def _admin_users_page(
+    request: Request, *, error: str | None = None, status_code: int = 200
+) -> Response:
     ws = _ws(request)
     return templates.TemplateResponse(
         request,
@@ -237,8 +238,15 @@ def admin_users(request: Request) -> Response:
             "active": "admin",
             "users": auth.list_accounts(ws),
             "auto_approve": auth.auto_approve_enabled(ws),
+            "error": error,
         },
+        status_code=status_code,
     )
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+def admin_users(request: Request) -> Response:
+    return _admin_users_page(request)
 
 
 @router.post("/admin/auto-approve")
@@ -256,4 +264,13 @@ def admin_approve(request: Request, uid: str) -> Response:
 @router.post("/admin/users/{uid}/revoke")
 def admin_revoke(request: Request, uid: str) -> Response:
     auth.set_user_approved(_ws(request), uid, False)
+    return RedirectResponse("/admin/users", status_code=303)
+
+
+@router.post("/admin/users/{uid}/role")
+def admin_set_role(request: Request, uid: str, role: str = Form(...)) -> Response:
+    try:
+        auth.set_user_role(_ws(request), uid, role)
+    except ValueError as exc:
+        return _admin_users_page(request, error=str(exc), status_code=400)
     return RedirectResponse("/admin/users", status_code=303)
