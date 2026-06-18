@@ -20,19 +20,27 @@
     {% endif %}
   </div>
 
-  {% if done_per_measure %}
-  <ul class="progress-chips">
-    {% for measure, count in done_per_measure.items() | sort %}
-    <li class="progress-chip progress-chip--{{ 'done' if status == 'done' else 'active' }}">
-      <span class="progress-chip__name">{{ measure }}</span>
-      {% if status != "done" %}
-        <span class="progress-chip__count">{{ count }}</span>
-      {% else %}
-        <span class="progress-chip__check">✓</span>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
+  {% if progress %}
+  {% for ds in progress %}
+  <section class="run-dataset">
+    <div class="run-dataset__head">
+      <span class="run-dataset__name">{{ ds.dataset }}</span>
+      <span class="run-dataset__pct">{{ '✓ done' if status == 'done' else ds.percent ~ '%' }}</span>
+    </div>
+    <div class="run-bar" role="progressbar" aria-valuenow="{{ 100 if status == 'done' else ds.percent }}"
+         aria-valuemin="0" aria-valuemax="100">
+      <div class="run-bar__fill" style="width: {{ 100 if status == 'done' else ds.percent }}%"></div>
+    </div>
+    <ul class="progress-chips">
+      {% for m in ds.measures %}
+      <li class="progress-chip progress-chip--{{ 'done' if status == 'done' else 'active' }}">
+        <span class="progress-chip__name">{{ m.name }}</span>
+        <span class="progress-chip__count">{{ '✓' if status == 'done' else m.percent ~ '%' }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
   {% elif status == "running" %}
   <p class="muted" style="margin:0.75rem 0 0">Preparing datasets…</p>
   {% endif %}

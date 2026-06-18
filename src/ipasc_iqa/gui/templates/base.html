@@ -11,6 +11,7 @@
   <script src="https://unpkg.com/htmx.org@2.0.3" crossorigin="anonymous"></script>
   <script defer src="/static/js/citations.js"></script>
   <script defer src="/static/js/annotate.js"></script>
+  <script defer src="/static/js/nav.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -19,7 +20,13 @@
       <span class="brand__sub">Benchmarking: Image Quality Assessment</span>
     </a>
     {% set user = request.state.user %}
-    <nav class="nav">
+    <button class="nav-toggle" id="nav-toggle" type="button"
+            aria-label="Toggle menu" aria-controls="site-nav" aria-expanded="false">
+      <span class="nav-toggle__bar"></span>
+      <span class="nav-toggle__bar"></span>
+      <span class="nav-toggle__bar"></span>
+    </button>
+    <nav class="nav" id="site-nav">
       {% if user and user.role == 'admin' %}
       <a href="/run"        class="nav__link {{ 'is-active' if active == 'run' }}">Run benchmark</a>
       {% endif %}

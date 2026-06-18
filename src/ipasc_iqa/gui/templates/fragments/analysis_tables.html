@@ -55,6 +55,7 @@
     {% if not rows %}
       <p class="muted">No measures to correlate.</p>
     {% else %}
+    <div class="table-scroll">
     <table class="data-table">
       <thead>
         <tr><th>Measure</th><th class="num">Mean</th><th class="num">Std</th>
@@ -96,6 +97,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% endif %}
   </section>
   {% endfor %}

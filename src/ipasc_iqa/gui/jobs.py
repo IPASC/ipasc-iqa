@@ -13,25 +13,46 @@ import uuid
 
 
 class _JobState:
-    """Thread-safe state for one background benchmark run."""
+    """Thread-safe state for one background benchmark run.
 
-    __slots__ = ("job_id", "status", "run_id", "error", "_done_per_measure", "_lock")
+    Progress is tracked per (dataset, measure) pair against each dataset's image
+    count, so the UI can show a percentage per dataset (and per measure within it).
+    """
+
+    __slots__ = (
+        "job_id",
+        "status",
+        "run_id",
+        "error",
+        "_n_images",
+        "_measures",
+        "_done",
+        "_lock",
+    )
 
     def __init__(self, job_id: str) -> None:
         self.job_id = job_id
         self.status = "running"
         self.run_id: str | None = None
         self.error: str | None = None
-        self._done_per_measure: dict[str, int] = {}
+        self._n_images: dict[str, int] = {}  # dataset -> image count (the denominator)
+        self._measures: list[str] = []  # measure names, in selection order
+        self._done: dict[tuple[str, str], int] = {}  # (dataset, measure) -> pairs done
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Mutators (called from the background thread)
     # ------------------------------------------------------------------
 
-    def record_result(self, measure_name: str) -> None:
+    def set_plan(self, n_images_by_dataset: dict[str, int], measure_names: list[str]) -> None:
         with self._lock:
-            self._done_per_measure[measure_name] = self._done_per_measure.get(measure_name, 0) + 1
+            self._n_images = dict(n_images_by_dataset)
+            self._measures = list(measure_names)
+
+    def record_progress(self, dataset: str, measure: str) -> None:
+        with self._lock:
+            key = (dataset, measure)
+            self._done[key] = self._done.get(key, 0) + 1
 
     def finish(self, run_id: str) -> None:
         with self._lock:
@@ -47,15 +68,42 @@ class _JobState:
     # Readers (called from route handlers — any thread)
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _pct(done: int, total: int) -> int:
+        return 100 if total <= 0 else min(100, round(100 * done / total))
+
     def snapshot(self) -> dict:
-        """Return a plain-dict copy of the current state (safe to read from any thread)."""
+        """Return a plain-dict copy of the current state (safe to read from any thread).
+
+        ``progress`` is a per-dataset list, each with an overall percentage and a
+        per-measure breakdown.
+        """
         with self._lock:
+            progress = []
+            for dataset, n_images in self._n_images.items():
+                measures = [
+                    {
+                        "name": m,
+                        "done": min(self._done.get((dataset, m), 0), n_images),
+                        "total": n_images,
+                        "percent": self._pct(self._done.get((dataset, m), 0), n_images),
+                    }
+                    for m in self._measures
+                ]
+                ds_done = sum(mp["done"] for mp in measures)
+                progress.append(
+                    {
+                        "dataset": dataset,
+                        "percent": self._pct(ds_done, n_images * len(self._measures)),
+                        "measures": measures,
+                    }
+                )
             return {
                 "job_id": self.job_id,
                 "status": self.status,
                 "run_id": self.run_id,
                 "error": self.error,
-                "done_per_measure": dict(self._done_per_measure),
+                "progress": progress,
             }
 
 
@@ -90,7 +138,8 @@ def launch_run(
                 measure_names,
                 reference_preference=reference_preference,
                 device=device,
-                on_result=job.record_result,
+                on_progress=job.record_progress,
+                on_plan=job.set_plan,
             )
             job.finish(run_id)
         except Exception as exc:  # noqa: BLE001

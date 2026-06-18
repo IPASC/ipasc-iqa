@@ -31,6 +31,7 @@
   {% if not users %}
     <p class="muted">No accounts yet.</p>
   {% else %}
+  <div class="table-scroll">
   <table class="data-table">
     <thead>
       <tr><th>Name</th><th>Email</th><th>Role</th><th>PAI expertise</th><th>Approved</th><th>Action</th></tr>
@@ -62,6 +63,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% endif %}
 </div>
 {% endblock %}

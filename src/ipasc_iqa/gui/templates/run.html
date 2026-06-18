@@ -7,7 +7,7 @@
 {# A benchmark is already running — show its live progress instead of the form. #}
 {% with job_id=active_job.job_id, status=active_job.status,
         run_id=active_job.run_id, error=active_job.error,
-        done_per_measure=active_job.done_per_measure %}
+        progress=active_job.progress %}
   {% include "fragments/job_progress.html" %}
 {% endwith %}
 

@@ -91,7 +91,7 @@ def run_evaluation(
     output_path: Path | None = None,
     cache: ResultStore | None = None,
     progress: bool = True,
-    on_result: Callable[[str], None] | None = None,
+    on_progress: Callable[[str, str], None] | None = None,
 ) -> RunResults:
     from ipasc_iqa import __version__
     from ipasc_iqa.core.cache import make_cache_key
@@ -136,6 +136,10 @@ def run_evaluation(
         for record in ds:
             for measure in measures:
                 pbar.update(1)
+                # Report one processed (dataset, measure) unit — including cached
+                # and skipped pairs — so progress reaches 100% regardless of cache.
+                if on_progress is not None:
+                    on_progress(ds.name, measure.metadata.name)
 
                 # Check ROI requirements
                 if measure.metadata.requires_signal_roi and record.signal_roi is None:
@@ -244,8 +248,6 @@ def run_evaluation(
                 if cache is not None:
                     cache.set(cache_key, record_out)
                 results.append(record_out)
-                if on_result is not None:
-                    on_result(measure.metadata.name)
 
     pbar.close()
     finished = datetime.now(UTC)

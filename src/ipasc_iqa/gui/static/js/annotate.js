@@ -22,6 +22,15 @@
     }
   });
 
+  // After each HTMX swap of the annotation area, re-anchor the freshly drawn
+  // stage at the top so the viewport doesn't "jump" between pairs/ratings on
+  // mobile (where the stage is sized to fit the screen).
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (e.target && e.target.id === "contribute-root" && e.target.querySelector(".annotate-stage")) {
+      window.scrollTo(0, 0);
+    }
+  });
+
   // Keys 1–4 set the score; space confirms.
   document.addEventListener("keydown", function (e) {
     const stage = document.querySelector(".annotate-rate");

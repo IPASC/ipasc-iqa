@@ -263,13 +263,18 @@ def run_benchmark(
     *,
     reference_preference: list[str] | None = None,
     device: str = "auto",
-    on_result: Callable[[str], None] | None = None,
+    on_progress: Callable[[str, str], None] | None = None,
+    on_plan: Callable[[dict[str, int], list[str]], None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
 
     Results are written through a persistent, newest-wins store that also serves
     as the cache: already-computed (dataset, image, measure) pairs are reused
     rather than recomputed, and partial runs accumulate instead of overwriting.
+
+    ``on_plan`` is called once the datasets are prepared with
+    ``({dataset: n_images}, [measure_name, ...])`` so a caller can size a progress
+    display; ``on_progress(dataset, measure)`` then fires once per evaluated pair.
     """
     workspace.ensure()
     datasets = [
@@ -279,6 +284,8 @@ def run_benchmark(
     measures = [measure_registry.instantiate(m, device=device) for m in measure_names]
     if reference_preference is None:
         reference_preference = ["ground_truth", "pseudo_reference"]
+    if on_plan is not None:
+        on_plan({ds.name: len(ds) for ds in datasets}, [m.metadata.name for m in measures])
 
     with ResultStore(workspace.store_path) as store:
         run = run_evaluation(
@@ -287,7 +294,7 @@ def run_benchmark(
             reference_preference=reference_preference,
             cache=store,
             progress=False,
-            on_result=on_result,
+            on_progress=on_progress,
         )
         # Pre-compute per-dataset mean/std over the merged per-image results and
         # persist them, so reporting doesn't have to recompute from scratch.
