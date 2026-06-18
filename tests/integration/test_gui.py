@@ -262,6 +262,10 @@ def test_bt_source_in_analysis(client: TestClient) -> None:
     )
     assert scatter.status_code == 200
     assert "BT" in scatter.text  # BT axis label, not z-MOS
+    # The measure description block is rendered beneath the plot.
+    assert "Description of PSNR" in scatter.text
+    assert "full-reference measure" in scatter.text
+    assert "values denote a better image quality" in scatter.text
 
 
 def test_bt_source_absent_without_contributions(client: TestClient) -> None:

@@ -402,6 +402,12 @@ img, svg, video, table { max-width: 100%; }
 .scatter__legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
 .scatter__swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; }
 
+/* Measure description shown beneath the scatter plot. */
+.measure-desc { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border);
+                color: var(--text); font-size: 0.9rem; }
+.measure-desc p { margin: 0 0 0.4rem; }
+.measure-desc__title { font-weight: 600; color: var(--navy); }
+
 /* ---------- Contribute annotations ---------- */
 .annotate-login { max-width: 34rem; }
 .annotate-login .field, .annotate-picker .field { margin-bottom: 0.9rem; }

@@ -147,6 +147,30 @@ def _measure_usable(measure_meta: dict, caps: dict) -> bool:
     return not (measure_meta["requires_noise_roi"] and not caps.get("has_noise_roi"))
 
 
+# Human-readable labels for the measure-type enum (used in the analysis UI).
+_MEASURE_TYPE_LABELS = {
+    MeasureType.FULL_REFERENCE: "full-reference",
+    MeasureType.REDUCED_REFERENCE: "reduced-reference",
+    MeasureType.NO_REFERENCE: "no-reference",
+}
+
+
+def _format_value_range(value_range: tuple[float, float] | None) -> str | None:
+    """Render a measure's value range as ``[lo, hi]`` (∞ for infinities), or None."""
+    if not value_range:
+        return None
+
+    def _fmt(x: float) -> str:
+        if x == float("inf"):
+            return "∞"
+        if x == float("-inf"):
+            return "−∞"
+        return f"{x:g}"
+
+    lo, hi = value_range
+    return f"[{_fmt(lo)}, {_fmt(hi)}]"
+
+
 def discover_datasets(workspace: Workspace) -> list[dict]:
     """List datasets that have a registered adapter.
 
@@ -619,6 +643,9 @@ def scatter_for_measure(
         "std": stats.get("std"),
         "higher_is_better": meta.higher_is_better,
         "bibtex": meta.bibtex,
+        "description": meta.description,
+        "measure_type": _MEASURE_TYPE_LABELS.get(meta.measure_type, meta.measure_type.name.lower()),
+        "value_range": _format_value_range(meta.value_range),
     }
 
 

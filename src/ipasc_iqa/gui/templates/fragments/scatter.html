@@ -89,5 +89,14 @@
     <span class="scatter__legend-item muted">— rank-mean trend</span>
   </div>
   {% endif %}
+
+  <div class="measure-desc">
+    <p class="measure-desc__title">Description of {{ s.measure }}:</p>
+    {% if s.description %}<p>{{ s.description }}</p>{% endif %}
+    <p>This is a {{ s.measure_type }} measure.</p>
+    {% if s.value_range %}<p>The value range is defined between {{ s.value_range }}.</p>{% endif %}
+    <p>{{ 'Higher' if s.higher_is_better else 'Lower' }} values denote a better image quality.</p>
+  </div>
+
 </div>
 {% endif %}
