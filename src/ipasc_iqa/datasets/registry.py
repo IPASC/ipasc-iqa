@@ -44,11 +44,13 @@ class DatasetRegistry:
         # Built-in adapters.
         from ipasc_iqa.datasets.digital_twin import DigitalTwinDataset
         from ipasc_iqa.datasets.duke_pam import DukePAMDataset
+        from ipasc_iqa.datasets.ear_vessels import EarVesselsDataset
         from ipasc_iqa.datasets.phot_iqa import PhotIQADataset
 
         self.register(PhotIQADataset, distribution="ipasc_iqa")
         self.register(DigitalTwinDataset, distribution="ipasc_iqa")
         self.register(DukePAMDataset, distribution="ipasc_iqa")
+        self.register(EarVesselsDataset, distribution="ipasc_iqa")
 
         # Third-party adapters via entry points (reserved group, forward-looking).
         for ep in importlib.metadata.entry_points(group=_ENTRY_POINT_GROUP):
