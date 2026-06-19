@@ -73,6 +73,11 @@ def create_app(
     app.state.cookie_secure = os.environ.get("IPASC_IQA_COOKIE_SECURE", "0") == "1"
     app.state.jobs = {}  # job_id → _JobState; populated by gui.jobs.launch_run
     app.state.ranking_sessions = {}  # session_id → {session, dataset_choice, task_choice}
+    # Persistent cache of expensive analysis/standings/scatter outputs, keyed by
+    # a results-epoch token so unchanged views are served without recompute.
+    from ipasc_iqa.gui.result_cache import ResultCache
+
+    app.state.result_cache = ResultCache(workspace.results_dir / "view_cache")
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     @app.middleware("http")

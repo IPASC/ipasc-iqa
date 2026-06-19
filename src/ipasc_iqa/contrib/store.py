@@ -194,8 +194,11 @@ class AnnotatorStore:
                 if new_email:
                     self._cache.set(("email", new_email), uid)
             fields["email"] = new_email
+        affects_results = "role" in fields or "approved" in fields
         user = {**user, **fields, "updated": _now()}
         self._cache.set(("user", uid), user)
+        if affects_results:
+            self.bump_results_epoch()  # approval/role change alters which data counts
         return user
 
     def delete_user(self, uid: str) -> None:
@@ -224,6 +227,7 @@ class AnnotatorStore:
             },
         )
         self.delete_sessions_for_uid(uid)
+        self.bump_results_epoch()  # the user's contributions no longer count
 
     def _user_keys(self) -> Iterator[tuple]:
         for k in self._cache:
@@ -294,6 +298,18 @@ class AnnotatorStore:
     def set_setting(self, key: str, value: object) -> None:
         self._cache.set(("setting", key), value)
 
+    # -- results epoch -----------------------------------------------------
+    # A monotonically increasing token bumped whenever something that affects
+    # computed results changes (contributed annotations, approval/role changes,
+    # account deletion, benchmark runs). The GUI caches analysis/standings/scatter
+    # outputs keyed by this token, so unchanged views are served without recompute.
+
+    def results_epoch(self) -> int:
+        return int(self._cache.get(("meta", "results_epoch"), 0))
+
+    def bump_results_epoch(self) -> None:
+        self._cache.incr(("meta", "results_epoch"), 1)
+
     # -- sessions (ranking) ------------------------------------------------
 
     def add_session(self, result: dict) -> str:
@@ -301,6 +317,7 @@ class AnnotatorStore:
         sid = uuid.uuid4().hex
         record = {**result, "session_id": sid, "created": _now()}
         self._cache.set(("session", sid), record)
+        self.bump_results_epoch()
         return sid
 
     def _session_keys(self) -> Iterator[tuple]:
@@ -341,6 +358,7 @@ class AnnotatorStore:
         rid = uuid.uuid4().hex
         stored = {**record, "rating_id": rid, "created": _now()}
         self._cache.set(("rating", rid), stored)
+        self.bump_results_epoch()
         return rid
 
     def _rating_keys(self) -> Iterator[tuple]:

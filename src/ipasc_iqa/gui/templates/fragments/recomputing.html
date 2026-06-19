@@ -1,0 +1,10 @@
+{# Placeholder shown while a results view is being (re)computed in the background.
+   It polls the same endpoint; once the value is cached the real fragment replaces
+   it (and the polling stops, since this element is gone). Expects `poll_url`. #}
+<div class="result-area recomputing"
+     hx-get="{{ poll_url }}" hx-trigger="every 1.5s" hx-target="this" hx-swap="outerHTML">
+  <p class="notice notice--ok">
+    <span class="progress-spinner"></span>
+    New data available — recomputing results, please be patient…
+  </p>
+</div>

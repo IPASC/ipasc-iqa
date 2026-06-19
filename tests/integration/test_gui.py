@@ -619,6 +619,42 @@ def test_admin_can_change_user_role(client: TestClient) -> None:
     assert {a["email"]: a["role"] for a in auth.list_accounts(ws)}["ann@test.com"] == "admin"
 
 
+def test_results_view_cache_and_epoch_invalidation(client: TestClient) -> None:
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+    from ipasc_iqa.gui import service
+
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    ws = client.app.state.workspace
+    cache = client.app.state.result_cache
+
+    # Viewing standings populates the persistent cache for the current epoch.
+    e1 = service.results_epoch(ws)
+    assert client.get("/api/standings").status_code == 200
+    assert cache.get("standings", {"source": "mos"}, e1) is not None
+
+    # A new contributed rating bumps the epoch → the old cache entry is stale,
+    # so the next view recomputes (cache miss at the new epoch).
+    with AnnotatorStore(ws.annotations_path) as store:
+        u = store.create_user(
+            email="r@x.com", name="R", role=ROLE_ANNOTATOR, password_hash=None, approved=True
+        )
+        store.add_rating(
+            {
+                "user_uid": u["uid"],
+                "dataset": "mini",
+                "image_id": "image0_alg0",
+                "task": "overall_quality",
+                "score": 3,
+            }
+        )
+    e2 = service.results_epoch(ws)
+    assert e2 > e1
+    assert cache.get("standings", {"source": "mos"}, e2) is None
+    # Re-viewing recomputes and re-populates the cache at the new epoch.
+    assert client.get("/api/standings").status_code == 200
+    assert cache.get("standings", {"source": "mos"}, e2) is not None
+
+
 def test_download_all_datasets(client: TestClient) -> None:
     _run_and_wait(client, ["mini"], ["PSNR"])
     payload = client.get("/api/download", params={"dataset": "all"}).json()

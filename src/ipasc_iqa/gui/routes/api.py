@@ -64,6 +64,12 @@ def run_job_status(request: Request, job_id: str) -> Response:
 # ---------------------------------------------------------------------------
 
 
+def _recomputing(request: Request) -> HTMLResponse:
+    """Placeholder that polls this same URL until the cached value is ready."""
+    poll_url = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+    return templates.TemplateResponse(request, "fragments/recomputing.html", {"poll_url": poll_url})
+
+
 @router.get("/api/scatter", response_class=HTMLResponse)
 def scatter_fragment(
     request: Request,
@@ -74,7 +80,15 @@ def scatter_fragment(
 ) -> HTMLResponse:
     """Scatter plot (SVG) of one measure's per-image values vs the human scores."""
     ws = _ws(request)
-    model = service.scatter_for_measure(ws, dataset, measure, task=task, source=source)
+    params = {"dataset": dataset, "measure": measure, "task": task, "source": source}
+    model = request.app.state.result_cache.get_or_schedule(
+        "scatter",
+        params,
+        service.results_epoch(ws),
+        lambda: service.scatter_for_measure(ws, dataset, measure, task=task, source=source),
+    )
+    if model is None:
+        return _recomputing(request)
     return templates.TemplateResponse(request, "fragments/scatter.html", {"s": model})
 
 
@@ -87,7 +101,23 @@ def analysis_fragment(
     source: str = Query(default="mos"),
 ) -> HTMLResponse:
     ws = _ws(request)
-    result = service.analysis_for_dataset(ws, dataset, measures=measures, task=task, source=source)
+    params = {
+        "dataset": dataset,
+        "measures": sorted(measures) if measures else None,
+        "task": task,
+        "source": source,
+    }
+
+    def _compute() -> dict:
+        return service.analysis_for_dataset(
+            ws, dataset, measures=measures, task=task, source=source
+        )
+
+    result = request.app.state.result_cache.get_or_schedule(
+        "analysis", params, service.results_epoch(ws), _compute
+    )
+    if result is None:
+        return _recomputing(request)
     # Re-render the measure checkboxes (disabled/checked for this dataset) and
     # swap them out-of-band, so changing the dataset updates which are usable.
     options = service.measure_options(ws, dataset, selected=measures)
@@ -106,7 +136,14 @@ def analysis_fragment(
 @router.get("/api/standings", response_class=HTMLResponse)
 def standings_fragment(request: Request, source: str = Query(default="mos")) -> HTMLResponse:
     ws = _ws(request)
-    result = service.standings(ws, source=source)
+    result = request.app.state.result_cache.get_or_schedule(
+        "standings",
+        {"source": source},
+        service.results_epoch(ws),
+        lambda: service.standings(ws, source=source),
+    )
+    if result is None:
+        return _recomputing(request)
     return templates.TemplateResponse(request, "fragments/standings_table.html", {"result": result})
 
 

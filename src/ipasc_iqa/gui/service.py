@@ -328,6 +328,10 @@ def run_benchmark(
     # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
+
+    # New measure values → invalidate cached analysis/standings/scatter views.
+    with AnnotatorStore(workspace.annotations_path) as store:
+        store.bump_results_epoch()
     return run.run_id
 
 
@@ -725,6 +729,16 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
 # ---------------------------------------------------------------------------
 
 _REF_PREFIX = "__ref__"
+
+
+def results_epoch(workspace: Workspace) -> int:
+    """Token that bumps whenever anything affecting computed results changes.
+
+    The GUI keys its analysis/standings/scatter cache on this, so an unchanged
+    view is served without recomputation.
+    """
+    with AnnotatorStore(workspace.annotations_path) as store:
+        return store.results_epoch()
 
 
 def account_for(workspace: Workspace, user: dict | None) -> dict | None:
