@@ -228,6 +228,20 @@ def contribute_tasks(request: Request, dataset: str = Query(default="random")) -
     )
 
 
+def _done_response(request: Request, account: dict, draw: dict) -> Response:
+    """Shown when the rater has annotated everything (in the chosen scope)."""
+    if draw.get("scope") == "dataset":
+        return _picker_response(
+            request,
+            account,
+            message=(
+                f"You've annotated everything in '{draw.get('dataset')}' — "
+                "pick another dataset or 'Random' to keep going."
+            ),
+        )
+    return templates.TemplateResponse(request, "fragments/annotate_done.html", {"account": account})
+
+
 def _rate_fragment(
     request: Request,
     account: dict,
@@ -236,7 +250,9 @@ def _rate_fragment(
     *,
     toast: str | None = None,
 ) -> Response:
-    """Render the single-stimulus rating fragment, or the picker on failure."""
+    """Render the single-stimulus rating fragment, the done message, or the picker."""
+    if draw.get("done"):
+        return _done_response(request, account, draw)
     if draw.get("error"):
         return _picker_response(request, account, message=draw["error"])
     task = draw["task"]
@@ -273,18 +289,21 @@ def contribute_start(
         return _pending_response(request)
     account = service.account_for(ws, request.state.user)
 
+    uid = request.state.user["uid"]
     if rating_type == "quantitative":
-        draw = service.draw_rating_item(ws, dataset)
+        draw = service.draw_rating_item(ws, dataset, user_uid=uid)
         return _rate_fragment(request, account, draw, dataset)
 
     # Comparative (2AFC): the sub-task is always randomised per session.
     res = service.start_ranking(
         ws,
         request.app.state.ranking_sessions,
-        user_uid=request.state.user["uid"],
+        user_uid=uid,
         dataset_choice=dataset,
         task_choice="random",
     )
+    if res.get("done"):
+        return _done_response(request, account, res)
     if res.get("error"):
         return _picker_response(request, account, message=res["error"])
     return _compare_or_picker(request, account, res["session_id"])
@@ -304,15 +323,16 @@ def contribute_rate(
         return _pending_response(request)
     account = service.account_for(ws, request.state.user)
 
+    uid = request.state.user["uid"]
     count = service.record_rating(
         ws,
-        user_uid=request.state.user["uid"],
+        user_uid=uid,
         dataset=dataset,
         image_id=image_id,
         task=task or None,
         score=score,
     )
-    draw = service.draw_rating_item(ws, dataset_choice)
+    draw = service.draw_rating_item(ws, dataset_choice, user_uid=uid)
     toast = f"Rating saved — thank you! ({count} total). Next:"
     return _rate_fragment(request, account, draw, dataset_choice, toast=toast)
 
@@ -338,14 +358,17 @@ def contribute_choose(
 
     # Completed one full ranking → reflect the new count and continue.
     account = {**account, "count": outcome["count"]}
-    if outcome.get("error") or not outcome.get("next_session_id"):
+    nxt = outcome["next"]
+    if nxt.get("done"):
+        return _done_response(request, account, nxt)
+    if nxt.get("error") or not nxt.get("session_id"):
         return _picker_response(
             request,
             account,
             message=f"Ranking saved — thank you! ({outcome['count']} total). "
-            + (outcome.get("error") or "No more sets available right now."),
+            + (nxt.get("error") or "No more sets available right now."),
         )
-    ctx = service.compare_view(request.app.state.ranking_sessions, outcome["next_session_id"])
+    ctx = service.compare_view(request.app.state.ranking_sessions, nxt["session_id"])
     ctx["toast"] = f"Ranking saved — thank you! ({outcome['count']} total). Next set:"
     return templates.TemplateResponse(request, "fragments/annotate_compare.html", ctx)
 

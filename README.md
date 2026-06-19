@@ -141,6 +141,10 @@ See [`CONTRIBUTORS.md`](CONTRIBUTORS.md).
 
 ---
 
+## Promote first admin user on server:
+
+`ipasc_iqa-gui create-admin --email jgroehl@ukaachen.de --workspace .\workspace\ --data-dir .\data\`
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).

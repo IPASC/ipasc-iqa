@@ -141,3 +141,56 @@ def test_bt_only_dataset_is_analysable(tmp_path: Path) -> None:
     assert [s["key"] for s in after["sources"]] == ["bt"]
     assert after["active_task"] is None and after["all_tasks"] == []
     assert any(r["srcc"] is not None for r in after["tasks"][0]["rows"])
+
+
+def test_no_repeat_annotations_and_done_message(tmp_path: Path) -> None:
+    """A rater is never re-offered an item they've done; exhaustion reports done."""
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+    from ipasc_iqa.datasets.registry import registry
+    from ipasc_iqa.gui import service
+
+    data_dir = tmp_path / "dd"
+    _build_source(data_dir / "digital_twin")
+    if "digital_twin" not in registry._classes:
+        registry.register(DigitalTwinDataset, distribution="t")
+    ws = service.Workspace.resolve(tmp_path / "ws", data_dir)
+    ws.ensure()
+    service.run_benchmark(ws, ["digital_twin"], ["PSNR"])  # prepares the dataset
+    with AnnotatorStore(ws.annotations_path) as store:
+        uid = store.create_user(
+            email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None, approved=True
+        )["uid"]
+
+    # --- Comparative ranking: each reference set is offered at most once. ---
+    sessions: dict = {}
+    ranked: set = set()
+    while True:
+        res = service.start_ranking(
+            ws, sessions, user_uid=uid, dataset_choice="random", task_choice="random"
+        )
+        if res.get("done"):
+            assert res["scope"] == "all"
+            break
+        sess = sessions[res["session_id"]]["session"]
+        key = (sess.dataset, sess.reference, sess.task)
+        assert key not in ranked  # never re-offered
+        ranked.add(key)
+        with AnnotatorStore(ws.annotations_path) as store:
+            store.add_session(sess.result())
+    assert len(ranked) == 2  # the two testing scenes, each once
+
+    # --- Quantitative rating: each variant is offered at most once. ---
+    rated: set = set()
+    while True:
+        d = service.draw_rating_item(ws, "digital_twin", user_uid=uid)
+        if d.get("done"):
+            assert d["scope"] == "all"
+            break
+        key = (d["image_id"], d["task"])
+        assert key not in rated  # never re-offered
+        rated.add(key)
+        service.record_rating(
+            ws, user_uid=uid, dataset=d["dataset"], image_id=d["image_id"],
+            task=d["task"], score=2,
+        )
+    assert len(rated) == 2 * len(RECON_ALGORITHMS)  # 2 scenes × all algorithm variants

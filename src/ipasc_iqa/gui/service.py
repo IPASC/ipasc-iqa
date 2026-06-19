@@ -967,6 +967,96 @@ def annotation_tasks_for(workspace: Workspace, dataset_name: str | None) -> list
     return annotation_tasks_in_manifest(manifest)
 
 
+def _tasks_or_unnamed(manifest: dict) -> list[str | None]:
+    """Annotation tasks for a manifest, or ``[None]`` when it declares none."""
+    tasks = annotation_tasks_in_manifest(manifest)
+    return list(tasks) if tasks else [None]
+
+
+def _remaining_ranking_pool(
+    workspace: Workspace, user_uid: str, dataset_filter: str | None
+) -> dict[str, list[tuple[str, str | None]]]:
+    """``{dataset: [(stem, task), ...]}`` of reference sets the user hasn't ranked.
+
+    Each rater ranks a given reference set (per task) at most once; completed
+    sessions are keyed by ``(dataset, reference, task)``.
+    """
+    with AnnotatorStore(workspace.annotations_path) as store:
+        done = {
+            (s.get("dataset"), s.get("reference"), s.get("task"))
+            for s in store.sessions(user_uid=user_uid)
+        }
+    pool: dict[str, list[tuple[str, str | None]]] = {}
+    for e in eligible_annotation_datasets(workspace):
+        name = e["name"]
+        if dataset_filter and name != dataset_filter:
+            continue
+        manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+        groups = _reference_groups(manifest)
+        rankable = [s for s, entries in groups.items() if len(_items_for_stem(entries)) >= 2]
+        cands = [
+            (stem, task)
+            for stem in rankable
+            for task in _tasks_or_unnamed(manifest)
+            if (name, stem, task) not in done
+        ]
+        if cands:
+            pool[name] = cands
+    return pool
+
+
+def _remaining_rating_pool(
+    workspace: Workspace, user_uid: str, dataset_filter: str | None
+) -> dict[str, list[tuple[str, str, str | None]]]:
+    """``{dataset: [(image_id, stem, task), ...]}`` of variants the user hasn't rated.
+
+    Each rater rates a given variant (per task) at most once; ratings are keyed by
+    ``(dataset, image_id, task)``.
+    """
+    with AnnotatorStore(workspace.annotations_path) as store:
+        done = {
+            (r.get("dataset"), r.get("image_id"), r.get("task"))
+            for r in store.ratings()
+            if r.get("user_uid") == user_uid
+        }
+    pool: dict[str, list[tuple[str, str, str | None]]] = {}
+    for e in eligible_annotation_datasets(workspace):
+        name = e["name"]
+        if dataset_filter and name != dataset_filter:
+            continue
+        manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+        cands: list[tuple[str, str, str | None]] = []
+        for stem, entries in _reference_groups(manifest).items():
+            items = _items_for_stem(entries)
+            variants = [i for i in items if not i.startswith(_REF_PREFIX)]
+            has_ref = any(i.startswith(_REF_PREFIX) for i in items)
+            if not (variants and has_ref):
+                continue
+            for image_id in variants:
+                for task in _tasks_or_unnamed(manifest):
+                    if (name, image_id, task) not in done:
+                        cands.append((image_id, stem, task))
+        if cands:
+            pool[name] = cands
+    return pool
+
+
+def _exhausted_signal(
+    workspace: Workspace,
+    user_uid: str,
+    dataset_filter: str | None,
+    pool_fn,
+) -> dict:
+    """Build the ``done`` result when a draw has no remaining candidates.
+
+    ``scope`` is ``"all"`` when nothing remains in *any* dataset (show the grand
+    thank-you), else ``"dataset"`` (the chosen dataset is finished, others remain).
+    """
+    if dataset_filter is None or not pool_fn(workspace, user_uid, None):
+        return {"done": True, "scope": "all"}
+    return {"done": True, "scope": "dataset", "dataset": dataset_filter}
+
+
 def start_ranking(
     workspace: Workspace,
     sessions: dict[str, dict],
@@ -976,40 +1066,29 @@ def start_ranking(
     task_choice: str,
     rng: random.Random | None = None,
 ) -> dict:
-    """Draw a random reference set and create a new :class:`RankingSession`.
+    """Draw a not-yet-ranked reference set and create a :class:`RankingSession`.
 
-    ``dataset_choice`` / ``task_choice`` may be ``"random"``; they are remembered
-    so the *next* set after this one is drawn the same way. Returns
-    ``{"error": ...}`` on failure or ``{"session_id": ...}`` on success.
+    Only reference sets this user hasn't ranked are offered. Returns
+    ``{"error": ...}`` on failure, ``{"done": True, "scope": ...}`` when the user
+    has ranked everything (in the chosen scope), or ``{"session_id": ...}``.
     """
     rng = rng or random.Random()
     eligible = {e["name"] for e in eligible_annotation_datasets(workspace)}
     if not eligible:
         return {"error": "No datasets with rankable variants are prepared yet."}
 
-    dataset_name = dataset_choice
-    if dataset_name in (None, "", "random"):
-        dataset_name = rng.choice(sorted(eligible))
-    elif dataset_name not in eligible:
+    dataset_filter = None if dataset_choice in (None, "", "random") else dataset_choice
+    if dataset_filter and dataset_filter not in eligible:
         return {"error": "That dataset isn't available for annotation."}
 
+    pool = _remaining_ranking_pool(workspace, user_uid, dataset_filter)
+    if not pool:
+        return _exhausted_signal(workspace, user_uid, dataset_filter, _remaining_ranking_pool)
+
+    dataset_name = rng.choice(sorted(pool))
+    stem, chosen_task = rng.choice(pool[dataset_name])
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
-    groups = _reference_groups(manifest)
-    rankable = {
-        stem: items
-        for stem, entries in groups.items()
-        if len(items := _items_for_stem(entries)) >= 2
-    }
-    if not rankable:
-        return {"error": "That dataset has no rankable reference sets."}
-
-    stem = rng.choice(sorted(rankable))
-    item_ids = rankable[stem]
-
-    tasks = annotation_tasks_in_manifest(manifest)
-    chosen_task: str | None = None
-    if tasks:
-        chosen_task = task_choice if task_choice in tasks else rng.choice(sorted(tasks))
+    item_ids = _items_for_stem(_reference_groups(manifest)[stem])
 
     session = RankingSession(
         items=item_ids,
@@ -1089,12 +1168,7 @@ def submit_choice(
         dataset_choice=wrapper["dataset_choice"],
         task_choice=wrapper["task_choice"],
     )
-    return {
-        "status": "completed",
-        "count": count,
-        "next_session_id": nxt.get("session_id"),
-        "error": nxt.get("error"),
-    }
+    return {"status": "completed", "count": count, "next": nxt}
 
 
 # ---------------------------------------------------------------------------
@@ -1106,43 +1180,31 @@ def draw_rating_item(
     workspace: Workspace,
     dataset_choice: str,
     *,
+    user_uid: str,
     rng: random.Random | None = None,
 ) -> dict:
-    """Pick a random reconstruction + its reference + a random task to rate.
+    """Pick a not-yet-rated reconstruction + its reference + task to rate.
 
-    The task is always randomised (no sub-task selection) so the annotator must
-    read the prompt each time. Returns ``{"error": ...}`` or a draw dict with
-    ``dataset``, ``image_id`` (variant), ``reference_item`` and ``task``.
+    Only variants this user hasn't rated are offered. Returns ``{"error": ...}``,
+    ``{"done": True, "scope": ...}`` when the user has rated everything (in the
+    chosen scope), or a draw dict with ``dataset``, ``image_id`` (variant),
+    ``reference_item`` and ``task``.
     """
     rng = rng or random.Random()
     eligible = {e["name"] for e in eligible_annotation_datasets(workspace)}
     if not eligible:
         return {"error": "No datasets with rankable variants are prepared yet."}
 
-    dataset_name = dataset_choice
-    if dataset_name in (None, "", "random"):
-        dataset_name = rng.choice(sorted(eligible))
-    elif dataset_name not in eligible:
+    dataset_filter = None if dataset_choice in (None, "", "random") else dataset_choice
+    if dataset_filter and dataset_filter not in eligible:
         return {"error": "That dataset isn't available for rating."}
 
-    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
-    groups = _reference_groups(manifest)
-    # Variants only (drop the reference pseudo-item); a stem needs a reference too.
-    rateable: dict[str, list[str]] = {}
-    for stem, entries in groups.items():
-        items = _items_for_stem(entries)
-        variants = [i for i in items if not i.startswith(_REF_PREFIX)]
-        has_ref = any(i.startswith(_REF_PREFIX) for i in items)
-        if variants and has_ref:
-            rateable[stem] = variants
-    if not rateable:
-        return {"error": "That dataset has no reconstructions with a reference to rate."}
+    pool = _remaining_rating_pool(workspace, user_uid, dataset_filter)
+    if not pool:
+        return _exhausted_signal(workspace, user_uid, dataset_filter, _remaining_rating_pool)
 
-    stem = rng.choice(sorted(rateable))
-    image_id = rng.choice(rateable[stem])
-    tasks = annotation_tasks_in_manifest(manifest)
-    task = rng.choice(sorted(tasks)) if tasks else None
-
+    dataset_name = rng.choice(sorted(pool))
+    image_id, stem, task = rng.choice(pool[dataset_name])
     return {
         "error": None,
         "dataset": dataset_name,
