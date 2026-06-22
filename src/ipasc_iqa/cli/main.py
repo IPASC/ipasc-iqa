@@ -113,6 +113,48 @@ def manifest_generate(
     typer.echo("Manifest generated.")
 
 
+
+
+# ---------------------------------------------------------------------------
+# doctor
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def doctor(
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON."),
+    require_gui: bool = typer.Option(
+        False, "--gui", help="Treat missing GUI dependencies as errors."
+    ),
+    require_deep: bool = typer.Option(
+        False, "--deep", help="Treat missing deep-learning dependencies as errors."
+    ),
+) -> None:
+    """Check whether the current environment can run ipasc_iqa."""
+    import json
+
+    from ipasc_iqa.core.doctor import has_errors, run_doctor
+
+    results = run_doctor(require_gui=require_gui, require_deep=require_deep)
+
+    if json_out:
+        typer.echo(json.dumps([result.to_dict() for result in results], indent=2))
+    else:
+        typer.echo(f"{'Group':<8} {'Check':<24} {'Status':<8} {'Version':<32} Message")
+        typer.echo("-" * 100)
+        for result in results:
+            version = result.version or "-"
+            typer.echo(
+                f"{result.group:<8} {result.name:<24} {result.status.upper():<8} "
+                f"{version:<32} {result.message}"
+            )
+            if result.suggestion and result.status != "ok":
+                typer.echo(f"{'':<8} {'':<24} {'':<8} {'':<32} Suggestion: {result.suggestion}")
+
+    if has_errors(results):
+        raise typer.Exit(1)
+
+
 # ---------------------------------------------------------------------------
 # verify
 # ---------------------------------------------------------------------------

@@ -23,6 +23,13 @@ pip install "ipasc_iqa[deep]"    # + PyTorch-based measures
 
 NumPy 2.x is currently not part of the tested environment for deep metrics.
 Use numpy>=1.26,<2 unless you are testing newer torch builds explicitly.
+You can verify that the environment is correctly configured with:
+```bash
+ipasc_iqa doctor              # check core dependencies
+ipasc_iqa doctor --gui        # also check GUI dependencies
+ipasc_iqa doctor --deep       # also check deep-metric dependencies
+ipasc_iqa doctor --gui --deep # check the full installation
+```
 
 Working from a checkout (recommended for development):
 
