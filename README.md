@@ -21,6 +21,9 @@ pip install "ipasc_iqa[gui]"     # + the web GUI
 pip install "ipasc_iqa[deep]"    # + PyTorch-based measures
 ```
 
+NumPy 2.x is currently not part of the tested environment for deep metrics.
+Use numpy>=1.26,<2 unless you are testing newer torch builds explicitly.
+
 Working from a checkout (recommended for development):
 
 ```bash

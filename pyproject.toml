@@ -11,7 +11,7 @@ license = { text = "MIT" }
 requires-python = ">=3.12"
 authors = [{ name = "IPASC" }]
 dependencies = [
-    "numpy>=1.26",
+    "numpy>=1.26,<2",
     "scipy>=1.12",
     "scikit-image>=0.22",
     "pydantic>=2.6",
@@ -22,7 +22,7 @@ dependencies = [
     "tqdm>=4.66",
     "pillow>=10.0",
 ]
-# (possible conflict between "torch>=2.2" ([deep]) and "numpy>=1.26")
+# ADD[Test and possibly enable NumPy 2.x support with newer torch/deep dependencies.]
 
 [project.optional-dependencies]
 deep  = ["torch>=2.2", "torchvision>=0.17", "lpips>=0.1.4", "DISTS-pytorch>=0.1", "piq>=0.8.0"]
