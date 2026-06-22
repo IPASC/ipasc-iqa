@@ -24,6 +24,7 @@ class _JobState:
         "status",
         "run_id",
         "error",
+        "message",
         "_n_images",
         "_measures",
         "_done",
@@ -36,6 +37,7 @@ class _JobState:
         self.run_id: str | None = None
         self.error: str | None = None
         self._n_images: dict[str, int] = {}  # dataset -> image count (the denominator)
+        self.message: str = "Preparing/downloading datasets..."
         self._measures: list[str] = []  # measure names, in selection order
         self._done: dict[tuple[str, str], int] = {}  # (dataset, measure) -> pairs done
         self._lock = threading.Lock()
@@ -48,6 +50,7 @@ class _JobState:
         with self._lock:
             self._n_images = dict(n_images_by_dataset)
             self._measures = list(measure_names)
+            self.message = "Computing metrics..."
 
     def record_progress(self, dataset: str, measure: str) -> None:
         with self._lock:
@@ -103,6 +106,7 @@ class _JobState:
                 "status": self.status,
                 "run_id": self.run_id,
                 "error": self.error,
+                "message": self.message,
                 "progress": progress,
             }
 
