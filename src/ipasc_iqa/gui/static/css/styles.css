@@ -297,7 +297,7 @@ img, svg, video, table { max-width: 100%; }
                   border: 1px solid var(--border); vertical-align: middle; }
 
 /* ---------- Standings ---------- */
-.standings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+.standings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                   gap: 1.25rem; margin-top: 1rem; }
 .standings-card { background: var(--surface); border: 1px solid var(--border);
                   border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); }
