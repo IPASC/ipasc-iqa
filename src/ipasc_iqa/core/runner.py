@@ -41,6 +41,7 @@ def _env_info() -> EnvironmentInfo:
     cuda_ver: str | None = None
     try:
         import torch
+
         torch_ver = torch.__version__
         if torch.cuda.is_available():
             cuda_ver = torch.version.cuda
@@ -60,7 +61,7 @@ def _pick_reference(
     reference_preference: list[str] | None,
 ) -> tuple[object, str | None]:
     """Return (array_or_None, reference_type_or_None)."""
-    if not measure.metadata.measure_type == MeasureType.FULL_REFERENCE:
+    if measure.metadata.measure_type != MeasureType.FULL_REFERENCE:
         return None, None
 
     accepted = measure.metadata.accepted_reference_types
@@ -90,7 +91,7 @@ def run_evaluation(
     output_path: Path | None = None,
     cache: ResultStore | None = None,
     progress: bool = True,
-    on_result: Callable[[str], None] | None = None,
+    on_progress: Callable[[str, str], None] | None = None,
 ) -> RunResults:
     from ipasc_iqa import __version__
     from ipasc_iqa.core.cache import make_cache_key
@@ -135,6 +136,10 @@ def run_evaluation(
         for record in ds:
             for measure in measures:
                 pbar.update(1)
+                # Report one processed (dataset, measure) unit — including cached
+                # and skipped pairs — so progress reaches 100% regardless of cache.
+                if on_progress is not None:
+                    on_progress(ds.name, measure.metadata.name)
 
                 # Check ROI requirements
                 if measure.metadata.requires_signal_roi and record.signal_roi is None:
@@ -163,7 +168,10 @@ def run_evaluation(
                     record.references, measure, reference_preference
                 )
 
-                if measure.metadata.measure_type == MeasureType.FULL_REFERENCE and reference is None:
+                if (
+                    measure.metadata.measure_type == MeasureType.FULL_REFERENCE
+                    and reference is None
+                ):
                     skipped.append(
                         SkippedRecord(
                             dataset=ds.name,
@@ -240,8 +248,6 @@ def run_evaluation(
                 if cache is not None:
                     cache.set(cache_key, record_out)
                 results.append(record_out)
-                if on_result is not None:
-                    on_result(measure.metadata.name)
 
     pbar.close()
     finished = datetime.now(UTC)

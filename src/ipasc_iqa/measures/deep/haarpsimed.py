@@ -1,6 +1,7 @@
 """HaarPSI optimised for medical images.
 
-Karner, Clemens, et al. "Parameter choices in HaarPSI for IQA with medical images." 2025 IEEE 22nd International Symposium on Biomedical Imaging (ISBI). IEEE, 2025.
+Karner, Clemens, et al. "Parameter choices in HaarPSI for IQA with medical images."
+2025 IEEE 22nd International Symposium on Biomedical Imaging (ISBI). IEEE, 2025.
 """
 
 from __future__ import annotations
@@ -30,14 +31,21 @@ class HaarPSIMedMeasure(BaseMeasure):
         higher_is_better=True,
         value_range=(0.0, 1.0),
         citation=(
-            "Reisenhofer et al., 'A Haar Wavelet-Based Perceptual Similarity Index "
-            "for Image Quality Assessment', Signal Process. Image Commun. 61, 2018."
+            "Karner et al., 'Parameter Choices in HaarPSI for IQA with Medical Images', "
+            "IEEE 22nd International Symposium on Biomedical Imaging (ISBI), 2025."
+        ),
+        bibtex=(
+            "@inproceedings{karner2025haarpsimed,\n"
+            "  author    = {Karner, Clemens and others},\n"
+            "  title     = {Parameter Choices in {HaarPSI} for {IQA} with Medical Images},\n"
+            "  booktitle = {IEEE 22nd International Symposium on Biomedical Imaging (ISBI)},\n"
+            "  year      = {2025}\n"
+            "}"
         ),
         description=(
             "Haar Wavelet-Based Perceptual Similarity Index (HaarPSI). "
             "Computed via piq.haarpsi. "
             "Minimum recommended image size: ~16×16 for the default 3-scale decomposition. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 
@@ -57,8 +65,7 @@ class HaarPSIMedMeasure(BaseMeasure):
             from piq import haarpsi
         except ImportError as exc:
             raise ImportError(
-                "HaarPSI requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "HaarPSI requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

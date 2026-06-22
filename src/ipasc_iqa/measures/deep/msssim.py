@@ -49,15 +49,24 @@ class MSSSIMMeasure(BaseMeasure):
             "Wang et al., 'Multiscale Structural Similarity for Image Quality Assessment', "
             "Proc. Asilomar Conf. Signals, Systems and Computers, 2003."
         ),
+        bibtex=(
+            "@inproceedings{wang2003msssim,\n"
+            "  author    = {Wang, Zhou and Simoncelli, Eero P. and Bovik, Alan C.},\n"
+            "  title     = {Multiscale Structural Similarity for Image Quality Assessment},\n"
+            "  booktitle = {The Thirty-Seventh Asilomar Conference on Signals,\n"
+            "               Systems and Computers},\n"
+            "  pages     = {1398--1402},\n"
+            "  year      = {2003}\n"
+            "}"
+        ),
         description=(
             "Multi-Scale Structural Similarity Index (MS-SSIM). "
             "Computed via piq.multi_scale_ssim — no reference implementation "
             "exists in scipy or scikit-image. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 
-    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device = None) -> None:
+    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device=None) -> None:
         # Pass hyperparameters to super() so config_canonical_json() picks them
         # up and they contribute to the cache key.
         super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
@@ -124,8 +133,7 @@ class MSSSIMMeasure(BaseMeasure):
             from piq import multi_scale_ssim
         except ImportError as exc:
             raise ImportError(
-                "MS-SSIM requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "MS-SSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

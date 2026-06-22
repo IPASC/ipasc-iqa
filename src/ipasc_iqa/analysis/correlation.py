@@ -37,9 +37,7 @@ class CorrelationRow:
         return {"measure": self.measure, "n": self.n, "srcc": self.srcc, "krcc": self.krcc}
 
 
-def _measure_values_by_image(
-    run: RunResults, measure: str, dataset: str | None
-) -> dict[str, float]:
+def measure_values_by_image(run: RunResults, measure: str, dataset: str | None) -> dict[str, float]:
     """Collect {image_id: value} for one measure (optionally one dataset)."""
     out: dict[str, float] = {}
     for rec in run.results:
@@ -87,7 +85,7 @@ def correlate_measures_with_annotations(
 
     rows: list[CorrelationRow] = []
     for measure in measures:
-        values = _measure_values_by_image(run, measure, dataset)
+        values = measure_values_by_image(run, measure, dataset)
 
         paired_x: list[float] = []
         paired_y: list[float] = []

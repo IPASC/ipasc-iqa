@@ -30,17 +30,19 @@ def _strip_ext(name: str) -> str:
 
 @dataclass
 class AnnotationTable:
-    """Per-image aggregate scores for a single quality task."""
+    """Per-image scores for a single quality task."""
 
     task: str
     #: join key (filename stem) -> mean opinion score
     mos: dict[str, float] = field(default_factory=dict)
     #: join key (filename stem) -> z-scored mean opinion score
     zscore_mos: dict[str, float] = field(default_factory=dict)
+    #: join key (filename stem) -> {rater_id: raw score} (individual annotators)
+    raters: dict[str, dict[str, float]] = field(default_factory=dict)
 
     def image_keys(self) -> set[str]:
         """Return the set of join keys (filename stems) that have any score."""
-        return set(self.mos) | set(self.zscore_mos)
+        return set(self.mos) | set(self.zscore_mos) | set(self.raters)
 
     def __len__(self) -> int:
         return len(self.image_keys())
@@ -73,6 +75,10 @@ def load_annotation_csv(path: Path, task: str | None = None) -> AnnotationTable:
     delimiter = _sniff_delimiter(text[0])
     reader = csv.DictReader(text, delimiter=delimiter)
 
+    # Raw per-rater columns (e.g. "rater1".."rater5"); the "z-score rater*"
+    # columns are deliberately excluded (they start with "z-score").
+    rater_cols = [c for c in (reader.fieldnames or []) if c and c.startswith("rater")]
+
     table = AnnotationTable(task=task)
     for row in reader:
         raw_name = (row.get("filename") or "").strip()
@@ -87,6 +93,10 @@ def load_annotation_csv(path: Path, task: str | None = None) -> AnnotationTable:
         z_raw = row.get("z-score mos")
         if z_raw not in (None, ""):
             table.zscore_mos[key] = float(z_raw)
+
+        ratings = {c: float(row[c]) for c in rater_cols if row.get(c) not in (None, "")}
+        if ratings:
+            table.raters[key] = ratings
 
     return table
 

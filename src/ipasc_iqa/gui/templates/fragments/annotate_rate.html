@@ -1,0 +1,55 @@
+{# Single-stimulus MOS rating. Reference (left) + reconstruction (right), a 1–4
+   slider (default 1), and a Confirm button. Keyboard: 1–4 set the slider,
+   spacebar confirms (wired globally in /static/js/annotate.js). Dark BT.500
+   stage. Expects: dataset, image_id, reference_item, task, dataset_choice,
+   prompt, optional toast. #}
+<div class="annotate-stage annotate-rate">
+  {% if toast %}<p class="annotate-toast">{{ toast }}</p>{% endif %}
+
+  <p class="annotate-prompt">{{ prompt }}</p>
+
+  <div class="annotate-pair">
+    <figure class="annotate-rate__panel">
+      <img src="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ reference_item | urlencode }}"
+           alt="reference image" draggable="false">
+      <figcaption>Reference</figcaption>
+    </figure>
+    <figure class="annotate-rate__panel">
+      <img src="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ image_id | urlencode }}"
+           alt="reconstruction to rate" draggable="false">
+      <figcaption>Reconstruction</figcaption>
+    </figure>
+  </div>
+
+  <form hx-post="/contribute/rate" hx-target="#contribute-root" hx-swap="innerHTML"
+        class="annotate-rate__form">
+    <input type="hidden" name="dataset" value="{{ dataset }}">
+    <input type="hidden" name="image_id" value="{{ image_id }}">
+    <input type="hidden" name="task" value="{{ task }}">
+    <input type="hidden" name="dataset_choice" value="{{ dataset_choice }}">
+
+    <div class="annotate-rate__scale">
+      <span>1 · low</span>
+      <input type="range" name="score" min="1" max="4" step="1" value="1"
+             class="annotate-rate__slider" list="rate-ticks">
+      <datalist id="rate-ticks">
+        <option value="1"></option><option value="2"></option>
+        <option value="3"></option><option value="4"></option>
+      </datalist>
+      <span>4 · best</span>
+      <output class="annotate-rate__value" aria-live="polite">1</output>
+    </div>
+
+    <div class="annotate-foot">
+      <button type="submit" class="btn btn--primary annotate-rate__confirm">
+        Confirm rating <small>(space)</small>
+      </button>
+      <span class="annotate-progress">Keys 1–4 set the score · space confirms</span>
+    </div>
+  </form>
+
+  <form hx-post="/contribute/finish" hx-target="#contribute-root" hx-swap="innerHTML"
+        class="annotate-rate__finish">
+    <button type="submit" class="btn annotate-finish">Finish session</button>
+  </form>
+</div>

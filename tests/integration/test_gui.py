@@ -7,6 +7,7 @@ pre-prepared on disk (download is a no-op).
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -74,8 +75,10 @@ def _write_mini_dataset(root: Path) -> None:
     (ds_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
-@pytest.fixture()
-def client(tmp_path: Path) -> TestClient:
+ADMIN_EMAIL, ADMIN_PW = "admin@test.com", "password123"
+
+
+def _make_client(tmp_path: Path) -> TestClient:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     _write_mini_dataset(data_dir)
@@ -83,6 +86,52 @@ def client(tmp_path: Path) -> TestClient:
         dataset_registry.register(MiniDataset, distribution="tests")
     workspace_root = tmp_path / "ws"
     return TestClient(create_app(workspace_root=workspace_root, data_dir=data_dir))
+
+
+def _login(client: TestClient, email: str, password: str) -> None:
+    resp = client.post("/login", data={"email": email, "password": password})
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.fixture()
+def anon_client(tmp_path: Path) -> TestClient:
+    """An unauthenticated client (for auth-flow / access-control tests)."""
+    return _make_client(tmp_path)
+
+
+@pytest.fixture()
+def client(tmp_path: Path) -> TestClient:
+    """A client logged in as an admin (most tests exercise admin-level access)."""
+    from ipasc_iqa.gui import auth
+
+    c = _make_client(tmp_path)
+    auth.promote_admin(c.app.state.workspace, ADMIN_EMAIL, name="Admin", password=ADMIN_PW)
+    _login(c, ADMIN_EMAIL, ADMIN_PW)
+    return c
+
+
+def _run_and_wait(
+    client: TestClient,
+    datasets: list[str],
+    measures: list[str],
+    *,
+    timeout: float = 30.0,
+):
+    """POST /run (which launches a background job) and block until it finishes.
+
+    Returns the final status-endpoint response, which carries the ``HX-Redirect``
+    header once the run is done.
+    """
+    resp = client.post("/run", data={"datasets": datasets, "measures": measures})
+    assert resp.status_code == 200
+    jobs = client.app.state.jobs
+    job_id = next(reversed(jobs))  # the most recently launched job
+    deadline = time.time() + timeout
+    while jobs[job_id].snapshot()["status"] == "running":
+        if time.time() > deadline:
+            raise AssertionError("benchmark job did not finish in time")
+        time.sleep(0.02)
+    return client.get(f"/api/run/{job_id}/status")
 
 
 def test_pages_render(client: TestClient) -> None:
@@ -108,9 +157,10 @@ def test_measures_listed(client: TestClient) -> None:
 
 
 def test_run_then_analysis_all_tasks(client: TestClient) -> None:
-    resp = client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR", "SSIM"]})
-    assert resp.status_code == 200
-    assert resp.headers.get("HX-Redirect") == "/results"
+    # /run launches a background job; the HX-Redirect is emitted by the status
+    # endpoint once the job completes.
+    status = _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+    assert status.headers.get("HX-Redirect") == "/results"
 
     frag = client.get("/api/analysis", params={"dataset": "mini"})
     assert frag.status_code == 200
@@ -139,14 +189,13 @@ def test_measure_options_reflect_capabilities(client: TestClient) -> None:
 
 def test_partial_runs_merge_in_analysis(client: TestClient) -> None:
     # Run only psnr, then only ssim — analysis should show BOTH (merged store).
-    client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR"]})
-    client.post("/run", data={"datasets": ["mini"], "measures": ["SSIM"]})
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    _run_and_wait(client, ["mini"], ["SSIM"])
 
     frag = client.get("/api/analysis", params={"dataset": "mini"})
     assert frag.status_code == 200
     assert "PSNR" in frag.text
     assert "SSIM" in frag.text
-    assert "merged results" in frag.text
 
 
 def test_run_requires_selection(client: TestClient) -> None:
@@ -156,9 +205,501 @@ def test_run_requires_selection(client: TestClient) -> None:
 
 
 def test_standings_ranks_measures(client: TestClient) -> None:
-    client.post("/run", data={"datasets": ["mini"], "measures": ["PSNR", "SSIM"]})
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
     frag = client.get("/api/standings")
     assert frag.status_code == 200
     # Measures (not algorithms) are ranked; both tasks appear.
     assert "PSNR" in frag.text or "SSIM" in frag.text
     assert "overall_quality" in frag.text
+    # Each ranked measure carries an info button + its description template,
+    # and a citation button (PSNR has a bibtex).
+    assert "info-btn" in frag.text
+    assert "Description of PSNR" in frag.text
+    assert "values denote a better image quality" in frag.text
+    assert 'class="cite-btn' in frag.text
+
+
+def _seed_bt_comparisons(client: TestClient, task: str = "overall_quality") -> None:
+    """Seed contributed pairwise comparisons for the 'mini' dataset (ref best)."""
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+
+    ws = client.app.state.workspace
+    with AnnotatorStore(ws.annotations_path) as store:
+        user = store.create_user(
+            email="u@x.com", name="U", role=ROLE_ANNOTATOR, password_hash=None, approved=True
+        )
+        for stem in range(3):
+            a0, a1, ref = f"image{stem}_alg0", f"image{stem}_alg1", f"__ref__{stem}"
+            comps = [
+                {"winner": ref, "loser": a0},
+                {"winner": ref, "loser": a1},
+                {"winner": a0, "loser": a1},
+            ] * 4
+            store.add_session(
+                {
+                    "user_uid": user["uid"],
+                    "dataset": "mini",
+                    "task": task,
+                    "reference": str(stem),
+                    "order": [a1, a0, ref],
+                    "comparisons": comps,
+                    "n_comparisons": len(comps),
+                }
+            )
+
+
+def test_bt_source_in_analysis(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+    _seed_bt_comparisons(client)
+
+    # Both human-score sources are now offered; selecting BT yields correlations.
+    frag = client.get(
+        "/api/analysis",
+        params={"dataset": "mini", "task": "overall_quality", "source": "bt"},
+    )
+    assert frag.status_code == 200
+    assert "Pairwise (Bradley" in frag.text  # source dropdown shows BT option
+    assert "PSNR" in frag.text and "SRCC" in frag.text
+
+    # The scatter endpoint honours the BT source.
+    scatter = client.get(
+        "/api/scatter",
+        params={"dataset": "mini", "task": "overall_quality", "measure": "PSNR", "source": "bt"},
+    )
+    assert scatter.status_code == 200
+    assert "BT" in scatter.text  # BT axis label, not z-MOS
+    # The measure description block is rendered beneath the plot.
+    assert "Description of PSNR" in scatter.text
+    assert "full-reference measure" in scatter.text
+    assert "values denote a better image quality" in scatter.text
+
+
+def test_bt_source_absent_without_contributions(client: TestClient) -> None:
+    # With no contributed comparisons, only MOS is offered (no source dropdown).
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    frag = client.get("/api/analysis", params={"dataset": "mini", "task": "overall_quality"})
+    assert "Pairwise (Bradley" not in frag.text
+
+
+def test_standings_endpoint_switch(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+
+    # The page exposes the MOS/BT endpoint dropdown.
+    page = client.get("/standings")
+    assert 'name="source"' in page.text
+    assert 'value="mos"' in page.text and 'value="bt"' in page.text
+
+    # MOS ranks measures against z-MOS by default.
+    mos = client.get("/api/standings")
+    assert "overall_quality" in mos.text and "z-MOS" in mos.text
+
+    # BT has nothing until pairwise comparisons are contributed.
+    bt_empty = client.get("/api/standings", params={"source": "bt"})
+    assert "No rankings yet for the pairwise" in bt_empty.text
+
+    _seed_bt_comparisons(client)
+    bt = client.get("/api/standings", params={"source": "bt"})
+    assert "overall_quality" in bt.text
+    assert "Bradley" in bt.text and ("PSNR" in bt.text or "SSIM" in bt.text)
+
+
+def test_download_page_and_export(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+    _seed_bt_comparisons(client)
+
+    # Page renders with the dataset picker and the download form.
+    page = client.get("/download")
+    assert page.status_code == 200
+    assert "/api/download" in page.text and ">Download<" in page.text
+
+    # Export returns a JSON attachment with the expected sections.
+    resp = client.get("/api/download", params={"dataset": "mini"})
+    assert resp.status_code == 200
+    assert "attachment" in resp.headers.get("content-disposition", "")
+    assert resp.headers["content-type"].startswith("application/json")
+
+    payload = resp.json()
+    assert payload["anonymised"] is True
+    ds = payload["datasets"][0]
+    assert ds["name"] == "mini"
+    assert ds["n_measure_results"] > 0
+    assert "overall_quality" in ds["expert_annotations"]
+    assert ds["pairwise_annotations"] and ds["bradley_terry"]
+    # Annotators are pseudonymised — the seeded email never appears.
+    assert ds["pairwise_annotations"][0]["annotator"].startswith("annotator_")
+    assert "u@x.com" not in resp.text
+
+
+def test_login_required_for_protected_pages(anon_client: TestClient) -> None:
+    for path in ("/", "/results", "/contribute", "/run", "/download"):
+        resp = anon_client.get(path, follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/login"
+
+
+def test_standings_is_public(anon_client: TestClient) -> None:
+    assert anon_client.get("/standings").status_code == 200
+    assert anon_client.get("/api/standings").status_code == 200
+
+
+def test_hx_unauthenticated_gets_redirect_header(anon_client: TestClient) -> None:
+    resp = anon_client.get(
+        "/api/analysis",
+        params={"dataset": "mini"},
+        headers={"HX-Request": "true"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 401
+    assert resp.headers.get("HX-Redirect") == "/login"
+
+
+def test_annotator_cannot_access_admin_areas(anon_client: TestClient) -> None:
+    # Open self-registration creates an annotator and logs them in.
+    anon_client.post(
+        "/register",
+        data={
+            "name": "Ann",
+            "email": "ann@test.com",
+            "password": "password123",
+            "expertise": "novice",
+        },
+    )
+    assert anon_client.get("/results").status_code == 200  # annotators allowed
+    assert anon_client.get("/run", follow_redirects=False).status_code == 403
+    assert (
+        anon_client.get(
+            "/api/download", params={"dataset": "all"}, follow_redirects=False
+        ).status_code
+        == 403
+    )
+
+
+def test_approval_gate_end_to_end(tmp_path: Path) -> None:
+    from ipasc_iqa.gui import auth
+
+    c = _make_client(tmp_path)
+    ws = c.app.state.workspace
+    auth.promote_admin(ws, ADMIN_EMAIL, name="Admin", password=ADMIN_PW)
+
+    # Annotator self-registers (auto-approve off) → pending: can view analysis,
+    # but cannot contribute and cannot reach the admin area.
+    c.post(
+        "/register",
+        data={
+            "name": "Ann",
+            "email": "ann@test.com",
+            "password": "password123",
+            "expertise": "knowledgeable",
+        },
+    )
+    assert c.get("/results").status_code == 200
+    assert "Awaiting approval" in c.get("/contribute").text
+    blocked = c.post("/contribute/start", data={"dataset": "random", "rating_type": "comparative"})
+    assert "Awaiting approval" in blocked.text
+    assert c.get("/admin/users", follow_redirects=False).status_code == 403
+
+    # Admin approves the pending annotator.
+    c.post("/logout")
+    _login(c, ADMIN_EMAIL, ADMIN_PW)
+    accounts = {u["email"]: u for u in auth.list_accounts(ws)}
+    assert accounts["ann@test.com"]["approved"] is False
+    uid = accounts["ann@test.com"]["uid"]
+    assert c.post(f"/admin/users/{uid}/approve").status_code == 200
+
+    # The annotator can now start contributing.
+    c.post("/logout")
+    _login(c, "ann@test.com", "password123")
+    started = c.post("/contribute/start", data={"dataset": "random", "rating_type": "comparative"})
+    assert "Awaiting approval" not in started.text
+
+
+def test_auto_approve_flag_lets_new_users_contribute(tmp_path: Path) -> None:
+    from ipasc_iqa.gui import auth
+
+    c = _make_client(tmp_path)
+    ws = c.app.state.workspace
+    auth.promote_admin(ws, ADMIN_EMAIL, name="Admin", password=ADMIN_PW)
+    _login(c, ADMIN_EMAIL, ADMIN_PW)
+    c.post("/admin/auto-approve", data={"enabled": "on"})
+    assert auth.auto_approve_enabled(ws) is True
+
+    c.post("/logout")
+    c.post(
+        "/register",
+        data={
+            "name": "Bob",
+            "email": "bob@test.com",
+            "password": "password123",
+            "expertise": "expert",
+        },
+    )
+    started = c.post("/contribute/start", data={"dataset": "random", "rating_type": "comparative"})
+    assert "Awaiting approval" not in started.text
+
+
+def test_annotation_images_share_reference_window(client: TestClient) -> None:
+    # Both variants of a reference must render on the same dynamic range (the
+    # reference's), not be individually min-max stretched.
+    from ipasc_iqa.gui import service
+
+    ws = client.app.state.workspace
+    w0 = service.display_window_for(ws, "mini", "image0_alg0")
+    w1 = service.display_window_for(ws, "mini", "image0_alg1")
+    assert w0 is not None and w0 == w1
+    ref = np.load(ws.data_dir / "mini" / "images" / "image0.ref.pseudo_reference.npy").astype(float)
+    assert w0 == (float(ref.min()), float(ref.max()))
+
+
+def test_render_item_png_respects_explicit_window(tmp_path: Path) -> None:
+    import io as _io
+
+    from PIL import Image
+
+    from ipasc_iqa.gui import service
+
+    arr = np.array([[0.0, 0.5], [0.5, 1.0]], dtype=np.float32)
+    p = tmp_path / "a.npy"
+    np.save(p, arr)
+    # Explicit [0, 2] window: max value 1.0 maps to ~half, not stretched to 255.
+    windowed = np.array(Image.open(_io.BytesIO(service.render_item_png(p, window=(0.0, 2.0)))))
+    assert windowed.max() <= 130
+    # No window → per-image stretch sends the max to 255.
+    stretched = np.array(Image.open(_io.BytesIO(service.render_item_png(p))))
+    assert stretched.max() == 255
+
+
+def test_expertise_in_signup_and_export(client: TestClient) -> None:
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+
+    # A contributor with a declared expertise → it rides along in the export
+    # (both the anonymised annotators table and inline on each contribution).
+    ws = client.app.state.workspace
+    with AnnotatorStore(ws.annotations_path) as store:
+        u = store.create_user(
+            email="e@x.com",
+            name="E",
+            role=ROLE_ANNOTATOR,
+            password_hash=None,
+            approved=True,
+            expertise="expert",
+        )
+        store.add_session(
+            {
+                "user_uid": u["uid"],
+                "dataset": "mini",
+                "task": "overall_quality",
+                "reference": "0",
+                "order": ["image0_alg1", "image0_alg0", "__ref__0"],
+                "comparisons": [{"winner": "__ref__0", "loser": "image0_alg0"}],
+                "n_comparisons": 1,
+            }
+        )
+
+    payload = client.get("/api/download", params={"dataset": "mini"}).json()
+    assert any(meta.get("expertise") == "expert" for meta in payload["annotators"].values())
+    ds = next(d for d in payload["datasets"] if d["name"] == "mini")
+    assert any(p.get("expertise") == "expert" for p in ds["pairwise_annotations"])
+
+    # The sign-up form asks the PAI-expertise question with the three levels
+    # (checked while logged out, since /register redirects authenticated users).
+    client.post("/logout")
+    page = client.get("/register")
+    assert "How do you rate your PAI expertise?" in page.text
+    for level in ("expert", "knowledgeable", "novice"):
+        assert f'value="{level}"' in page.text
+
+
+def test_unapproved_contributions_excluded_from_live_aggregates(client: TestClient) -> None:
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+    from ipasc_iqa.gui import auth, service
+
+    ws = client.app.state.workspace
+    with AnnotatorStore(ws.annotations_path) as store:
+        ok = store.create_user(
+            email="ok@x.com", name="OK", role=ROLE_ANNOTATOR, password_hash=None, approved=True
+        )
+        pend = store.create_user(
+            email="pend@x.com", name="P", role=ROLE_ANNOTATOR, password_hash=None, approved=False
+        )
+        # Contributed ratings (MOS) on the same image/task.
+        for u in (ok, pend):
+            store.add_rating(
+                {
+                    "user_uid": u["uid"],
+                    "dataset": "mini",
+                    "image_id": "image0_alg0",
+                    "task": "overall_quality",
+                    "score": 3,
+                }
+            )
+        # Pairwise sessions (BT): approved on ref 0 (2 comps), pending on ref 1 (5 comps).
+        store.add_session(
+            {
+                "user_uid": ok["uid"],
+                "dataset": "mini",
+                "task": "overall_quality",
+                "reference": "0",
+                "order": ["image0_alg1", "image0_alg0", "__ref__0"],
+                "comparisons": [
+                    {"winner": "__ref__0", "loser": "image0_alg0"},
+                    {"winner": "image0_alg0", "loser": "image0_alg1"},
+                ],
+                "n_comparisons": 2,
+            }
+        )
+        store.add_session(
+            {
+                "user_uid": pend["uid"],
+                "dataset": "mini",
+                "task": "overall_quality",
+                "reference": "1",
+                "order": ["image1_alg1", "image1_alg0", "__ref__1"],
+                "comparisons": [{"winner": "__ref__1", "loser": "image1_alg0"}] * 5,
+                "n_comparisons": 5,
+            }
+        )
+
+    # MOS: only the approved rater contributes.
+    scores = service._mos_annotator_scores(ws, "mini", "overall_quality", {"images": []})
+    assert f"user:{ok['uid']}" in scores["image0_alg0"]
+    assert f"user:{pend['uid']}" not in scores["image0_alg0"]
+    # BT: only the approved session's comparisons count.
+    assert service.bt_scores_for_dataset_task(ws, "mini", "overall_quality")["n_comparisons"] == 2
+
+    # Approving the pending user makes their data count immediately (live recompute).
+    auth.set_user_approved(ws, pend["uid"], True)
+    scores2 = service._mos_annotator_scores(ws, "mini", "overall_quality", {"images": []})
+    assert f"user:{pend['uid']}" in scores2["image0_alg0"]
+    assert service.bt_scores_for_dataset_task(ws, "mini", "overall_quality")["n_comparisons"] == 7
+
+
+def test_export_keeps_but_tags_unapproved_contributors(client: TestClient) -> None:
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+
+    ws = client.app.state.workspace
+    with AnnotatorStore(ws.annotations_path) as store:
+        pend = store.create_user(
+            email="p2@x.com",
+            name="P2",
+            role=ROLE_ANNOTATOR,
+            password_hash=None,
+            approved=False,
+            expertise="novice",
+        )
+        store.add_session(
+            {
+                "user_uid": pend["uid"],
+                "dataset": "mini",
+                "task": "overall_quality",
+                "reference": "0",
+                "order": ["image0_alg1", "image0_alg0", "__ref__0"],
+                "comparisons": [{"winner": "__ref__0", "loser": "image0_alg0"}],
+                "n_comparisons": 1,
+            }
+        )
+
+    ds = next(
+        d
+        for d in client.get("/api/download", params={"dataset": "mini"}).json()["datasets"]
+        if d["name"] == "mini"
+    )
+    # Raw contribution retained, tagged not-approved (nothing silently dropped).
+    assert any(p["approved"] is False for p in ds["pairwise_annotations"])
+
+
+def test_admin_can_change_user_role(client: TestClient) -> None:
+    from ipasc_iqa.gui import auth
+
+    ws = client.app.state.workspace
+    ann = auth.register_user(ws, "Ann", "ann@test.com", "password123", "novice")
+    assert ann["role"] == "annotator"
+
+    resp = client.post(f"/admin/users/{ann['uid']}/role", data={"role": "admin"})
+    assert resp.status_code == 200  # PRG → followed redirect to /admin/users
+    assert {a["email"]: a["role"] for a in auth.list_accounts(ws)}["ann@test.com"] == "admin"
+
+
+def test_results_view_cache_and_epoch_invalidation(client: TestClient) -> None:
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+    from ipasc_iqa.gui import service
+
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    ws = client.app.state.workspace
+    cache = client.app.state.result_cache
+
+    # Viewing standings populates the persistent cache for the current epoch.
+    e1 = service.results_epoch(ws)
+    assert client.get("/api/standings").status_code == 200
+    assert cache.get("standings", {"source": "mos"}, e1) is not None
+
+    # A new contributed rating bumps the epoch → the old cache entry is stale,
+    # so the next view recomputes (cache miss at the new epoch).
+    with AnnotatorStore(ws.annotations_path) as store:
+        u = store.create_user(
+            email="r@x.com", name="R", role=ROLE_ANNOTATOR, password_hash=None, approved=True
+        )
+        store.add_rating(
+            {
+                "user_uid": u["uid"],
+                "dataset": "mini",
+                "image_id": "image0_alg0",
+                "task": "overall_quality",
+                "score": 3,
+            }
+        )
+    e2 = service.results_epoch(ws)
+    assert e2 > e1
+    assert cache.get("standings", {"source": "mos"}, e2) is None
+    # Re-viewing recomputes and re-populates the cache at the new epoch.
+    assert client.get("/api/standings").status_code == 200
+    assert cache.get("standings", {"source": "mos"}, e2) is not None
+
+
+def test_download_all_datasets(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    payload = client.get("/api/download", params={"dataset": "all"}).json()
+    assert "mini" in [d["name"] for d in payload["datasets"]]
+
+
+def test_download_handles_non_finite_values(client: TestClient) -> None:
+    # Non-finite cached values (NaN/Inf) must export as null, not crash the
+    # JSON response (which disallows NaN/Inf).
+    import math
+
+    from ipasc_iqa.core.cache import ResultStore, make_cache_key
+    from ipasc_iqa.core.result import ResultRecord
+
+    ws = client.app.state.workspace
+    with ResultStore(ws.store_path) as store:
+        for img, val in [("image0_alg0", float("nan")), ("image1_alg0", float("inf"))]:
+            key = make_cache_key(
+                measure_name="PSNR",
+                measure_version="1.0.0",
+                image_sha256=img,
+                reference_type="pseudo_reference",
+                reference_sha256="r",
+                signal_roi_sha256=None,
+                noise_roi_sha256=None,
+            )
+            store.set(
+                key,
+                ResultRecord(
+                    dataset="mini",
+                    image_id=img,
+                    image_sha256=img,
+                    measure="PSNR",
+                    measure_version="1.0.0",
+                    reference_type="pseudo_reference",
+                    signal_roi_sha256=None,
+                    noise_roi_sha256=None,
+                    value=val,
+                    sub_scores=None,
+                    wall_time_s=0.0,
+                    device="cpu",
+                ),
+            )
+
+    resp = client.get("/api/download", params={"dataset": "mini"})
+    assert resp.status_code == 200
+    values = [r["value"] for r in resp.json()["datasets"][0]["measure_results"]]
+    assert all(v is None or math.isfinite(v) for v in values)

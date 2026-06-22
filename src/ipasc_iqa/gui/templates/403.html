@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Forbidden{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="panel auth-form">
+    <h2 class="panel__title">Access denied</h2>
+    <p class="notice notice--warn">
+      Your account doesn't have permission to view this page. Running benchmarks and
+      downloads are restricted to administrators.
+    </p>
+    <p class="panel__hint"><a href="/">Back to home</a> · <a href="/standings">Standings</a></p>
+  </div>
+</div>
+{% endblock %}

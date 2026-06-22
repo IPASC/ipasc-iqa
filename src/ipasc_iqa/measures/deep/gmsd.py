@@ -42,10 +42,22 @@ class GMSDMeasure(BaseMeasure):
             "Xue et al., 'Gradient Magnitude Similarity Deviation: A Highly Efficient "
             "Perceptual Image Quality Index', IEEE Trans. Image Process. 23(2), 2014."
         ),
+        bibtex=(
+            "@article{xue2014gmsd,\n"
+            "  author  = {Xue, Wufeng and Zhang, Lei and Mou, Xuanqin and Bovik, Alan C.},\n"
+            "  title   = {Gradient Magnitude Similarity Deviation: A Highly Efficient\n"
+            "             Perceptual Image Quality Index},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {23},\n"
+            "  number  = {2},\n"
+            "  pages   = {684--695},\n"
+            "  year    = {2014}\n"
+            "}"
+        ),
         description=(
             "Gradient Magnitude Similarity Deviation (GMSD). "
             "Computed via piq.gmsd. "
-            "Lower deviation = better quality. Requires ipasc_iqa[deep]."
+            "Lower deviation = better quality."
         ),
     )
 
@@ -65,8 +77,7 @@ class GMSDMeasure(BaseMeasure):
             from piq import gmsd
         except ImportError as exc:
             raise ImportError(
-                "GMSD requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "GMSD requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

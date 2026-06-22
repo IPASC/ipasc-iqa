@@ -1,0 +1,11 @@
+{# Shared measure description block, used under the detailed-analysis scatter
+   plot and inside the standings info popup so both read identically. #}
+{% macro measure_desc(name, description, measure_type, value_range, higher_is_better) %}
+<div class="measure-desc">
+  <p class="measure-desc__title">Description of {{ name }}:</p>
+  {% if description %}<p>{{ description }}</p>{% endif %}
+  <p>This is a {{ measure_type }} measure.</p>
+  {% if value_range %}<p>The value range is defined between {{ value_range }}.</p>{% endif %}
+  <p>{{ 'Higher' if higher_is_better else 'Lower' }} values denote a better image quality.</p>
+</div>
+{% endmacro %}

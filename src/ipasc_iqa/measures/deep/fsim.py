@@ -48,15 +48,25 @@ class FSIMMeasure(BaseMeasure):
             "Zhang et al., 'FSIM: A Feature Similarity Index for Image Quality Assessment', "
             "IEEE Trans. Image Process. 20(8), 2011."
         ),
+        bibtex=(
+            "@article{zhang2011fsim,\n"
+            "  author  = {Zhang, Lin and Zhang, Lei and Mou, Xuanqin and Zhang, David},\n"
+            "  title   = {{FSIM}: A Feature Similarity Index for Image Quality Assessment},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {20},\n"
+            "  number  = {8},\n"
+            "  pages   = {2378--2386},\n"
+            "  year    = {2011}\n"
+            "}"
+        ),
         description=(
             "Feature Similarity Index (FSIM). "
             "Computed via piq.fsim with chromatic=False (luminance only). "
             "Set chromatic=True for colour images (requires C=3). "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 
-    def __init__(self, chromatic: bool = False, device = None) -> None:
+    def __init__(self, chromatic: bool = False, device=None) -> None:
         # chromatic enters the cache key so changing it invalidates cached results.
         super().__init__(chromatic=chromatic)
         self._chromatic = chromatic
@@ -77,8 +87,7 @@ class FSIMMeasure(BaseMeasure):
             from piq import fsim
         except ImportError as exc:
             raise ImportError(
-                "FSIM requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "FSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

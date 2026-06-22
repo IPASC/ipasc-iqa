@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Users{% endblock %}
+{% block content %}
+<h1 class="page-title">User management</h1>
+
+<div class="panel">
+  <h2 class="panel__title">Auto-approve new accounts</h2>
+  <p class="panel__hint">
+    When <strong>on</strong>, accounts created via self-registration are approved
+    to contribute immediately. Use it temporarily for testing or a conference
+    sign-up spike, then turn it off — existing approvals are unaffected.
+  </p>
+  <p>
+    Status:
+    {% if auto_approve %}
+      <span class="badge" style="background:#ecfdf5;color:var(--ok)">ON</span>
+    {% else %}
+      <span class="badge">OFF</span>
+    {% endif %}
+  </p>
+  <form method="post" action="/admin/auto-approve">
+    <input type="hidden" name="enabled" value="{{ 'off' if auto_approve else 'on' }}">
+    <button type="submit" class="btn btn--primary">
+      {{ 'Disable auto-approval' if auto_approve else 'Enable auto-approval' }}
+    </button>
+  </form>
+</div>
+
+<div class="panel" style="margin-top:1.25rem;">
+  <h2 class="panel__title">Accounts</h2>
+  {% if error %}<p class="notice notice--warn">{{ error }}</p>{% endif %}
+  {% if not users %}
+    <p class="muted">No accounts yet.</p>
+  {% else %}
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr><th>Name</th><th>Email</th><th>Role</th><th>PAI expertise</th><th>Approved</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.name or '—' }}</td>
+        <td class="mono">{{ u.email or '—' }}</td>
+        <td>
+          {% if u.deleted %}
+            <span class="muted">DELETED_USER</span>
+          {% else %}
+            <form method="post" action="/admin/users/{{ u.uid }}/role" class="role-form">
+              <select name="role" class="select select--sm">
+                <option value="annotator" {{ 'selected' if u.role == 'annotator' }}>Annotator</option>
+                <option value="admin" {{ 'selected' if u.role == 'admin' }}>Admin</option>
+              </select>
+              <button type="submit" class="btn btn--sm">Set</button>
+            </form>
+          {% endif %}
+        </td>
+        <td>{{ (u.expertise or '—') | capitalize }}</td>
+        <td>{{ '✓' if u.approved else '—' }}</td>
+        <td>
+          {% if u.deleted %}
+            <span class="muted">deleted</span>
+          {% elif u.role == 'admin' %}
+            <span class="muted">always</span>
+          {% elif u.approved %}
+            <form method="post" action="/admin/users/{{ u.uid }}/revoke" style="display:inline">
+              <button type="submit" class="btn">Revoke</button>
+            </form>
+          {% else %}
+            <form method="post" action="/admin/users/{{ u.uid }}/approve" style="display:inline">
+              <button type="submit" class="btn btn--primary">Approve</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

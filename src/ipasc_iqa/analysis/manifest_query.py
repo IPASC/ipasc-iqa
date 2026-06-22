@@ -43,6 +43,29 @@ def annotation_values_from_manifest(
     return out
 
 
+def annotator_ratings_from_manifest(manifest: dict, task: str) -> dict[str, dict[str, float]]:
+    """Return ``{image_id: {annotator_id: raw_score}}`` for one task.
+
+    Reads the per-rater scores embedded under each image's
+    ``metadata.annotations[task]["ratings"]``. Annotator ids are namespaced
+    (``manifest:<rater>``) so they never collide with contributed annotators.
+    """
+    out: dict[str, dict[str, float]] = {}
+    for entry in manifest.get("images", []):
+        ann = entry.get("metadata", {}).get("annotations", {}).get(task)
+        if not ann:
+            continue
+        ratings = ann.get("ratings")
+        if not ratings:
+            continue
+        out[entry["id"]] = {
+            f"manifest:{rater}": float(value)
+            for rater, value in ratings.items()
+            if value is not None
+        }
+    return out
+
+
 def groups_from_manifest(manifest: dict, key: str = "algorithm") -> dict[str, str]:
     """Return ``{image_id: group}`` using a metadata *key* (default 'algorithm')."""
     out: dict[str, str] = {}

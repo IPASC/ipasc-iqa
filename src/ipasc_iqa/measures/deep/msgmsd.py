@@ -52,17 +52,28 @@ class MSGMSDMeasure(BaseMeasure):
         higher_is_better=False,
         value_range=(0.0, float("inf")),
         citation=(
-            "Reisenhofer et al., 'A Haar Wavelet-Based Perceptual Similarity Index "
-            "for Image Quality Assessment', Signal Process. Image Commun. 61, 2018."
+            "Zhang et al., 'Gradient Magnitude Similarity Deviation on Multiple Scales "
+            "for Color Image Quality Assessment', IEEE ICASSP 2017."
+        ),
+        bibtex=(
+            "@inproceedings{zhang2017msgmsd,\n"
+            "  author    = {Zhang, Bo and Sander, Pedro V. and Bermak, Amine},\n"
+            "  title     = {Gradient Magnitude Similarity Deviation on Multiple Scales\n"
+            "               for Color Image Quality Assessment},\n"
+            "  booktitle = {IEEE International Conference on Acoustics, Speech and\n"
+            "               Signal Processing (ICASSP)},\n"
+            "  pages     = {1253--1257},\n"
+            "  year      = {2017}\n"
+            "}"
         ),
         description=(
             "Multi-Scale Gradient Magnitude Similarity Deviation (MS-GMSD). "
             "Computed via piq.multi_scale_gmsd with adaptive scale selection. "
-            "Lower deviation = better quality. Requires ipasc_iqa[deep]."
+            "Lower deviation = better quality."
         ),
     )
 
-    def _adaptive_scale_weights(self, min_dim: int) -> "torch.Tensor":
+    def _adaptive_scale_weights(self, min_dim: int):
         """Return weights for as many scales as the image can support.
 
         GMSD uses a 3×3 Prewitt-like gradient kernel; we require
@@ -95,8 +106,7 @@ class MSGMSDMeasure(BaseMeasure):
             from piq import multi_scale_gmsd
         except ImportError as exc:
             raise ImportError(
-                "MS-GMSD requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "MS-GMSD requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

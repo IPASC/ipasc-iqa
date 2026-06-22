@@ -1,0 +1,10 @@
+{# Shown when the rater has annotated every available item across all datasets. #}
+<div class="panel annotate-picker">
+  <h2 class="panel__title">All done 🎉</h2>
+  <p class="notice notice--ok">
+    Amazing, you have already annotated all available data — many thanks for your contributions!
+  </p>
+  {% if account %}
+  <p class="panel__hint">You have contributed {{ account.count }} ranking{{ '' if account.count == 1 else 's' }} so far.</p>
+  {% endif %}
+</div>

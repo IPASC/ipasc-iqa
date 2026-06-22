@@ -24,14 +24,46 @@
       </select>
     </label>
 
+    <div id="task-filter">
+      {% if initial_tasks | length > 1 %}
+      <label class="field">
+        <span class="field__label">Sub-task</span>
+        <select name="task" class="select">
+          {% for t in initial_tasks %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+    </div>
+
+    <div id="source-filter">
+      {% with sources=initial_sources, active_source=(initial_sources[0].key if initial_sources else 'mos') %}
+        {% include "fragments/source_field.html" %}
+      {% endwith %}
+    </div>
+
     <fieldset class="field field--measures">
       <legend class="field__label">Measures</legend>
+      <label class="field field--preset">
+        <span class="field__label">Preset</span>
+        {# Quick presets that (un)check measures by type. Switches to "Custom"
+           when a checkbox is toggled by hand. Not submitted (no name attr). #}
+        <select id="measure-preset" class="select">
+          <option value="custom" selected>Custom</option>
+          <option value="all">All measures</option>
+          <option value="FULL_REFERENCE">All full-reference (FR)</option>
+          <option value="REDUCED_REFERENCE">All reduced-reference (RR)</option>
+          <option value="NO_REFERENCE">All no-reference (NR)</option>
+        </select>
+      </label>
       <div id="measure-chips" class="measure-chips">
         {% include "fragments/measure_chips.html" %}
       </div>
     </fieldset>
+
     <p class="panel__hint">
-      Greyed-out measures aren't usable with this dataset. All quality tasks are shown below.
+      Greyed-out measures aren't usable with this dataset.
     </p>
   </form>
 
@@ -39,5 +71,42 @@
     <p class="muted">Loading…</p>
   </div>
 </div>
+{% include "fragments/cite_dialog.html" %}
+
+<script>
+// Measure presets for the analysis controls. Selecting a preset (un)checks
+// measures by type and re-runs the analysis; toggling a checkbox by hand flips
+// the selector back to "Custom". The measure chips are re-rendered by HTMX on
+// every request, so listeners are bound to the persistent <form>.
+(function () {
+  const form = document.querySelector(".controls");
+  const preset = document.getElementById("measure-preset");
+  if (!form || !preset) return;
+
+  function applyPreset(value) {
+    if (value === "custom") return;
+    form.querySelectorAll('input[name="measures"]').forEach(function (cb) {
+      cb.checked = !cb.disabled && (value === "all" || cb.dataset.measureType === value);
+    });
+    // Re-run the analysis with the new selection (HTMX listens for "change").
+    if (window.htmx) window.htmx.trigger(form, "change");
+    else form.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  preset.addEventListener("change", function (e) {
+    // Don't let the select's own change bubble to the form (HTMX would fire a
+    // request with the pre-preset selection); apply, then trigger explicitly.
+    e.stopPropagation();
+    applyPreset(preset.value);
+  });
+
+  // A hand-toggled measure means the selection no longer matches a preset.
+  form.addEventListener("change", function (e) {
+    if (e.target && e.target.matches && e.target.matches('input[name="measures"]')) {
+      preset.value = "custom";
+    }
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}

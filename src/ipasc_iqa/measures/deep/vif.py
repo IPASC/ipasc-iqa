@@ -47,12 +47,22 @@ class VIFMeasure(BaseMeasure):
             "Sheikh & Bovik, 'Image Information and Visual Quality', "
             "IEEE Trans. Image Process. 15(2), 2006."
         ),
+        bibtex=(
+            "@article{sheikh2006vif,\n"
+            "  author  = {Sheikh, Hamid R. and Bovik, Alan C.},\n"
+            "  title   = {Image Information and Visual Quality},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {15},\n"
+            "  number  = {2},\n"
+            "  pages   = {430--444},\n"
+            "  year    = {2006}\n"
+            "}"
+        ),
         description=(
             "Visual Information Fidelity in the pixel domain (VIF-P). "
             "Computed via piq.vif_p. "
             "Typical range [0, 1]; values above 1 possible for enhanced images. "
             "Minimum recommended image size: 41×41. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 
@@ -72,8 +82,7 @@ class VIFMeasure(BaseMeasure):
             from piq import vif_p
         except ImportError as exc:
             raise ImportError(
-                "VIF requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "VIF requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

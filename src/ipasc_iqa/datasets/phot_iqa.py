@@ -73,6 +73,16 @@ class PhotIQADataset(LocalDataset):
         "PhotIQA: 1134 reconstructed photoacoustic images from 3 algorithms, paired "
         "with 378 references and expert quality ratings (Breger et al., Zenodo 13325196)."
     )
+    DATASET_BIBTEX = (
+        "@dataset{breger2024photiqa,\n"
+        "  author    = {Breger, Anna and others},\n"
+        "  title     = {{PhotIQA}: A Photoacoustic Image Data Set with Image Quality Ratings},\n"
+        "  year      = {2024},\n"
+        "  publisher = {Zenodo},\n"
+        "  doi       = {10.5281/zenodo.13325196},\n"
+        "  url       = {https://zenodo.org/records/13325196}\n"
+        "}"
+    )
 
     @classmethod
     def prepared_manifest_path(cls, root: Path | str) -> Path:
@@ -278,11 +288,13 @@ class PhotIQADataset(LocalDataset):
         print(f"Manifest written to {manifest_path} ({len(manifest_entries)} images)")
 
     @staticmethod
-    def _load_annotations(src_root: Path) -> dict[str, dict[str, dict[str, float]]]:
-        """Load expert annotation CSVs into ``{source_stem: {task: {mos, zscore_mos}}}``.
+    def _load_annotations(src_root: Path) -> dict[str, dict[str, dict]]:
+        """Load expert annotation CSVs into ``{source_stem: {task: {...}}}``.
 
-        Returns an empty mapping if no annotation directory is found (annotations
-        are optional — the dataset is still usable for raw measure evaluation).
+        Each task slot holds the aggregate ``mos`` / ``zscore_mos`` *and* the
+        individual per-rater scores under ``ratings`` ({rater_id: raw}), so a
+        composite MOS can be recomputed (and pooled with contributed ratings).
+        Returns an empty mapping if no annotation directory is found.
         """
         from ipasc_iqa.analysis.annotations import load_annotation_dir
 
@@ -293,8 +305,22 @@ class PhotIQADataset(LocalDataset):
         ann_dir = candidates[0].parent
 
         tables = load_annotation_dir(ann_dir)
-        per_image: dict[str, dict[str, dict[str, float]]] = {}
+
+        # The project starts with a single generic "overall quality" task. The
+        # other PhotIQA sub-tasks are disabled for now — re-enable one by
+        # uncommenting its name below.
+        enabled_tasks = {
+            "overall_quality",
+            # "edge_visibility",
+            # "object_homogeneity",
+            # "object_intensity_(inclusions)",
+            # "object_intensity_(background)",
+        }
+
+        per_image: dict[str, dict[str, dict]] = {}
         for task, table in tables.items():
+            if task not in enabled_tasks:
+                continue
             for key in table.image_keys():
                 slot = per_image.setdefault(key, {})
                 slot[task] = {}
@@ -302,6 +328,8 @@ class PhotIQADataset(LocalDataset):
                     slot[task]["mos"] = table.mos[key]
                 if key in table.zscore_mos:
                     slot[task]["zscore_mos"] = table.zscore_mos[key]
+                if key in table.raters:
+                    slot[task]["ratings"] = table.raters[key]
         return per_image
 
     @staticmethod

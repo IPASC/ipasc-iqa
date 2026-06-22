@@ -49,16 +49,26 @@ class IWSSIMMeasure(BaseMeasure):
             "Wang & Li, 'Information Content Weighting for Perceptual Image Quality Assessment', "
             "IEEE Trans. Image Process. 20(5), 2011."
         ),
+        bibtex=(
+            "@article{wang2011iwssim,\n"
+            "  author  = {Wang, Zhou and Li, Qiang},\n"
+            "  title   = {Information Content Weighting for Perceptual Image Quality Assessment},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {20},\n"
+            "  number  = {5},\n"
+            "  pages   = {1185--1198},\n"
+            "  year    = {2011}\n"
+            "}"
+        ),
         description=(
             "Information-Weighted Structural Similarity (IW-SSIM). "
             "Computed via piq.information_weighted_ssim — no reference implementation "
             "exists in scipy or scikit-image. "
             "Minimum recommended image size: 32×32. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 
-    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device = None) -> None:
+    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device=None) -> None:
         # Pass hyperparameters to super() so config_canonical_json() picks them
         # up and they contribute to the cache key.
         super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
@@ -104,8 +114,7 @@ class IWSSIMMeasure(BaseMeasure):
             from piq import information_weighted_ssim
         except ImportError as exc:
             raise ImportError(
-                "IW-SSIM requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "IW-SSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

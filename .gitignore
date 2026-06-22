@@ -12,6 +12,8 @@ dist/
 wheels/
 
 data/
+workspace/
+annotations/
 
 # --- Virtual environments ---
 .venv/

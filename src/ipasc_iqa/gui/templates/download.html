@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Download{% endblock %}
+{% block content %}
+<h1 class="page-title">Download data</h1>
+
+<div class="panel" style="max-width: 40rem;">
+  <p class="panel__hint">
+    Export the cached metric results and human annotations as a single JSON file —
+    for archival (e.g. publishing a snapshot to Zenodo with a DOI) or for your own
+    studies (such as training a learned metric).
+  </p>
+
+  {# Plain GET form: the browser navigates to the endpoint, which returns the
+     file as an attachment. No JavaScript needed. #}
+  <form action="/api/download" method="get">
+    <label class="field">
+      <span class="field__label">Dataset</span>
+      <select class="select" name="dataset">
+        <option value="all">All datasets</option>
+        {% for ds in datasets %}
+        <option value="{{ ds.name }}">{{ ds.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn btn--primary">
+        <i class="fa-solid fa-download"></i> Download JSON
+      </button>
+    </div>
+  </form>
+
+  <h2 class="panel__title" style="margin-top: 1.5rem;">What's included</h2>
+  <ul class="download-contents">
+    <li><strong>measure_results</strong> — every cached per-image metric value.</li>
+    <li><strong>expert_annotations</strong> — original ratings shipped with the dataset (e.g. MOS), if any.</li>
+    <li><strong>pairwise_annotations</strong> — contributed 2AFC comparisons and rankings.</li>
+    <li><strong>bradley_terry</strong> — continuous quality scores derived from the comparisons (β ± SE).</li>
+  </ul>
+  <p class="panel__hint">
+    Annotator identities are pseudonymised (<code>annotator_001</code>, …) — no names
+    or emails are included, so the export is safe to publish.
+  </p>
+</div>
+{% endblock %}

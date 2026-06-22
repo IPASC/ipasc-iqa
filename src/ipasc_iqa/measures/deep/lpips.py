@@ -30,9 +30,21 @@ class LPIPSMeasure(BaseMeasure):
             "Zhang et al., 'The Unreasonable Effectiveness of Deep Features as a Perceptual "
             "Metric', CVPR 2018. https://github.com/richzhang/PerceptualSimilarity"
         ),
+        bibtex=(
+            "@inproceedings{zhang2018lpips,\n"
+            "  author    = {Zhang, Richard and Isola, Phillip and Efros, Alexei A. and\n"
+            "               Shechtman, Eli and Wang, Oliver},\n"
+            "  title     = {The Unreasonable Effectiveness of Deep Features as a "
+            "Perceptual Metric},\n"
+            "  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern "
+            "Recognition (CVPR)},\n"
+            "  pages     = {586--595},\n"
+            "  year      = {2018}\n"
+            "}"
+        ),
         description=(
             "Learned Perceptual Image Patch Similarity (AlexNet backbone). "
-            "Lower distance = more similar. Requires ipasc_iqa[deep]."
+            "Lower distance = more similar."
         ),
     )
 
@@ -56,8 +68,7 @@ class LPIPSMeasure(BaseMeasure):
             import lpips
         except ImportError as exc:
             raise ImportError(
-                "LPIPS requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "LPIPS requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

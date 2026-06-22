@@ -25,9 +25,20 @@ class BRISQUEMeasure(BaseMeasure):
             "Mittal et al., 'No-Reference Image Quality Assessment in the Spatial Domain', "
             "IEEE TIP 2012."
         ),
+        bibtex=(
+            "@article{mittal2012brisque,\n"
+            "  author  = {Mittal, Anish and Moorthy, Anush Krishna and Bovik, Alan Conrad},\n"
+            "  title   = {No-Reference Image Quality Assessment in the Spatial Domain},\n"
+            "  journal = {IEEE Transactions on Image Processing},\n"
+            "  volume  = {21},\n"
+            "  number  = {12},\n"
+            "  pages   = {4695--4708},\n"
+            "  year    = {2012}\n"
+            "}"
+        ),
         description=(
             "Blind/Referenceless Image Spatial Quality Evaluator (BRISQUE). "
-            "Lower score = better quality. Requires ipasc_iqa[deep]."
+            "Lower score = better quality."
         ),
     )
 
@@ -44,8 +55,7 @@ class BRISQUEMeasure(BaseMeasure):
             from piq import brisque
         except ImportError as exc:
             raise ImportError(
-                "BRISQUE requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "BRISQUE requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

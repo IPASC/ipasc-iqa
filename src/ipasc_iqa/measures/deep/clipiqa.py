@@ -55,11 +55,18 @@ class CLIPIQAMeasure(BaseMeasure):
             "Radford et al., 'Learning Transferable Visual Models from Natural Language "
             "Supervision', ICML 2021."
         ),
+        bibtex=(
+            "@inproceedings{wang2023clipiqa,\n"
+            "  author    = {Wang, Jianyi and Chan, Kelvin C. K. and Loy, Chen Change},\n"
+            "  title     = {Exploring {CLIP} for Assessing the Look and Feel of Images},\n"
+            "  booktitle = {AAAI Conference on Artificial Intelligence},\n"
+            "  year      = {2023}\n"
+            "}"
+        ),
         description=(
             "No-reference image quality via CLIP (CLIP-IQA). "
             "Computed via piq.CLIPIQA — piq bundles its own CLIP weights. "
             "Model downloaded on first evaluate() call. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 
@@ -79,8 +86,7 @@ class CLIPIQAMeasure(BaseMeasure):
             from piq import CLIPIQA
         except ImportError as exc:
             raise ImportError(
-                "CLIP-IQA requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "CLIP-IQA requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

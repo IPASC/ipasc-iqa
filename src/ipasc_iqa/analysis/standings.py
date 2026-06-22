@@ -67,8 +67,6 @@ def compute_standings(
         ]
         group_means.sort(key=lambda gm: gm[1], reverse=higher_is_better)
         for rank, (group, mean_score, n) in enumerate(group_means, start=1):
-            rows.append(
-                StandingRow(dataset=dataset, rank=rank, group=group, score=mean_score, n=n)
-            )
+            rows.append(StandingRow(dataset=dataset, rank=rank, group=group, score=mean_score, n=n))
 
     return rows

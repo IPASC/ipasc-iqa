@@ -1,0 +1,75 @@
+{# Dataset + sub-task picker shown to a signed-in annotator, alongside a
+   scrollable per-annotator leaderboard. Expects `account` ({user, count}),
+   `eligible_datasets`, `annotators` ([{name, rankings, comparisons}]), and an
+   optional `message`. #}
+<div class="contribute-layout">
+  <div class="panel annotate-picker">
+    <h2 class="panel__title">Welcome, {{ account.user.name }}</h2>
+    {% if message %}<p class="notice notice--ok">{{ message }}</p>{% endif %}
+    <p class="panel__hint">You have contributed {{ account.count }} ranking{{ '' if account.count == 1 else 's' }} so far.</p>
+
+    {% if not eligible_datasets %}
+      <p class="empty">No datasets with rankable image variants are prepared yet.
+        Run a benchmark on such a dataset first.</p>
+    {% else %}
+    <form hx-post="/contribute/start" hx-target="#contribute-root" hx-swap="innerHTML">
+      <label class="field">
+        <span class="field__label">Dataset</span>
+        <select class="select" name="dataset">
+          <option value="random">Random</option>
+          {% for d in eligible_datasets %}
+          <option value="{{ d.name }}">{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Rating type</span>
+        <select class="select" name="rating_type">
+          <option value="comparative">Comparative Ranking — pairwise (2AFC)</option>
+          <option value="quantitative">Quantitative Rating — absolute 1–4</option>
+        </select>
+      </label>
+
+      <p class="panel__hint">
+        Comparative: pick the higher-quality of two images until a full
+        ranking emerges.
+
+        Quantitative: rate one reconstruction against its
+        reference on a 1–4 scale.
+      </p>
+      <div class="actions">
+        <button type="submit" class="btn btn--primary">Start annotating ▶</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="panel annotators-panel">
+    <h2 class="panel__title">Annotators</h2>
+    <div class="annotators-scroll">
+      {% if annotators %}
+      <table class="data-table annotators-table">
+        <thead>
+          <tr>
+            <th>Annotator</th>
+            <th class="num">Rankings</th>
+            <th class="num">Ratings</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in annotators %}
+          <tr>
+            <td>{{ a.name }}</td>
+            <td class="num">{{ a.rankings }}</td>
+            <td class="num">{{ a.ratings }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No annotators yet — be the first!</p>
+      {% endif %}
+    </div>
+  </div>
+</div>

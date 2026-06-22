@@ -7,7 +7,7 @@
 {# A benchmark is already running — show its live progress instead of the form. #}
 {% with job_id=active_job.job_id, status=active_job.status,
         run_id=active_job.run_id, error=active_job.error,
-        done_per_measure=active_job.done_per_measure %}
+        progress=active_job.progress %}
   {% include "fragments/job_progress.html" %}
 {% endwith %}
 
@@ -21,9 +21,9 @@
       <p class="panel__hint">Select one or more (multi-select).</p>
       {% if datasets %}
         <button type="button" id="toggle-btn-ds" style="margin-bottom: 1rem;" class="btn">Select All</button>
-        <ul class="checklist">
+        <ul class="checklist checklist--scroll">
           {% for ds in datasets %}
-          <li>
+          <li class="check-row">
             <label class="check">
               <input type="checkbox" name="datasets" value="{{ ds.name }}">
               <span class="check__label">{{ ds.name }}
@@ -34,6 +34,12 @@
                 <small class="check__desc">{{ ds.description }}</small>
               </span>
             </label>
+            {% if ds.bibtex %}
+            <button type="button" class="cite-btn" data-bibtex="{{ ds.bibtex }}"
+                    title="Show BibTeX citation" aria-label="Show citation for {{ ds.name }}">
+              <i class="fa-solid fa-quote-right"></i>
+            </button>
+            {% endif %}
           </li>
           {% endfor %}
         </ul>
@@ -46,9 +52,9 @@
       <h2 class="panel__title">Measures</h2>
       <p class="panel__hint">Select one or more (multi-select).</p>
       <button type="button" id="toggle-btn-measures" style="margin-bottom: 1rem;" class="btn">Select All</button>
-      <ul class="checklist">
+      <ul class="checklist checklist--scroll">
         {% for m in measures %}
-        <li>
+        <li class="check-row">
           <label class="check">
             <input type="checkbox" name="measures" value="{{ m.name }}">
             <span class="check__label">{{ m.name }}
@@ -58,6 +64,12 @@
                 {%- if m.requires_signal_roi or m.requires_noise_roi %} (requires ROIs) {% endif %}</small>
             </span>
           </label>
+          {% if m.bibtex %}
+          <button type="button" class="cite-btn" data-bibtex="{{ m.bibtex }}"
+                  title="Show BibTeX citation" aria-label="Show citation for {{ m.name }}">
+            <i class="fa-solid fa-quote-right"></i>
+          </button>
+          {% endif %}
         </li>
         {% endfor %}
       </ul>
@@ -78,14 +90,17 @@
           checkboxes.forEach(cb => cb.checked = !allChecked);
           btn2.textContent = allChecked ? "Select All" : "Deselect All";
       });
+      // Citation popups are wired globally by /static/js/citations.js.
     </script>
 
   </div>
 
-  <div class="actions">
+  <div class="actions actions--sticky">
     <button type="submit" class="btn btn--primary" hx-disabled-elt="this">Run ▶</button>
   </div>
 </form>
+
+{% include "fragments/cite_dialog.html" %}
 </div>
 {% endif %}
 {% endblock %}

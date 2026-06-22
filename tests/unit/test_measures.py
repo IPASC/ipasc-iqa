@@ -12,8 +12,8 @@ from ipasc_iqa.measures.classical.ssim import SSIMMeasure
 from ipasc_iqa.measures.classical.tv import TVMeasure
 
 rng = np.random.default_rng(0)
-IMAGE = rng.random((64, 64, 1), dtype=np.float32).astype(np.float32)
-REFERENCE = rng.random((64, 64, 1), dtype=np.float32).astype(np.float32)
+IMAGE = rng.random((256, 256, 1), dtype=np.float32).astype(np.float32)
+REFERENCE = rng.random((256, 256, 1), dtype=np.float32).astype(np.float32)
 SIGNAL_ROI = (IMAGE[:, :, 0] > 0.7)[:, :, np.newaxis].astype(bool)
 NOISE_ROI = (IMAGE[:, :, 0] < 0.2)[:, :, np.newaxis].astype(bool)
 
@@ -186,8 +186,8 @@ from ipasc_iqa.measures.deep.msssim import MSSSIMMeasure  # noqa: E402
 
 # Use a larger image so the adaptive scale logic gets to exercise ≥2 scales.
 _rng2 = np.random.default_rng(7)
-_IMG_128 = _rng2.random((128, 128, 1)).astype(np.float32)
-_REF_128 = _rng2.random((128, 128, 1)).astype(np.float32)
+_IMG_128 = _rng2.random((256, 256, 1)).astype(np.float32)
+_REF_128 = _rng2.random((256, 256, 1)).astype(np.float32)
 
 
 class TestMSSSIM:
@@ -214,7 +214,6 @@ class TestMSSSIM:
         m = MSSSIMMeasure()
         weights = m._adaptive_scale_weights(64)
         assert len(weights) == 3
-        import torch
         assert abs(float(weights.sum().item()) - 1.0) < 1e-5
 
     def test_adaptive_scales_large_image(self) -> None:
@@ -253,8 +252,8 @@ class TestIWSSIM:
             IWSSIMMeasure().evaluate(_IMG_128)
 
     def test_three_channel_input(self) -> None:
-        img_3c = _rng2.random((128, 128, 3)).astype(np.float32)
-        ref_3c = _rng2.random((128, 128, 3)).astype(np.float32)
+        img_3c = _rng2.random((256, 256, 3)).astype(np.float32)
+        ref_3c = _rng2.random((256, 256, 3)).astype(np.float32)
         v = IWSSIMMeasure().evaluate(img_3c, reference=ref_3c)
         assert isinstance(v, float)
         assert 0.0 <= v <= 1.0
@@ -366,8 +365,6 @@ class TestMSGMSD:
 
     def test_adaptive_scales_small_image(self) -> None:
         # 8×8 image → only 2 of the default 4 scales fit (min_dim=8, threshold=4)
-        import torch
-
         m = MSGMSDMeasure()
         weights = m._adaptive_scale_weights(8)
         assert len(weights) == 2
@@ -375,7 +372,6 @@ class TestMSGMSD:
 
     def test_adaptive_scales_normal_image(self) -> None:
         # 64×64 → all 4 scales fit (64/4 = 16 ≥ 4 after 3 halvings)
-        import torch
 
         weights = MSGMSDMeasure()._adaptive_scale_weights(64)
         assert len(weights) == 4

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}IPASC IQA — Set a new password{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="panel auth-form">
+    <h2 class="panel__title">Set a new password</h2>
+    {% if error %}<p class="notice notice--warn">{{ error }}</p>{% endif %}
+
+    {% if token %}
+    <form method="post" action="/reset">
+      <input type="hidden" name="token" value="{{ token }}">
+      <label class="field">
+        <span class="field__label">New password</span>
+        <input class="select" name="password" type="password" required minlength="8"
+               autocomplete="new-password">
+      </label>
+      <label class="field">
+        <span class="field__label">Confirm password</span>
+        <input class="select" name="confirm" type="password" required minlength="8"
+               autocomplete="new-password">
+      </label>
+      <div class="actions">
+        <button type="submit" class="btn btn--primary">Update password</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="notice notice--warn">This reset link is missing or invalid.</p>
+    <p class="panel__hint"><a href="/forgot">Request a new link</a></p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

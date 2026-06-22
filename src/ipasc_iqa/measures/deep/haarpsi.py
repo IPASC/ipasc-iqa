@@ -42,11 +42,22 @@ class HaarPSIMeasure(BaseMeasure):
             "Reisenhofer et al., 'A Haar Wavelet-Based Perceptual Similarity Index "
             "for Image Quality Assessment', Signal Process. Image Commun. 61, 2018."
         ),
+        bibtex=(
+            "@article{reisenhofer2018haarpsi,\n"
+            "  author  = {Reisenhofer, Rafael and Bosse, Sebastian and\n"
+            "             Kutyniok, Gitta and Wiegand, Thomas},\n"
+            "  title   = {A Haar Wavelet-Based Perceptual Similarity Index for\n"
+            "             Image Quality Assessment},\n"
+            "  journal = {Signal Processing: Image Communication},\n"
+            "  volume  = {61},\n"
+            "  pages   = {33--43},\n"
+            "  year    = {2018}\n"
+            "}"
+        ),
         description=(
             "Haar Wavelet-Based Perceptual Similarity Index (HaarPSI). "
             "Computed via piq.haarpsi. "
             "Minimum recommended image size: ~16×16 for the default 3-scale decomposition. "
-            "Requires ipasc_iqa[deep]."
         ),
     )
 
@@ -66,8 +77,7 @@ class HaarPSIMeasure(BaseMeasure):
             from piq import haarpsi
         except ImportError as exc:
             raise ImportError(
-                "HaarPSI requires 'ipasc_iqa[deep]'. "
-                "Install with:  pip install 'ipasc_iqa[deep]'"
+                "HaarPSI requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
             ) from exc
         import torch
 

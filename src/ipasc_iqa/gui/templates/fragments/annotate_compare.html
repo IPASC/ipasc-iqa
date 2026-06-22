@@ -1,0 +1,31 @@
+{# Two-alternative forced choice. Dark, neutral-grey stage per ITU-R BT.500.
+   Expects: session_id, dataset, prompt, left_item, right_item, placed,
+   n_items, n_comparisons, and optional `toast`. #}
+<div class="annotate-stage">
+  {% if toast %}<p class="annotate-toast">{{ toast }}</p>{% endif %}
+
+  <p class="annotate-prompt">{{ prompt }}</p>
+
+  <div class="annotate-pair">
+    {% for item in [left_item, right_item] %}
+    <form hx-post="/contribute/choose" hx-target="#contribute-root" hx-swap="innerHTML"
+          class="annotate-choice">
+      <input type="hidden" name="session_id" value="{{ session_id }}">
+      <input type="hidden" name="winner" value="{{ item }}">
+      <button type="submit" class="annotate-img-btn" title="Choose this image">
+        <img src="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ item | urlencode }}"
+             alt="candidate image" draggable="false">
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+
+  <div class="annotate-foot">
+    <span class="annotate-progress">
+      Placing image {{ placed }} of {{ n_items }} · {{ n_comparisons }} comparison{{ '' if n_comparisons == 1 else 's' }}
+    </span>
+    <form hx-post="/contribute/finish" hx-target="#contribute-root" hx-swap="innerHTML">
+      <button type="submit" class="btn annotate-finish">Finish session</button>
+    </form>
+  </div>
+</div>
