@@ -264,6 +264,12 @@ def show(
         "-t",
         help="Number of best/worst examples to show per measure.",
     ),
+    dataset: str | None = typer.Option(
+        None,
+        "--dataset",
+        "-d",
+        help="Restrict the summary to one dataset.",
+    ),
 ) -> None:
     """Inspect a single result JSON file."""
 
@@ -307,15 +313,56 @@ def show(
             f"({direction})"
         )
 
-    typer.echo("\nRun summary:")
-    typer.echo(f"  Results: {len(run_res.results)}")
-    typer.echo(f"  Skipped: {len(run_res.skipped)}")
+    all_records = list(run_res.results)
+    all_skipped = list(run_res.skipped)
 
-    summary = rich_measure_summary(
-        run_res.results,
-        higher_is_better_by_measure=directions,
-        top=top,
-    )
+    if dataset is not None:
+        dataset_names = [dataset]
+    else:
+        dataset_names = sorted({rec.dataset for rec in all_records} | {rec.dataset for rec in all_skipped})
+
+    if not dataset_names:
+        typer.echo("\nNo result records found.")
+        raise typer.Exit(code=0)
+
+    typer.echo("\nRun summary:")
+    typer.echo(f"  Results: {len(all_records)}")
+    typer.echo(f"  Skipped: {len(all_skipped)}")
+    if dataset is not None:
+        typer.echo(f"  Dataset filter: {dataset}")
+
+    for dataset_name in dataset_names:
+        records = [rec for rec in all_records if rec.dataset == dataset_name]
+        skipped = [rec for rec in all_skipped if rec.dataset == dataset_name]
+
+        if dataset is not None and not records and not skipped:
+            typer.echo(f"\nNo results found for dataset: {dataset_name}")
+            raise typer.Exit(code=1)
+
+        typer.echo(f"\n\n=== Dataset: {dataset_name} ===")
+        typer.echo(f"Results: {len(records)}")
+        typer.echo(f"Skipped: {len(skipped)}")
+
+        if not records:
+            typer.echo("No successful metric results for this dataset.")
+            if skipped:
+                _print_skipped(skipped)
+            continue
+
+        summary = rich_measure_summary(
+            records,
+            higher_is_better_by_measure=directions,
+            top=top,
+        )
+
+        _print_metric_statistics(summary)
+        _print_best_worst_examples(summary)
+
+        if skipped:
+            _print_skipped(skipped)
+
+def _print_metric_statistics(summary: dict) -> None:
+    """Print per-measure statistics produced by rich_measure_summary."""
 
     typer.echo("\nStatistics:")
     typer.echo(
@@ -340,6 +387,10 @@ def show(
             f"{stat['max']:>12.4f}"
         )
 
+
+def _print_best_worst_examples(summary: dict) -> None:
+    """Print best/worst examples produced by rich_measure_summary."""
+
     for measure_name, groups in summary["examples"].items():
         direction = (
             "higher is better"
@@ -347,7 +398,7 @@ def show(
             else "lower is better"
         )
 
-        typer.echo(f"\n=== {measure_name} ===")
+        typer.echo(f"\n--- {measure_name} ---")
         typer.echo(f"Direction: {direction}")
 
         typer.echo("\nWorst examples:")
@@ -364,10 +415,16 @@ def show(
                 f"{row['dataset']}/{row['image_id']}"
             )
 
-    if run_res.skipped:
-        typer.echo("\nSkipped:")
-        for rec in run_res.skipped[:10]:
-            typer.echo(
-                f"  {rec.dataset}/{rec.image_id} | "
-                f"{rec.measure} | {rec.reason}"
-            )
+
+def _print_skipped(skipped: list) -> None:
+    """Print skipped result records."""
+
+    typer.echo("\nSkipped:")
+    for rec in skipped[:10]:
+        typer.echo(
+            f"  {rec.dataset}/{rec.image_id} | "
+            f"{rec.measure} | {rec.reason}"
+        )
+
+    if len(skipped) > 10:
+        typer.echo(f"  ... and {len(skipped) - 10} more")
