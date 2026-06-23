@@ -26,7 +26,11 @@ from typing import Any
 import numpy as np
 
 from ipasc_iqa import __version__
-from ipasc_iqa.analysis.aggregate import measure_stats
+from ipasc_iqa.analysis.aggregate import (
+    measure_directions,
+    measure_stats,
+    rich_measure_summary,
+)
 from ipasc_iqa.analysis.correlation import correlate_measures_with_annotations
 from ipasc_iqa.analysis.manifest_query import (
     annotation_tasks_in_manifest,
@@ -459,6 +463,13 @@ def analysis_for_dataset(
             "error": "no benchmark run found for this dataset — run a benchmark first",
             **_empty,
         }
+    
+    directions = measure_directions(run.measures)
+    metric_summary = rich_measure_summary(
+        [rec for rec in run.results if rec.dataset == dataset_name],
+        higher_is_better_by_measure=directions,
+        top=5,
+    )
 
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
     # Tasks can come from manifest MOS *or* from contributed pairwise comparisons,
@@ -468,9 +479,18 @@ def analysis_for_dataset(
     if not task_names and not has_unnamed:
         return {
             "dataset": dataset_name,
+            "description": ds.get("description"),
+            "bibtex": ds.get("bibtex"),
+            "run_id": run.run_id,
             "tasks": [],
-            "error": "no expert annotations or contributed comparisons to analyse yet",
-            **_empty,
+            "all_tasks": [],
+            "active_task": None,
+            "meta": None,
+            "sources": [],
+            "active_source": source,
+            "metric_summary": metric_summary,
+            "human_analysis_message": "No expert annotations or contributed comparisons are available for this dataset.",
+            "error": None,
         }
 
     # Resolve the active task. A dataset with no sub-tasks but contributed
@@ -521,6 +541,8 @@ def analysis_for_dataset(
         "meta": task_annotation_summary(workspace, dataset_name, active_task, manifest),
         "sources": sources,
         "active_source": active_source,
+        "metric_summary": metric_summary,
+        "human_analysis_message": None,
         "error": None,
     }
 

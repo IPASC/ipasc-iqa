@@ -289,7 +289,7 @@ img, svg, video, table { max-width: 100%; }
 .data-table tbody tr:last-child td { border-bottom: none; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-.corr-cell { font-weight: 600; }
+.corr-cell { font-weight: 600;background: hsl(var(--corr-hue), 70%, 90%); }
 
 .legend { color: var(--muted); font-size: 0.8rem; margin-top: 0.75rem; display: flex;
           align-items: center; gap: 0.4rem; }
@@ -402,6 +402,73 @@ img, svg, video, table { max-width: 100%; }
   font-variant-numeric: tabular-nums;
 }
 .progress-chip__check { font-size: 0.85rem; }
+
+/* ---------- Tabs in Deatailed analysis -------------------------------- */
+.analysis-tabs {
+  margin-top: 1rem;
+}
+
+.analysis-tabs > input {
+  display: none;
+}
+
+.analysis-tabs__nav {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.analysis-tabs__nav label {
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 0.6rem 0.6rem 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+#tab-metric-overview:checked ~ .analysis-tabs__nav label[for="tab-metric-overview"],
+#tab-human-agreement:checked ~ .analysis-tabs__nav label[for="tab-human-agreement"] {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.analysis-tabs__panel {
+  display: none;
+}
+
+#tab-metric-overview:checked ~ .analysis-tabs__panel--metric,
+#tab-human-agreement:checked ~ .analysis-tabs__panel--human {
+  display: block;
+}
+
+.analysis-example-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.corr-cell {
+  background: hsl(var(--corr-hue, 0), 70%, 90%);
+}
+
+.legend__swatch--weak {
+  background: hsl(0, 70%, 90%);
+}
+
+.legend__swatch--strong {
+  background: hsl(120, 70%, 90%);
+}
+
+@media (max-width: 900px) {
+  .analysis-example-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ---------- Detailed analysis: clickable rows + scatter plot ---------- */
 .measure-row { cursor: pointer; transition: background 0.1s ease; }
@@ -603,3 +670,5 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
   background: #f0fdf4;
   color: #166534;
 }
+
+

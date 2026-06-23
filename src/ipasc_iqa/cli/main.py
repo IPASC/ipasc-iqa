@@ -269,8 +269,10 @@ def show(
 
     from pathlib import Path
 
-    import numpy as np
-
+    from ipasc_iqa.analysis.aggregate import (
+        measure_directions,
+        rich_measure_summary,
+    )
     from ipasc_iqa.io.results import load_results
 
     run_res = load_results(Path(result_file))
@@ -290,32 +292,30 @@ def show(
             f"({ds.n_images} images)"
         )
 
+    directions = measure_directions(run_res.measures)
+
     typer.echo("\nMeasures:")
     for measure in run_res.measures:
+        higher_is_better = directions.get(measure.name, True)
+        direction = (
+            "higher is better"
+            if higher_is_better
+            else "lower is better"
+        )
         typer.echo(
-            f"  - {measure.name} v{measure.version}"
+            f"  - {measure.name} v{measure.version} "
+            f"({direction})"
         )
 
     typer.echo("\nRun summary:")
     typer.echo(f"  Results: {len(run_res.results)}")
     typer.echo(f"  Skipped: {len(run_res.skipped)}")
 
-    by_measure: dict[str, list[tuple[str, str, float]]] = {}
-
-    for rec in run_res.results:
-        if rec.value is not None:
-            by_measure.setdefault(rec.measure, []).append(
-                (rec.dataset, rec.image_id, rec.value)
-            )
-
-        if rec.sub_scores:
-            for sub_name, sub_value in rec.sub_scores.items():
-                by_measure.setdefault(
-                    f"{rec.measure}.{sub_name}",
-                    [],
-                ).append(
-                    (rec.dataset, rec.image_id, sub_value)
-                )
+    summary = rich_measure_summary(
+        run_res.results,
+        higher_is_better_by_measure=directions,
+        top=top,
+    )
 
     typer.echo("\nStatistics:")
     typer.echo(
@@ -329,34 +329,39 @@ def show(
     )
     typer.echo("-" * 93)
 
-    for measure_name, rows in sorted(by_measure.items()):
-        values = np.array([row[2] for row in rows], dtype=float)
-
+    for stat in summary["statistics"]:
         typer.echo(
-            f"{measure_name:<25}"
-            f"{len(values):>8}"
-            f"{values.mean():>12.4f}"
-            f"{values.std():>12.4f}"
-            f"{np.median(values):>12.4f}"
-            f"{values.min():>12.4f}"
-            f"{values.max():>12.4f}"
+            f"{stat['measure']:<25}"
+            f"{stat['n']:>8}"
+            f"{stat['mean']:>12.4f}"
+            f"{stat['std']:>12.4f}"
+            f"{stat['median']:>12.4f}"
+            f"{stat['min']:>12.4f}"
+            f"{stat['max']:>12.4f}"
         )
 
-    for measure_name, rows in sorted(by_measure.items()):
-        typer.echo(f"\n=== {measure_name} ===")
+    for measure_name, groups in summary["examples"].items():
+        direction = (
+            "higher is better"
+            if groups["higher_is_better"]
+            else "lower is better"
+        )
 
-        rows_sorted = sorted(rows, key=lambda x: x[2])
+        typer.echo(f"\n=== {measure_name} ===")
+        typer.echo(f"Direction: {direction}")
 
         typer.echo("\nWorst examples:")
-        for dataset, image_id, value in rows_sorted[:top]:
+        for row in groups["worst"]:
             typer.echo(
-                f"  {value:>10.4f}  {dataset}/{image_id}"
+                f"  {row['value']:>10.4f}  "
+                f"{row['dataset']}/{row['image_id']}"
             )
 
         typer.echo("\nBest examples:")
-        for dataset, image_id, value in reversed(rows_sorted[-top:]):
+        for row in groups["best"]:
             typer.echo(
-                f"  {value:>10.4f}  {dataset}/{image_id}"
+                f"  {row['value']:>10.4f}  "
+                f"{row['dataset']}/{row['image_id']}"
             )
 
     if run_res.skipped:
