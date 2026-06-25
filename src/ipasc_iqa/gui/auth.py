@@ -95,7 +95,7 @@ def register_user(
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters.")
     expertise = normalize_expertise(expertise) if expertise is not None else None
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         approved = bool(store.get_setting(AUTO_APPROVE_KEY, False))
         # email_taken covers DELETED_USER too (their index entry is removed, so a
         # freed email can be reused — which is the desired behaviour).
@@ -115,7 +115,7 @@ def authenticate(workspace: Workspace, email: str, password: str) -> dict | None
     Rejects deleted accounts and accounts without a password (e.g. migrated
     legacy users who must reset first).
     """
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         user = store.get_user_by_email(email)
     if user is None or user.get("role") == ROLE_DELETED:
         return None
@@ -130,7 +130,7 @@ def authenticate(workspace: Workspace, email: str, password: str) -> dict | None
 
 
 def create_session(workspace: Workspace, uid: str) -> str:
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         return store.create_auth_session(uid, SESSION_TTL_SECONDS)
 
 
@@ -138,7 +138,7 @@ def get_session_user(workspace: Workspace, token: str | None) -> dict | None:
     """Resolve a session-cookie token to its (non-deleted) user, or ``None``."""
     if not token:
         return None
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         uid = store.auth_session_uid(token)
         if uid is None:
             return None
@@ -151,7 +151,7 @@ def get_session_user(workspace: Workspace, token: str | None) -> dict | None:
 def destroy_session(workspace: Workspace, token: str | None) -> None:
     if not token:
         return
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         store.delete_auth_session(token)
 
 
@@ -166,7 +166,7 @@ def issue_reset_token(workspace: Workspace, email: str) -> str | None:
     Callers must respond identically whether or not this returns a token, to
     avoid leaking which emails are registered.
     """
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         user = store.get_user_by_email(email)
         if user is None or user.get("role") == ROLE_DELETED:
             return None
@@ -177,7 +177,7 @@ def consume_reset_token(workspace: Workspace, token: str, new_password: str) -> 
     """Set a new password from a valid reset token (single use). Returns success."""
     if len(new_password) < 8:
         raise ValueError("Password must be at least 8 characters.")
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         uid = store.pop_reset_uid(token)
         if uid is None:
             return False
@@ -206,7 +206,7 @@ def update_profile(
     name, email = name.strip(), normalize_email(email)
     if not name or "@" not in email:
         raise ValueError("A name and a valid email are required.")
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         user = store.get_user(uid)
         if user is None:
             raise ValueError("Account not found.")
@@ -226,7 +226,7 @@ def update_profile(
 
 def delete_account(workspace: Workspace, uid: str) -> None:
     """Honour an account-deletion request (soft delete; see store.delete_user)."""
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         store.delete_user(uid)
 
 
@@ -245,18 +245,18 @@ def is_approved(user: dict | None) -> bool:
 
 
 def auto_approve_enabled(workspace: Workspace) -> bool:
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         return bool(store.get_setting(AUTO_APPROVE_KEY, False))
 
 
 def set_auto_approve(workspace: Workspace, enabled: bool) -> None:
     """Toggle the instance-wide auto-approval flag for new registrations."""
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         store.set_setting(AUTO_APPROVE_KEY, bool(enabled))
 
 
 def set_user_approved(workspace: Workspace, uid: str, approved: bool) -> dict | None:
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         return store.update_user(uid, approved=bool(approved))
 
 
@@ -269,7 +269,7 @@ def set_user_role(workspace: Workspace, uid: str, role: str) -> dict:
     """
     if role not in (ROLE_ADMIN, ROLE_ANNOTATOR):
         raise ValueError("Invalid role.")
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         user = store.get_user(uid)
         if user is None or user.get("role") == ROLE_DELETED:
             raise ValueError("Account not found.")
@@ -287,7 +287,7 @@ def set_user_role(workspace: Workspace, uid: str, role: str) -> dict:
 
 def approve_user_by_email(workspace: Workspace, email: str) -> bool:
     """Approve the account with this email (used by the CLI). Returns success."""
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         user = store.get_user_by_email(email)
         if user is None:
             return False
@@ -300,7 +300,7 @@ def list_accounts(workspace: Workspace) -> list[dict]:
 
     Pending (unapproved, non-deleted) accounts are surfaced first, then by name.
     """
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         users = store.all_users()
     out = [
         {
@@ -335,7 +335,7 @@ def promote_admin(
     If ``password`` is given it is (re)set. Used by ``ipasc_iqa-gui create-admin``.
     """
     email = normalize_email(email)
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         user = store.get_user_by_email(email)
         if user is None:
             if not password:

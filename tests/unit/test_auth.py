@@ -209,3 +209,52 @@ def test_migration_from_legacy_v1(tmp_path: Path) -> None:
         assert user["approved"] is True  # legacy contributors grandfathered in
         sessions = store.sessions()
         assert sessions and sessions[0]["user_uid"] == user["uid"]
+
+
+def test_accounts_survive_annotation_deletion(tmp_path: Path) -> None:
+    """Deleting the annotations directory must leave the user accounts intact."""
+    import shutil
+
+    ws = _ws(tmp_path)
+    user = auth.register_user(ws, "Ann", "ann@x.com", "password123", expertise="expert")
+    with AnnotatorStore(ws.annotations_path, ws.users_path) as store:
+        store.add_session(
+            {"user_uid": user["uid"], "dataset": "d", "task": None, "n_comparisons": 0}
+        )
+
+    # Accounts live under users/, annotations under annotations/ — separate dirs.
+    assert ws.users_path.exists() and ws.annotations_path.exists()
+    assert ws.users_path != ws.annotations_path
+
+    # Drop the annotations data only.
+    shutil.rmtree(ws.annotations_path)
+
+    with AnnotatorStore(ws.annotations_path, ws.users_path) as store:
+        assert store.sessions() == []  # annotations gone
+        survivor = store.get_user_by_email("ann@x.com")  # account survives
+        assert survivor is not None and survivor["uid"] == user["uid"]
+
+
+def test_v4_migration_relocates_users_out_of_annotations_cache(tmp_path: Path) -> None:
+    """A legacy combined (v3) store has its accounts moved into the users cache."""
+    import diskcache
+
+    ws = _ws(tmp_path)
+    # Simulate a v3 store: schema + user + email index all in the annotations cache.
+    cache = diskcache.Cache(str(ws.annotations_path))
+    cache.set(("schema", "version"), 3)
+    cache.set(
+        ("user", "abc"),
+        {"uid": "abc", "email": "old@b.com", "name": "Old", "role": "annotator",
+         "password_hash": None, "approved": True},
+    )
+    cache.set(("email", "old@b.com"), "abc")
+    cache.set(("setting", "auto_approve_registrations"), True)
+    cache.close()
+
+    with AnnotatorStore(ws.annotations_path, ws.users_path) as store:
+        # Relocated: gone from the annotations cache, present in the users cache.
+        assert store._cache.get(("user", "abc")) is None
+        assert store._users.get(("user", "abc")) is not None
+        assert store.get_user("abc")["email"] == "old@b.com"
+        assert store.get_setting("auto_approve_registrations") is True

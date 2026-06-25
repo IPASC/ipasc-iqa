@@ -2,15 +2,27 @@
 
 Backed by the same ``diskcache`` engine as the result store: SQLite-backed,
 process- and thread-safe, so it tolerates concurrent users in a public
-deployment. Several kinds of entries share the cache, distinguished by a tag
+deployment.
+
+The data lives in **two separate** diskcache directories so accounts and
+contributions have independent lifecycles — deleting the annotations directory
+must not wipe the user accounts, and bundling/"downloading" the annotation data
+must not drag the accounts along. Each entry kind is distinguished by a tag
 tuple:
+
+*Users cache* (``users/``) — the accounts and everything that authenticates them:
 
 - ``("user", uid)``            → an account (see :meth:`create_user`)
 - ``("email", email)``         → ``uid`` (unique index for login / uniqueness)
 - ``("authsession", token)``   → ``{"uid": uid}`` (login session, TTL'd)
 - ``("reset", token)``         → ``{"uid": uid}`` (password reset, short TTL)
+- ``("setting", key)``         → instance-wide admin flag
+
+*Annotations cache* (``annotations/``) — the contributed data:
+
 - ``("session", sid)``         → a completed ranking (see :meth:`add_session`)
 - ``("rating", rid)``          → a single-stimulus rating (see :meth:`add_rating`)
+- ``("meta", "results_epoch")``→ cache-invalidation counter
 - ``("schema", "version")``    → migration marker
 
 Accounts are keyed by a stable **uid** (uuid hex). Annotations reference that
@@ -37,7 +49,11 @@ ROLE_ANNOTATOR = "annotator"
 ROLE_DELETED = "DELETED_USER"
 
 # Bumped when the on-disk layout changes; gates the one-time migration.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+
+# Tag namespaces that belong in the *users* cache rather than the annotations one.
+# Used by the v4 migration to relocate legacy entries out of a combined store.
+_USER_DOMAIN_TAGS = frozenset({"user", "email", "authsession", "reset", "setting"})
 
 
 def normalize_email(email: str) -> str:
@@ -49,17 +65,32 @@ def _now() -> str:
 
 
 class AnnotatorStore:
-    def __init__(self, path: Path | str) -> None:
+    """Two-cache store for accounts (users cache) and annotations (annotations cache).
+
+    Parameters
+    ----------
+    path:
+        The annotations cache directory (e.g. ``<workspace>/annotations``).
+    users_path:
+        The users cache directory. Defaults to the sibling ``users/`` folder
+        next to ``path`` — i.e. ``<workspace>/users`` — so the two stores live
+        side by side under the workspace root with independent lifecycles.
+    """
+
+    def __init__(self, path: Path | str, users_path: Path | str | None = None) -> None:
         import diskcache
 
         self.path = Path(path)
+        self.users_path = Path(users_path) if users_path is not None else self.path.parent / "users"
         self._cache = diskcache.Cache(str(self.path))
+        self._users = diskcache.Cache(str(self.users_path))
         self._migrate()
 
     # -- lifecycle ---------------------------------------------------------
 
     def close(self) -> None:
         self._cache.close()
+        self._users.close()
 
     def __enter__(self) -> AnnotatorStore:
         return self
@@ -75,7 +106,7 @@ class AnnotatorStore:
     # -- migration ---------------------------------------------------------
 
     def _migrate(self) -> None:
-        """One-time upgrade of legacy (email-keyed, password-less) data.
+        """One-time upgrade of legacy data layouts.
 
         v1 keyed users by email and stamped annotations with ``user_email``.
         v2 keys users by uid and stamps annotations with ``user_uid``. Legacy
@@ -84,6 +115,11 @@ class AnnotatorStore:
 
         v3 adds an ``approved`` gate for contributing. Accounts that predate it
         are grandfathered in (``approved=True``) so the upgrade locks nobody out.
+
+        v4 splits accounts out of the combined cache into a separate *users*
+        cache, so deleting/exporting the annotations data leaves accounts intact.
+        Any user-domain entries still sitting in the annotations cache are moved
+        across (see :data:`_USER_DOMAIN_TAGS`).
         """
         version = self._cache.get(("schema", "version"))
         if version == SCHEMA_VERSION:
@@ -128,25 +164,32 @@ class AnnotatorStore:
                 if uid:
                     self._cache.set(key, {**rec, "user_uid": uid})
 
-        # → v3: grandfather every existing account past the new approval gate.
+        # → v4: relocate any user-domain entries that still live in the
+        # annotations cache (legacy combined store) into the users cache.
+        for key in list(self._cache):
+            if isinstance(key, tuple) and key and key[0] in _USER_DOMAIN_TAGS:
+                self._users.set(key, self._cache.get(key))
+                self._cache.delete(key)
+
+        # → v3: grandfather every existing account past the approval gate.
         for key in list(self._user_keys()):
-            rec = self._cache.get(key)
+            rec = self._users.get(key)
             if rec is not None and "approved" not in rec:
-                self._cache.set(key, {**rec, "approved": True})
+                self._users.set(key, {**rec, "approved": True})
 
         self._cache.set(("schema", "version"), SCHEMA_VERSION)
 
     # -- users -------------------------------------------------------------
 
     def get_user(self, uid: str) -> dict | None:
-        return self._cache.get(("user", uid))
+        return self._users.get(("user", uid))
 
     def get_user_by_email(self, email: str) -> dict | None:
-        uid = self._cache.get(("email", normalize_email(email)))
+        uid = self._users.get(("email", normalize_email(email)))
         return self.get_user(uid) if uid else None
 
     def email_taken(self, email: str) -> bool:
-        return self._cache.get(("email", normalize_email(email))) is not None
+        return self._users.get(("email", normalize_email(email))) is not None
 
     def create_user(
         self,
@@ -175,8 +218,8 @@ class AnnotatorStore:
             "created": now,
             "updated": now,
         }
-        self._cache.set(("user", uid), user)
-        self._cache.set(("email", email), uid)
+        self._users.set(("user", uid), user)
+        self._users.set(("email", email), uid)
         return user
 
     def update_user(self, uid: str, **fields: object) -> dict | None:
@@ -190,13 +233,13 @@ class AnnotatorStore:
             old_email = normalize_email(user.get("email", ""))
             if new_email != old_email:
                 if old_email:
-                    self._cache.delete(("email", old_email))
+                    self._users.delete(("email", old_email))
                 if new_email:
-                    self._cache.set(("email", new_email), uid)
+                    self._users.set(("email", new_email), uid)
             fields["email"] = new_email
         affects_results = "role" in fields or "approved" in fields
         user = {**user, **fields, "updated": _now()}
-        self._cache.set(("user", uid), user)
+        self._users.set(("user", uid), user)
         if affects_results:
             self.bump_results_epoch()  # approval/role change alters which data counts
         return user
@@ -213,8 +256,8 @@ class AnnotatorStore:
             return
         old_email = normalize_email(user.get("email", ""))
         if old_email:
-            self._cache.delete(("email", old_email))
-        self._cache.set(
+            self._users.delete(("email", old_email))
+        self._users.set(
             ("user", uid),
             {
                 "uid": uid,
@@ -230,14 +273,14 @@ class AnnotatorStore:
         self.bump_results_epoch()  # the user's contributions no longer count
 
     def _user_keys(self) -> Iterator[tuple]:
-        for k in self._cache:
+        for k in self._users:
             if isinstance(k, tuple) and k and k[0] == "user":
                 yield k
 
     def all_users(self) -> list[dict]:
         out = []
         for k in self._user_keys():
-            rec = self._cache.get(k)
+            rec = self._users.get(k)
             if rec is not None:
                 out.append(rec)
         return out
@@ -258,45 +301,45 @@ class AnnotatorStore:
 
     def create_auth_session(self, uid: str, ttl_seconds: int) -> str:
         token = secrets.token_urlsafe(32)
-        self._cache.set(("authsession", token), {"uid": uid}, expire=ttl_seconds)
+        self._users.set(("authsession", token), {"uid": uid}, expire=ttl_seconds)
         return token
 
     def auth_session_uid(self, token: str) -> str | None:
-        rec = self._cache.get(("authsession", token))
+        rec = self._users.get(("authsession", token))
         return rec.get("uid") if rec else None
 
     def delete_auth_session(self, token: str) -> None:
-        self._cache.delete(("authsession", token))
+        self._users.delete(("authsession", token))
 
     def delete_sessions_for_uid(self, uid: str) -> None:
-        for k in list(self._cache):
+        for k in list(self._users):
             if isinstance(k, tuple) and k and k[0] == "authsession":
-                rec = self._cache.get(k)
+                rec = self._users.get(k)
                 if rec is not None and rec.get("uid") == uid:
-                    self._cache.delete(k)
+                    self._users.delete(k)
 
     # -- password-reset tokens --------------------------------------------
 
     def create_reset_token(self, uid: str, ttl_seconds: int) -> str:
         token = secrets.token_urlsafe(32)
-        self._cache.set(("reset", token), {"uid": uid}, expire=ttl_seconds)
+        self._users.set(("reset", token), {"uid": uid}, expire=ttl_seconds)
         return token
 
     def pop_reset_uid(self, token: str) -> str | None:
         """Return the uid for a reset token and invalidate it (single use)."""
-        rec = self._cache.get(("reset", token))
+        rec = self._users.get(("reset", token))
         if rec is None:
             return None
-        self._cache.delete(("reset", token))
+        self._users.delete(("reset", token))
         return rec.get("uid")
 
     # -- instance settings (small, admin-toggled flags) --------------------
 
     def get_setting(self, key: str, default: object = None) -> object:
-        return self._cache.get(("setting", key), default)
+        return self._users.get(("setting", key), default)
 
     def set_setting(self, key: str, value: object) -> None:
-        self._cache.set(("setting", key), value)
+        self._users.set(("setting", key), value)
 
     # -- results epoch -----------------------------------------------------
     # A monotonically increasing token bumped whenever something that affects

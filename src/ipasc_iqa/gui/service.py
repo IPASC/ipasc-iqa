@@ -76,8 +76,17 @@ class Workspace:
 
     @property
     def annotations_path(self) -> Path:
-        """diskcache directory for contributed annotators + their rankings."""
+        """diskcache directory for contributed annotations (rankings + ratings)."""
         return self.root / "annotations"
+
+    @property
+    def users_path(self) -> Path:
+        """diskcache directory for accounts (kept separate from annotations).
+
+        Separated so deleting/exporting the annotations data leaves the user
+        accounts untouched.
+        """
+        return self.root / "users"
 
     def ensure(self) -> None:
         self.results_dir.mkdir(parents=True, exist_ok=True)
@@ -334,7 +343,7 @@ def run_benchmark(
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
 
     # New measure values → invalidate cached analysis/standings/scatter views.
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         store.bump_results_epoch()
     return run.run_id
 
@@ -571,7 +580,7 @@ def task_annotation_summary(
 
     # Rankings: total variant placements across sessions for this task. Counts
     # only approved contributors, to match the filtered result aggregates.
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         sessions = store.sessions()
         approved = store.approved_uids()
     n_rankings = 0
@@ -759,7 +768,7 @@ def results_epoch(workspace: Workspace) -> int:
     The GUI keys its analysis/standings/scatter cache on this, so an unchanged
     view is served without recomputation.
     """
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         return store.results_epoch()
 
 
@@ -767,13 +776,13 @@ def account_for(workspace: Workspace, user: dict | None) -> dict | None:
     """Wrap the logged-in user with their contribution count for the templates."""
     if not user:
         return None
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         return {"user": user, "count": store.count_sessions(user_uid=user["uid"])}
 
 
 def annotators_leaderboard(workspace: Workspace) -> list[dict]:
     """Per-annotator ranking/comparison totals for the contribute screen."""
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         return store.leaderboard()
 
 
@@ -793,7 +802,7 @@ def _mos_annotator_scores(
             scores.setdefault(image_id, {}).update(raters)
     # Pool in contributed quantitative ratings (one annotator per uid, so a
     # rater's identity — and their MOS contribution — survives a profile edit).
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         approved = store.approved_uids()
         for r in store.ratings(dataset=dataset_name):
             uid = r.get("user_uid")
@@ -840,7 +849,7 @@ def bt_scores_for_dataset_task(workspace: Workspace, dataset_name: str, task: st
 
     Returns ``{"scores": {image_id: beta}, "se": {...}, "n_comparisons", "n_sets"}``.
     """
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         sessions = store.sessions()
         approved = store.approved_uids()
 
@@ -921,7 +930,7 @@ def _available_tasks(
     dataset with no sub-tasks (task=None).
     """
     mos_tasks = annotation_tasks_in_manifest(manifest)
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         contrib_tasks = store.dataset_tasks(dataset_name) | store.rating_tasks(dataset_name)
     named = sorted(set(mos_tasks) | {t for t in contrib_tasks if t})
     has_unnamed = None in contrib_tasks
@@ -1003,7 +1012,7 @@ def _remaining_ranking_pool(
     Each rater ranks a given reference set (per task) at most once; completed
     sessions are keyed by ``(dataset, reference, task)``.
     """
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         done = {
             (s.get("dataset"), s.get("reference"), s.get("task"))
             for s in store.sessions(user_uid=user_uid)
@@ -1035,7 +1044,7 @@ def _remaining_rating_pool(
     Each rater rates a given variant (per task) at most once; ratings are keyed by
     ``(dataset, image_id, task)``.
     """
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         done = {
             (r.get("dataset"), r.get("image_id"), r.get("task"))
             for r in store.ratings()
@@ -1178,7 +1187,7 @@ def submit_choice(
         return {"status": "continue", "session_id": session_id}
 
     # Persist the finished ranking and immediately draw the next set.
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         store.add_session(session.result())
         count = store.count_sessions(user_uid=session.user_uid)
     sessions.pop(session_id, None)
@@ -1247,7 +1256,7 @@ def record_rating(
 ) -> int:
     """Persist one 1-4 rating; returns the annotator's total rating count."""
     score = max(1, min(4, int(score)))
-    with AnnotatorStore(workspace.annotations_path) as store:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         store.add_rating(
             {
                 "user_uid": user_uid,
@@ -1436,7 +1445,7 @@ def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dic
     else:
         names = all_names
 
-    with AnnotatorStore(workspace.annotations_path) as astore:
+    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as astore:
         all_sessions = astore.sessions()
         expertise_by_uid = {u["uid"]: u.get("expertise") for u in astore.all_users()}
         approved_uids = astore.approved_uids()
