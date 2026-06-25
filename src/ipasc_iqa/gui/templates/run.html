@@ -27,10 +27,9 @@
             <label class="check">
               <input type="checkbox" name="datasets" value="{{ ds.name }}">
               <span class="check__label">{{ ds.name }}
-                <small>v{{ ds.version }}
-                  {%- if ds.prepared %} · {{ ds.n_images }} images
-                    {%- if ds.has_annotations %} · annotated{% endif %}
-                  {%- else %} · will download on first run{% endif %}</small>
+                <small>v{{ ds.version }}</small>
+                  {%- if ds.prepared %} <span class="dataset-status dataset-status--ready">Ready · {{ ds.n_images }} images{%- if ds.has_annotations %} · annotated{% endif %}</span>
+                  {%- else %} <span class="dataset-status dataset-status--download">Not downloaded yet · will download before running</span>{% endif %}
                 <small class="check__desc">{{ ds.description }}</small>
               </span>
             </label>

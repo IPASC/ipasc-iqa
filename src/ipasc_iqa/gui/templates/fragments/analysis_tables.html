@@ -1,9 +1,8 @@
 {% if result.error %}
   <p class="notice notice--warn">{{ result.error }}</p>
-{% elif not result.tasks %}
-  <p class="muted">No annotation tasks to analyse.</p>
-{% else %}
-  <div class="result-head">
+{% endif %}
+
+<div class="result-head">
     <div class="result-head__top">
       <h2 class="result-head__title">{{ result.dataset }}</h2>
       {% if result.bibtex %}
@@ -17,104 +16,236 @@
     {% if result.description %}
     <p class="result-head__desc">{{ result.description }}</p>
     {% endif %}
-
-    {% if result.meta %}
-    <dl class="result-meta">
-      <div class="result-meta__item">
-        <dt>Images{% if result.active_task %} ({{ result.active_task.replace('_', ' ') }}){% endif %}</dt>
-        <dd>{{ result.meta.n_images }}</dd>
-      </div>
-      <div class="result-meta__item">
-        <dt>Avg rankings / image</dt>
-        <dd>
-          {%- if result.meta.avg_rankings is not none -%}
-            {{ '%.2f'|format(result.meta.avg_rankings) }}
-            <span class="result-meta__sub">({{ result.meta.n_rankings }} total)</span>
-          {%- else -%}—{%- endif -%}
-        </dd>
-      </div>
-      <div class="result-meta__item">
-        <dt>Avg ratings / image</dt>
-        <dd>
-          {%- if result.meta.avg_ratings is not none -%}
-            {{ '%.2f'|format(result.meta.avg_ratings) }}
-            <span class="result-meta__sub">({{ result.meta.n_ratings }} total)</span>
-          {%- else -%}—{%- endif -%}
-        </dd>
-      </div>
-    </dl>
-    {% endif %}
   </div>
 
-  {% for task in result.tasks %}
-  {% set rows = task.rows | selectattr('n', 'gt', 0) | list %}
-  <section class="task-block">
-    {% if result.all_tasks | length > 1 %}
-    <h3 class="task-block__title">{{ task.task }}</h3>
-    {% endif %}
-    {% if not rows %}
-      <p class="muted">No measures to correlate.</p>
-    {% else %}
-    <div class="table-scroll">
-    <table class="data-table">
-      <thead>
-        <tr><th>Measure</th><th class="num">Value</th>
-            <th class="num">SRCC</th><th class="num">KRCC</th></tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        <tr class="measure-row"
-            hx-get="/api/scatter?dataset={{ result.dataset | urlencode }}&task={{ (task.task or '') | urlencode }}&measure={{ row.measure | urlencode }}&source={{ result.active_source | urlencode }}"
-            hx-target="#scatter-result" hx-swap="innerHTML"
-            title="Click to plot {{ row.measure }} against the human scores">
-          <td class="mono">
-            <span class="measure-cell">
-              <span class="measure-cell__icon">
-                {% if row.bibtex %}
-                <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ row.bibtex }}"
-                        title="Show BibTeX citation" aria-label="Citation for {{ row.measure }}">
-                  <i class="fa-solid fa-quote-right"></i>
-                </button>
-                {% endif %}
-              </span>
-              <span>{{ row.measure }}</span>
-            </span>
-          </td>
-          <td class="num mono">{{ '%.3g ± %d%%'|format(row.mean, (row.std/row.mean)*100) if row.mean is not none else '—' }}</td>
-          {% for key in ['srcc','krcc'] %}
-            {% set val = row[key] %}
-            {% if val is none %}
-              <td class="num muted">—</td>
-            {% else %}
-              {% set hue = (val|abs * 120)|round(0, 'floor')|int %}
-              <td class="num corr-cell" style="background: hsl({{ hue }}, 70%, 90%);">
-                {{ '%+.3f'|format(val) }}
-              </td>
-            {% endif %}
-          {% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="analysis-tabs">
+    <input type="radio" id="tab-metric-overview" name="analysis-tab" checked>
+    <input type="radio" id="tab-human-agreement" name="analysis-tab">
+
+    <div class="analysis-tabs__nav">
+      <label for="tab-metric-overview">Metric overview</label>
+      <label for="tab-human-agreement">Human agreement</label>
     </div>
-    {% endif %}
-  </section>
-  {% endfor %}
 
-  <p class="legend">
-    SRCC = Spearman's Rank-Order Correlation Coefficient
-  </p>
-  <p class="legend">
-    KRCC = Kendall's Rank-Order Correlation Coefficient
-  </p>
-  <p class="legend">
-    Cells shaded by correlation strength:
-    <span class="legend__swatch" style="background:hsl(0,70%,90%)"></span> weak
-    →
-    <span class="legend__swatch" style="background:hsl(120,70%,90%)"></span> strong.
-    Click a measure to plot it against the human scores.
-  </p>
+    <section class="analysis-tabs__panel analysis-tabs__panel--metric">
+      {% if result.error %}
+        <p class="muted">No metric overview available for this dataset yet.</p>
+      {% elif result.metric_summary is defined and result.metric_summary.statistics %}
+      <section class="task-block">
+        <h3 class="task-block__title">Metric summary</h3>
+        <p class="muted">
+          Overview of the computed metric values for this dataset.
+        </p>
 
-  {# Scatter plot target — cleared whenever the table re-renders (dataset/task change). #}
-  <div id="scatter-result" class="scatter-result"></div>
-{% endif %}
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Measure</th>
+                <th class="num">N</th>
+                <th class="num">Mean</th>
+                <th class="num">Std</th>
+                <th class="num">Median</th>
+                <th class="num">Min</th>
+                <th class="num">Max</th>
+                <th>Direction</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for stat in result.metric_summary.statistics %}
+              <tr>
+                <td class="mono">{{ stat.measure }}</td>
+                <td class="num">{{ stat.n }}</td>
+                <td class="num mono">{{ '%.4g'|format(stat.mean) }}</td>
+                <td class="num mono">{{ '%.4g'|format(stat.std) }}</td>
+                <td class="num mono">{{ '%.4g'|format(stat.median) }}</td>
+                <td class="num mono">{{ '%.4g'|format(stat.min) }}</td>
+                <td class="num mono">{{ '%.4g'|format(stat.max) }}</td>
+                <td>{{ 'higher is better' if stat.higher_is_better else 'lower is better' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="task-block">
+        <h3 class="task-block__title">Best / worst examples</h3>
+        <p class="muted">
+          Examples are ordered using each measure's direction.
+        </p>
+
+        {% for measure_name, groups in result.metric_summary.examples.items() %}
+        <details class="panel" style="margin-top:0.75rem">
+          <summary>
+            <strong>{{ measure_name }}</strong>
+            <span class="muted">
+              · {{ 'higher is better' if groups.higher_is_better else 'lower is better' }}
+            </span>
+          </summary>
+
+          <div class="analysis-example-grid">
+            <div>
+              <h4>Best examples</h4>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Image</th>
+                    <th class="num">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in groups.best %}
+                  <tr>
+                    <td class="mono">{{ row.dataset }}/{{ row.image_id }}</td>
+                    <td class="num mono">{{ '%.4g'|format(row.value) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h4>Worst examples</h4>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Image</th>
+                    <th class="num">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in groups.worst %}
+                  <tr>
+                    <td class="mono">{{ row.dataset }}/{{ row.image_id }}</td>
+                    <td class="num mono">{{ '%.4g'|format(row.value) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+        {% endfor %}
+      </section>
+      {% else %}
+        <p class="muted">No metric results available for this dataset.</p>
+      {% endif %}
+    </section>
+
+    <section class="analysis-tabs__panel analysis-tabs__panel--human">
+      {% if result.error %}
+        <p class="muted">Human agreement is not available until benchmark results exist.</p>
+      {% elif result.human_analysis_message %}
+        <p class="notice notice--warn">{{ result.human_analysis_message }}</p>
+      {% elif not result.tasks %}
+        <p class="muted">No annotation tasks to analyse.</p>
+      {% else %}
+
+        {% if result.meta %}
+        <dl class="result-meta">
+          <div class="result-meta__item">
+            <dt>Images{% if result.active_task %} ({{ result.active_task.replace('_', ' ') }}){% endif %}</dt>
+            <dd>{{ result.meta.n_images }}</dd>
+          </div>
+          <div class="result-meta__item">
+            <dt>Avg rankings / image</dt>
+            <dd>
+              {%- if result.meta.avg_rankings is not none -%}
+                {{ '%.2f'|format(result.meta.avg_rankings) }}
+                <span class="result-meta__sub">({{ result.meta.n_rankings }} total)</span>
+              {%- else -%}—{%- endif -%}
+            </dd>
+          </div>
+          <div class="result-meta__item">
+            <dt>Avg ratings / image</dt>
+            <dd>
+              {%- if result.meta.avg_ratings is not none -%}
+                {{ '%.2f'|format(result.meta.avg_ratings) }}
+                <span class="result-meta__sub">({{ result.meta.n_ratings }} total)</span>
+              {%- else -%}—{%- endif -%}
+            </dd>
+          </div>
+        </dl>
+        {% endif %}
+
+        {% for task in result.tasks %}
+        {% set rows = task.rows | selectattr('n', 'gt', 0) | list %}
+        <section class="task-block">
+          {% if result.all_tasks | length > 1 %}
+          <h3 class="task-block__title">{{ task.task }}</h3>
+          {% endif %}
+
+          {% if not rows %}
+            <p class="muted">No measures to correlate.</p>
+          {% else %}
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Measure</th>
+                  <th class="num">Value</th>
+                  <th class="num">SRCC</th>
+                  <th class="num">KRCC</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in rows %}
+                <tr class="measure-row"
+                    hx-get="/api/scatter?dataset={{ result.dataset | urlencode }}&task={{ (task.task or '') | urlencode }}&measure={{ row.measure | urlencode }}&source={{ result.active_source | urlencode }}"
+                    hx-target="#scatter-result" hx-swap="innerHTML"
+                    title="Click to plot {{ row.measure }} against the human scores">
+                  <td class="mono">
+                    <span class="measure-cell">
+                      <span class="measure-cell__icon">
+                        {% if row.bibtex %}
+                        <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ row.bibtex }}"
+                                title="Show BibTeX citation" aria-label="Citation for {{ row.measure }}">
+                          <i class="fa-solid fa-quote-right"></i>
+                        </button>
+                        {% endif %}
+                      </span>
+                      <span>{{ row.measure }}</span>
+                    </span>
+                  </td>
+                  <td class="num mono">
+                    {{ '%.3g ± %d%%'|format(row.mean, (row.std/row.mean)*100) if row.mean is not none and row.mean != 0 else '—' }}
+                  </td>
+                  {% for key in ['srcc','krcc'] %}
+                    {% set val = row[key] %}
+                    {% if val is none %}
+                      <td class="num muted">—</td>
+                    {% else %}
+                      {% set hue = (val|abs * 120)|round(0, 'floor')|int %}
+                      <td class="num corr-cell" style="--corr-hue: {{ hue }};">
+                        {{ '%+.3f'|format(val) }}
+                      </td>
+                    {% endif %}
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </section>
+        {% endfor %}
+
+        <p class="legend">
+          SRCC = Spearman's Rank-Order Correlation Coefficient
+        </p>
+        <p class="legend">
+          KRCC = Kendall's Rank-Order Correlation Coefficient
+        </p>
+        <p class="legend">
+          Cells shaded by correlation strength:
+          <span class="legend__swatch legend__swatch--weak"></span> weak
+          →
+          <span class="legend__swatch legend__swatch--strong"></span> strong.
+          Click a measure to plot it against the human scores.
+        </p>
+
+        <div id="scatter-result" class="scatter-result"></div>
+      {% endif %}
+    </section>
+  </div>
