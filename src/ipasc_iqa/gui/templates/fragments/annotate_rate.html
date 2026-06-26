@@ -10,13 +10,17 @@
 
   <div class="annotate-pair">
     <figure class="annotate-rate__panel">
-      <img src="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ reference_item | urlencode }}"
-           alt="reference image" draggable="false">
+      <span class="annotate-zoom">
+        <img src="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ reference_item | urlencode }}"
+             alt="reference image" draggable="false">
+      </span>
       <figcaption>Reference</figcaption>
     </figure>
     <figure class="annotate-rate__panel">
-      <img src="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ image_id | urlencode }}"
-           alt="reconstruction to rate" draggable="false">
+      <span class="annotate-zoom">
+        <img src="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ image_id | urlencode }}"
+             alt="reconstruction to rate" draggable="false">
+      </span>
       <figcaption>Reconstruction</figcaption>
     </figure>
   </div>

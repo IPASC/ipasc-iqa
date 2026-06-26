@@ -571,7 +571,13 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
   padding: 0; border: 3px solid transparent; border-radius: 8px;
   background: #1a1a1a; cursor: pointer; line-height: 0;
   transition: border-color 0.12s ease, transform 0.12s ease;
-  max-width: 100%;
+  max-width: 100%; overflow: hidden;   /* clip the scroll-zoomed image */
+}
+/* Scroll-to-zoom: clip each image to its box; the transform is driven by JS. */
+.annotate-pair img { will-change: transform; }
+.annotate-zoom {
+  display: inline-block; overflow: hidden; line-height: 0;
+  max-width: 100%; border-radius: 5px; background: #1a1a1a;
 }
 .annotate-img-btn:hover { border-color: #38bdf8; transform: scale(1.01); }
 .annotate-img-btn:focus-visible { outline: none; border-color: #7dd3fc; }
