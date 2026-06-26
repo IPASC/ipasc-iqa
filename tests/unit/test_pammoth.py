@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 
 from ipasc_iqa.datasets.pammoth import (
-    LOG_FLOOR,
     REFERENCE_METHOD,
     UNPACKED_DIR,
     VARIANT_METHODS,
@@ -45,21 +44,19 @@ def _manifest(ds_root: Path) -> dict:
     return json.loads((ds_root / "converted" / "manifest.json").read_text())
 
 
-def _slice_set(volunteer: str, scan: str, filename: str) -> dict[str, np.ndarray]:
-    """One slice reconstructed by all four methods, with distinct values."""
+def _mip_set(volunteer: str, scan: str, filename: str) -> dict[str, np.ndarray]:
+    """One MIP reconstructed by all four methods, with distinct values."""
     out = {}
     for i, method in enumerate(ALL_METHODS):
-        arr = np.full((8, 10), 10.0 + i, dtype=np.float32)
-        arr[0, 0] = 1.0  # below LOG_FLOOR → should be clamped
-        out[f"{volunteer}/{scan}/PA/{method}/{filename}"] = arr
+        out[f"{volunteer}/{scan}/PA/{method}/{filename}"] = np.full((8, 10), 10.0 + i, np.float32)
     return out
 
 
 def test_fwi_reference_and_variants(tmp_path: Path) -> None:
     root = tmp_path / "pammoth"
     slices: dict[str, np.ndarray] = {}
-    slices.update(_slice_set("volunteer1_X", "02", "rec_800nm_sagittal_+00.npy"))
-    slices.update(_slice_set("volunteer1_X", "02", "rec_800nm_frontal_-50.npy"))
+    slices.update(_mip_set("volunteer1_X", "02", "rec_800nm_sagittal.npy"))
+    slices.update(_mip_set("volunteer1_X", "02", "rec_800nm_axial.npy"))
     _write_raw_zip(root, slices)
 
     PAMMOTHDataset(root, download=False)
@@ -85,25 +82,39 @@ def test_fwi_reference_and_variants(tmp_path: Path) -> None:
     assert all(methods == set(VARIANT_METHODS) for methods in by_stem.values())
 
 
-def test_log_compression_and_floor(tmp_path: Path) -> None:
+def test_processing_is_passthrough(tmp_path: Path) -> None:
+    """Log processing is disabled — the MIP is stored unchanged (as float32)."""
     root = tmp_path / "pammoth"
-    _write_raw_zip(root, _slice_set("volunteer1_X", "02", "rec_800nm_sagittal_+00.npy"))
+    _write_raw_zip(root, _mip_set("volunteer1_X", "02", "rec_800nm_sagittal.npy"))
     PAMMOTHDataset(root, download=False)
 
     conv = root / "converted"
     manifest = _manifest(root)
     ref = np.load(conv / manifest["images"][0]["references"]["ground_truth"]["path"])
 
-    # FWI fill value was 10.0 → log10(10) == 1.0; clamped corner → log10(5).
-    assert np.isclose(ref[1, 0, 0], 1.0)
-    assert np.isclose(ref[0, 0, 0], np.log10(LOG_FLOOR))
-    assert ref.min() >= np.log10(LOG_FLOOR)
+    # FWI fill value was 10.0 and is preserved (no log compression applied).
+    assert ref.dtype == np.float32
+    assert np.allclose(ref, 10.0)
 
 
-def test_slice_without_fwi_is_skipped(tmp_path: Path) -> None:
+def test_leftover_slice_files_are_ignored(tmp_path: Path) -> None:
+    """Offset-suffixed slice exports are filtered out; only MIPs are converted."""
+    root = tmp_path / "pammoth"
+    slices = _mip_set("volunteer1_X", "02", "rec_800nm_sagittal.npy")
+    # Stray legacy slices (with offset) for the same anatomy — must be skipped.
+    slices.update(_mip_set("volunteer1_X", "02", "rec_800nm_sagittal_+00.npy"))
+    _write_raw_zip(root, slices)
+
+    PAMMOTHDataset(root, download=False)
+    entries = _manifest(root)["images"]
+    assert {e["metadata"]["source_file"] for e in entries} == {"rec_800nm_sagittal.npy"}
+    assert len(entries) == len(VARIANT_METHODS)
+
+
+def test_mip_without_fwi_is_skipped(tmp_path: Path) -> None:
     root = tmp_path / "pammoth"
     slices = {
-        f"volunteer1_X/02/PA/{m}/rec_800nm_sagittal_+00.npy": np.full((8, 10), 10.0, np.float32)
+        f"volunteer1_X/02/PA/{m}/rec_800nm_sagittal.npy": np.full((8, 10), 10.0, np.float32)
         for m in VARIANT_METHODS  # no FWI reference present
     }
     _write_raw_zip(root, slices)

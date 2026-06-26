@@ -1,28 +1,26 @@
 """PAMMOTH speed-of-sound reconstruction dataset adapter.
 
 Source:
-    2D slice crops exported from PAMMOTH breast photoacoustic tomography
-    reconstructions. For every volunteer/scan, the same anatomy is reconstructed
-    with four speed-of-sound (SOS) strategies — ``1SOS`` (single global SOS),
-    ``2SOS`` (two-compartment SOS), ``TOF`` (time-of-flight SOS) and ``FWI``
-    (full-waveform-inversion SOS) — across multiple wavelengths and two planes
-    (sagittal/frontal) at five slice offsets.
+    Maximum-intensity projections (MIPs) exported from PAMMOTH breast
+    photoacoustic tomography reconstructions. For every volunteer/scan, the same
+    anatomy is reconstructed with four speed-of-sound (SOS) strategies — ``1SOS``
+    (single global SOS), ``2SOS`` (two-compartment SOS), ``TOF`` (time-of-flight
+    SOS) and ``FWI`` (full-waveform-inversion SOS) — across multiple wavelengths
+    and three projection planes (``axial``, ``sagittal``, ``frontal``).
 
     The archive ``pammoth_soundspeed_iqa_subset.zip`` mirrors the acquisition
     layout::
 
-        pammoth_soundspeed_iqa_subset/<volunteer>/<scan>/PA/<method>/rec_<wl>_<plane>_<off>.npy
+        pammoth_soundspeed_iqa_subset/<volunteer>/<scan>/PA/<method>/rec_<wl>_<plane>.npy
 
-    where each ``.npy`` is a single cropped 2D slice (float32).
+    where each ``.npy`` is a single 2D maximum-intensity projection (float32).
 
-This adapter turns the slices into a *full-reference* IQA dataset. The
-**FWI** reconstruction is treated as the ground-truth reference; the other three
-SOS methods (``1SOS``, ``2SOS``, ``TOF``) become the **variants** that measures
-score against that reference. Every slice — reference and variant alike — is
-log-compressed with::
-
-    img[img < 5] = 5
-    img = np.log10(img)
+This adapter turns the MIPs into a *full-reference* IQA dataset. The **FWI**
+reconstruction is treated as the ground-truth reference; the other three SOS
+methods (``1SOS``, ``2SOS``, ``TOF``) become the **variants** that measures score
+against that reference. Each MIP passes through :meth:`PAMMOTHDataset._process_image`
+before being stored (currently a pass-through; an intensity transform will be
+added there).
 
 There are no signal/noise segmentations for this data, so no ROIs are written
 (CNR/SNR simply skip these images).
@@ -32,8 +30,8 @@ Converted layout written to ``<root>/converted/`` follows the data contract:
     <root>/converted/
         manifest.json
         images/
-            <stem>.ref.ground_truth.npy   # the FWI slice (log-compressed)
-            <stem>.var.<method>.npy       # 1SOS / 2SOS / TOF slice (log-compressed)
+            <stem>.ref.ground_truth.npy   # the FWI MIP
+            <stem>.var.<method>.npy       # 1SOS / 2SOS / TOF MIP
 
 Arrays are stored as float32 of shape ``(H, W, 1)``.
 """
@@ -60,7 +58,12 @@ UNPACKED_DIR = "pammoth_soundspeed_iqa_subset"
 REFERENCE_TYPE = "ground_truth"
 REFERENCE_METHOD = "FWI"  # full-waveform-inversion SOS = ground truth
 VARIANT_METHODS = ("1SOS", "2SOS", "TOF")
-LOG_FLOOR = 5  # clamp before log10 to avoid log of small/zero values
+LOG_FLOOR = 5  # clamp floor for the (currently disabled) log transform
+
+# MIP filenames look like ``rec_<wl>_<plane>.npy``. Older slice exports carried a
+# trailing offset (``rec_<wl>_<plane>_+00.npy``); this matches those so they can
+# be filtered out — only the offset-free maximum-intensity projections are used.
+_SLICE_OFFSET_RE = re.compile(r"_[+-]\d+\.npy$")
 
 
 class PAMMOTHDataset(LocalDataset):
@@ -83,10 +86,10 @@ class PAMMOTHDataset(LocalDataset):
     DATASET_NAME = "pammoth"
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = (
-        "PAMMOTH SOS: cropped 2D slices from breast photoacoustic-tomography "
+        "PAMMOTH SOS: maximum-intensity projections from breast photoacoustic-tomography "
         "reconstructions, where the full-waveform-inversion (FWI) speed-of-sound "
         "reconstruction is the ground-truth reference and the 1SOS/2SOS/TOF "
-        "reconstructions are log-compressed variants for full-reference IQA."
+        "reconstructions are the variants for full-reference IQA."
     )
     DATASET_BIBTEX = (
         "@misc{pammoth_soundspeed_iqa,\n"
@@ -157,22 +160,30 @@ class PAMMOTHDataset(LocalDataset):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _log_compress(path: Path) -> np.ndarray:
-        """Load a 2D slice and log-compress it; return float32 ``(H, W, 1)``."""
+    def _process_image(path: Path) -> np.ndarray:
+        """Load a 2D MIP and return it as float32 ``(H, W, 1)``.
+
+        Intensity processing is applied here. It is currently disabled (the MIP
+        is passed through unchanged) pending a replacement transform; the former
+        log compression is kept below, commented out, for reference::
+
+            img[img < LOG_FLOOR] = LOG_FLOOR
+            img = np.log10(img)
+        """
         img = np.load(path).astype(np.float64)
         if img.ndim == 3:  # defensive: collapse any stray channel axis
             img = img[..., 0]
-        img[img < LOG_FLOOR] = LOG_FLOOR
-        img = np.log10(img)
         return img[:, :, np.newaxis].astype(np.float32)
 
     def _convert(self, slice_dir: Path, converted_dir: Path) -> None:
         images_out = converted_dir / "images"
         images_out.mkdir(parents=True, exist_ok=True)
 
-        # Group the four method reconstructions of one slice together. A slice is
+        # Group the four method reconstructions of one MIP together. A MIP is
         # identified by everything except the method folder:
         #   <volunteer>/<scan>/PA/<method>/<filename>  →  key (volunteer, scan, filename)
+        # Only offset-free MIP files are kept; any leftover slice exports
+        # (``rec_<wl>_<plane>_+00.npy``) are skipped.
         groups: dict[tuple[str, str, str], dict[str, Path]] = {}
         for npy_path in sorted(slice_dir.rglob("*.npy")):
             parts = npy_path.relative_to(slice_dir).parts
@@ -180,22 +191,24 @@ class PAMMOTHDataset(LocalDataset):
             if len(parts) != 5 or parts[2] != "PA":
                 continue
             volunteer, scan, _pa, method, filename = parts
+            if _SLICE_OFFSET_RE.search(filename):
+                continue  # legacy 2D slice, not a MIP
             groups.setdefault((volunteer, scan, filename), {})[method] = npy_path
 
-        print(f"Converting {len(groups)} PAMMOTH slices (FWI reference + SOS variants) …")
+        print(f"Converting {len(groups)} PAMMOTH MIPs (FWI reference + SOS variants) …")
 
         manifest_entries: list[dict] = []
         n_refs = 0
         for (volunteer, scan, filename), method_paths in sorted(groups.items()):
             ref_path = method_paths.get(REFERENCE_METHOD)
             if ref_path is None:
-                continue  # no FWI ground truth for this slice — skip
+                continue  # no FWI ground truth for this MIP — skip
 
-            # Stem uniquely identifies the slice (volunteer/scan/wavelength/plane/offset).
-            slice_id = Path(filename).stem  # e.g. rec_800nm_sagittal_+00
+            # Stem uniquely identifies the MIP (volunteer/scan/wavelength/plane).
+            slice_id = Path(filename).stem  # e.g. rec_800nm_sagittal
             base = re.sub(r"[^0-9A-Za-z]+", "_", f"{volunteer}_{scan}_{slice_id}").strip("_")
 
-            ref = self._log_compress(ref_path)
+            ref = self._process_image(ref_path)
             ref_rel = f"images/{base}.ref.{REFERENCE_TYPE}.npy"
             np.save(converted_dir / ref_rel, ref)
             ref_sha = hash_file(converted_dir / ref_rel)
@@ -205,7 +218,7 @@ class PAMMOTHDataset(LocalDataset):
                 var_path = method_paths.get(method)
                 if var_path is None:
                     continue
-                variant = self._log_compress(var_path)
+                variant = self._process_image(var_path)
                 var_rel = f"images/{base}.var.{method}.npy"
                 np.save(converted_dir / var_rel, variant)
                 manifest_entries.append(
