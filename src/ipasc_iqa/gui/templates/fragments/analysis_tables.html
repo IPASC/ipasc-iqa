@@ -97,7 +97,15 @@
                 <tbody>
                   {% for row in groups.best %}
                   <tr>
-                    <td class="mono">{{ row.dataset }}/{{ row.image_id }}</td>
+                    <td class="mono">
+                      <button type="button"
+                              class="link-button mono"
+                              hx-get="/api/analysis/image-detail?dataset={{ row.dataset | urlencode }}&image_id={{ row.image_id | urlencode }}"
+                              hx-target="#metric-image-detail"
+                              hx-swap="innerHTML">
+                        {{ row.dataset }}/{{ row.image_id }}
+                      </button>
+                    </td>
                     <td class="num mono">{{ '%.4g'|format(row.value) }}</td>
                   </tr>
                   {% endfor %}
@@ -117,7 +125,15 @@
                 <tbody>
                   {% for row in groups.worst %}
                   <tr>
-                    <td class="mono">{{ row.dataset }}/{{ row.image_id }}</td>
+                    <td class="mono">
+                      <button type="button"
+                              class="link-button mono"
+                              hx-get="/api/analysis/image-detail?dataset={{ row.dataset | urlencode }}&image_id={{ row.image_id | urlencode }}"
+                              hx-target="#metric-image-detail"
+                              hx-swap="innerHTML">
+                        {{ row.dataset }}/{{ row.image_id }}
+                      </button>
+                    </td>
                     <td class="num mono">{{ '%.4g'|format(row.value) }}</td>
                   </tr>
                   {% endfor %}
@@ -128,6 +144,9 @@
         </details>
         {% endfor %}
       </section>
+
+      <div id="metric-image-detail" class="metric-image-detail"></div>
+
       {% else %}
         <p class="muted">No metric results available for this dataset.</p>
       {% endif %}

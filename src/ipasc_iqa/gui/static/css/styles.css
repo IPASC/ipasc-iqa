@@ -464,6 +464,22 @@ img, svg, video, table { max-width: 100%; }
   background: hsl(120, 70%, 90%);
 }
 
+.link-button {
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.link-button:hover {
+  color: var(--navy);
+}
+
 @media (max-width: 900px) {
   .analysis-example-grid {
     grid-template-columns: 1fr;
@@ -677,4 +693,170 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
   color: #166534;
 }
 
+/* ---------- Metric overview image detail dialog ---------- */
 
+#metric-image-detail:empty {
+  display: none;
+}
+
+dialog.image-detail-dialog {
+  border: none !important;
+  outline: none !important;
+  padding: 0 !important;
+  margin: auto !important;
+
+  width: min(1360px, calc(100vw - 2rem)) !important;
+  max-width: none !important;
+  max-height: calc(100vh - 2rem) !important;
+
+  background: transparent !important;
+  color: var(--text);
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+dialog.image-detail-dialog::backdrop {
+  background: rgba(0, 31, 76, 0.45);
+}
+
+dialog.image-detail-dialog:focus,
+dialog.image-detail-dialog:focus-visible,
+dialog.image-detail-dialog[open],
+dialog.image-detail-dialog[open]:focus,
+dialog.image-detail-dialog[open]:focus-visible {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.image-detail-dialog__card {
+  position: relative;
+  width: 100%;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+
+  background: var(--surface);
+  border-radius: 22px;
+  padding: 1.5rem;
+}
+
+.image-detail__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 999px;
+
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-detail__close:hover {
+  background: var(--border);
+  color: var(--navy);
+}
+
+.image-detail__head {
+  padding-right: 2.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.image-detail__title {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1.1rem;
+}
+
+.image-detail__subtitle {
+  margin: 0.25rem 0 0;
+  word-break: break-word;
+}
+
+.image-detail__grid {
+  display: grid !important;
+  grid-template-columns: minmax(520px, 680px) minmax(420px, 1fr) !important;
+  gap: 1.75rem;
+  align-items: start;
+}
+
+.image-detail__preview {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+
+  background: var(--bg);
+  border-radius: 16px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.image-detail__preview img {
+  display: block;
+  width: 100%;
+  max-width: 660px;
+  max-height: 76vh;
+  height: auto;
+  margin: 0 auto;
+
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 12px;
+
+  image-rendering: pixelated;
+}
+
+.image-detail__scores {
+  min-width: 0;
+}
+
+.image-detail__scores-title {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: var(--navy);
+}
+
+/* Stack only on genuinely small screens */
+@media (max-width: 760px) {
+  dialog.image-detail-dialog {
+    width: calc(100vw - 1rem) !important;
+    max-height: calc(100vh - 1rem) !important;
+  }
+
+  .image-detail-dialog__card {
+    max-height: calc(100vh - 1rem);
+    padding: 1rem;
+    border-radius: 16px;
+  }
+
+  .image-detail__grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .image-detail__preview img {
+    max-width: 100%;
+    max-height: 55vh;
+  }
+}
+
+.image-detail__score-row[style] td {
+  background: hsl(var(--score-hue), 70%, 92%);
+}
+
+.image-detail__score-row[style]:hover td {
+  background: hsl(var(--score-hue), 75%, 86%);
+}

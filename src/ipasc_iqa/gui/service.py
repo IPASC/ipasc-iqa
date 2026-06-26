@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from collections import defaultdict
 
 import numpy as np
 
@@ -473,7 +474,11 @@ def analysis_for_dataset(
             **_empty,
         }
     
-    directions = measure_directions(run.measures)
+    directions = {
+        measure["name"]: bool(measure["higher_is_better"])
+        for measure in list_measures()
+    }
+
     metric_summary = rich_measure_summary(
         [rec for rec in run.results if rec.dataset == dataset_name],
         higher_is_better_by_measure=directions,
@@ -681,6 +686,137 @@ def scatter_for_measure(
         "description": meta.description,
         "measure_type": _MEASURE_TYPE_LABELS.get(meta.measure_type, meta.measure_type.name.lower()),
         "value_range": _format_value_range(meta.value_range),
+    }
+
+def image_detail_for_dataset(
+    workspace: Workspace,
+    dataset_name: str,
+    image_id: str,
+) -> dict:
+    """Return image-level metric scores for the Metric overview detail dialog."""
+
+    ds = get_dataset(workspace, dataset_name)
+    if ds is None or not ds["prepared"]:
+        return {
+            "error": "dataset not available",
+            "dataset": dataset_name,
+            "image_id": image_id,
+            "scores": [],
+        }
+
+    run = _merged_run(workspace, dataset_name)
+    if run is None:
+        return {
+            "error": "no benchmark run found for this dataset",
+            "dataset": dataset_name,
+            "image_id": image_id,
+            "scores": [],
+        }
+
+    records = [
+        rec
+        for rec in run.results
+        if rec.dataset == dataset_name and rec.image_id == image_id
+    ]
+
+    if not records:
+        return {
+            "error": f"no metric results found for image '{image_id}'",
+            "dataset": dataset_name,
+            "image_id": image_id,
+            "scores": [],
+        }
+
+    directions = {
+        measure["name"]: bool(measure["higher_is_better"])
+        for measure in list_measures()
+    }
+
+    distributions: dict[str, list[float]] = defaultdict(list)
+
+    for rec in run.results:
+        if rec.dataset != dataset_name:
+            continue
+
+        if rec.value is not None:
+            distributions[rec.measure].append(float(rec.value))
+
+        if rec.sub_scores:
+            for sub_name, sub_value in rec.sub_scores.items():
+                if sub_value is not None:
+                    distributions[f"{rec.measure}.{sub_name}"].append(float(sub_value))
+
+    def relative_position(key: str, value: float) -> dict:
+        """Return dataset-relative position for a score.
+
+        0 means lowest value for this metric in the dataset.
+        1 means highest value for this metric in the dataset.
+        """
+
+        values = distributions.get(key, [])
+        if not values:
+            return {
+                "relative_position": None,
+                "relative_percent": None,
+                "color_hue": None,
+            }
+
+        lo = min(values)
+        hi = max(values)
+
+        if hi == lo:
+            rel = 0.5
+        else:
+            rel = (value - lo) / (hi - lo)
+
+        rel = max(0.0, min(1.0, rel))
+
+        return {
+            "relative_position": rel,
+            "relative_percent": round(rel * 100),
+            "color_hue": round(rel * 120),
+        }
+
+    scores: list[dict] = []
+
+    for rec in sorted(records, key=lambda r: r.measure):
+        higher_is_better = directions.get(rec.measure, True)
+
+        if rec.value is not None:
+            value = float(rec.value)
+            scores.append(
+                {
+                    "measure": rec.measure,
+                    "value": value,
+                    "higher_is_better": higher_is_better,
+                    "kind": "main",
+                    **relative_position(rec.measure, value),
+                }
+            )
+
+        if rec.sub_scores:
+            for sub_name, sub_value in sorted(rec.sub_scores.items()):
+                if sub_value is None:
+                    continue
+
+                key = f"{rec.measure}.{sub_name}"
+                value = float(sub_value)
+
+                scores.append(
+                    {
+                        "measure": key,
+                        "value": value,
+                        "higher_is_better": higher_is_better,
+                        "kind": "sub_score",
+                        **relative_position(key, value),
+                    }
+                )
+
+    return {
+        "error": None,
+        "dataset": dataset_name,
+        "image_id": image_id,
+        "scores": scores,
     }
 
 

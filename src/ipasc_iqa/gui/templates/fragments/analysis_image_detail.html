@@ -1,0 +1,105 @@
+<dialog class="image-detail-dialog" aria-labelledby="image-detail-title">
+  <div class="image-detail-dialog__card">
+    <button type="button"
+            class="image-detail__close"
+            aria-label="Close image detail"
+            onclick="this.closest('dialog').close()">
+      ×
+    </button>
+
+    <div class="image-detail__head">
+      <h3 id="image-detail-title" class="image-detail__title">Image detail</h3>
+
+      {% if detail.dataset and detail.image_id %}
+      <p class="muted mono image-detail__subtitle">
+        {{ detail.dataset }}/{{ detail.image_id }}
+      </p>
+      {% endif %}
+    </div>
+
+    {% if detail.error %}
+      <p class="notice notice--warn">{{ detail.error }}</p>
+    {% else %}
+      <div class="image-detail__grid">
+        <div class="image-detail__preview">
+          <img
+            src="/api/annotate/image?dataset={{ detail.dataset | urlencode }}&item={{ detail.image_id | urlencode }}"
+            alt="{{ detail.image_id }}"
+          >
+        </div>
+
+        <div class="image-detail__scores">
+          <h4 class="image-detail__scores-title">Metric scores</h4>
+
+          {% if detail.scores %}
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Measure</th>
+                  <th class="num">Score</th>
+                  <th class="num">Relative</th>
+                  <th>Direction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for score in detail.scores %}
+                <tr class="image-detail__score-row"
+                    {% if score.color_hue is not none %}
+                    style="--score-hue: {{ score.color_hue }};"
+                    {% endif %}>
+                <td class="mono">
+                    {{ score.measure }}
+                    {% if score.kind == "sub_score" %}
+                    <span class="badge badge--muted">sub</span>
+                    {% endif %}
+                </td>
+                <td class="num mono">{{ '%.4g'|format(score.value) }}</td>
+                <td class="num mono">
+                    {% if score.relative_percent is not none %}
+                    {{ score.relative_percent }}%
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>
+                    {{ 'higher is better' if score.higher_is_better else 'lower is better' }}
+                </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+            <p class="muted">No scores available for this image.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</dialog>
+
+<script>
+  (() => {
+    const root = document.querySelector("#metric-image-detail");
+    const dialog = root?.querySelector(".image-detail-dialog");
+
+    if (!dialog) {
+      return;
+    }
+
+    if (!dialog.open) {
+      dialog.showModal();
+    }
+
+    dialog.addEventListener("close", () => {
+      root.innerHTML = "";
+    });
+
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+  })();
+</script>
