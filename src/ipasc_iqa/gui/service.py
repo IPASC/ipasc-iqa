@@ -37,7 +37,10 @@ from ipasc_iqa.analysis.manifest_query import (
     annotation_tasks_in_manifest,
     annotation_values_from_manifest,
     annotator_ratings_from_manifest,
+    comparison_tasks_in_manifest,
+    comparisons_from_manifest,
     groups_from_manifest,
+    ranking_observations_from_manifest,
 )
 from ipasc_iqa.analysis.mos import composite_mos
 from ipasc_iqa.analysis.scatter import build_scatter
@@ -503,7 +506,9 @@ def analysis_for_dataset(
             "sources": [],
             "active_source": source,
             "metric_summary": metric_summary,
-            "human_analysis_message": "No expert annotations or contributed comparisons are available for this dataset.",
+            "human_analysis_message": (
+                "No expert annotations or contributed comparisons are available for this dataset."
+            ),
             "error": None,
         }
 
@@ -519,7 +524,7 @@ def analysis_for_dataset(
 
     # Resolve the human-score source (MOS vs contributed Bradley-Terry).
     mos_values = mos_values_for_dataset_task(workspace, dataset_name, active_task, manifest)
-    bt = bt_scores_for_dataset_task(workspace, dataset_name, active_task)
+    bt = bt_scores_for_dataset_task(workspace, dataset_name, active_task, manifest)
     sources: list[dict] = []
     if mos_values:
         sources.append({"key": "mos", "label": _SOURCE_LABELS["mos"]})
@@ -573,7 +578,9 @@ def task_annotation_summary(
 
     - ``n_images``: total images in the dataset.
     - ``n_ratings`` / ``n_rankings``: total rating / ranking observations for this
-      task (a ranking session contributes one observation per variant it ranks).
+      task. A contributed ranking session contributes one observation per variant
+      it ranks; each pairwise comparison (published in the manifest or
+      contributed) counts as one ranking observation.
     - ``avg_ratings`` / ``avg_rankings``: those totals divided by ``n_images``;
       ``None`` if the dataset has no images.
     """
@@ -583,12 +590,14 @@ def task_annotation_summary(
     rated = _mos_annotator_scores(workspace, dataset_name, task, manifest)
     n_ratings = sum(len(raters) for img, raters in rated.items() if not img.startswith(_REF_PREFIX))
 
-    # Rankings: total variant placements across sessions for this task. Counts
-    # only approved contributors, to match the filtered result aggregates.
+    # Rankings: published ranking placements embedded in the manifest (one
+    # observation per non-reference variant per annotator set), plus contributed
+    # variant placements (approved contributors only, to match the filtered
+    # result aggregates).
+    n_rankings = ranking_observations_from_manifest(manifest, task)
     with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         sessions = store.sessions()
         approved = store.approved_uids()
-    n_rankings = 0
     for s in sessions:
         if s.get("dataset") != dataset_name or s.get("task") != task:
             continue
@@ -641,7 +650,9 @@ def scatter_for_measure(
 
     task_label = active_task or "all"
     if source == "bt":
-        human_values = bt_scores_for_dataset_task(workspace, dataset_name, active_task)["scores"]
+        human_values = bt_scores_for_dataset_task(
+            workspace, dataset_name, active_task, manifest
+        )["scores"]
         x_label = f"Human score (BT · {task_label})"
     else:
         human_values = mos_values_for_dataset_task(workspace, dataset_name, active_task, manifest)
@@ -879,7 +890,7 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
 
         for task in tasks:
             if source == "bt":
-                values = bt_scores_for_dataset_task(workspace, ds["name"], task)["scores"]
+                values = bt_scores_for_dataset_task(workspace, ds["name"], task, manifest)["scores"]
             else:
                 values = mos_values_for_dataset_task(workspace, ds["name"], task, manifest)
             if not values:
@@ -985,34 +996,62 @@ def mos_values_for_dataset_task(
     return {}
 
 
-def bt_scores_for_dataset_task(workspace: Workspace, dataset_name: str, task: str | None) -> dict:
-    """Per-image Bradley-Terry quality scores from contributed comparisons.
+def _pooled_comparisons(
+    workspace: Workspace, dataset_name: str, task: str | None, manifest: dict
+) -> tuple[dict[str, list[tuple[str, str]]], dict[str, set[str]]]:
+    """Pool a dataset/task's pairwise comparisons from both sources.
 
-    Comparisons are aggregated per reference set (across all annotators), and each
-    set is fit independently and anchored at its reference image (beta = 0) — so a
-    variant's score is its *deficit below ground truth*, a scale that is
-    comparable across reference sets. Reference (GT) items are excluded from the
-    returned per-image mapping: full-reference IQMs are computed against the GT,
-    so including it would trivially inflate their correlation (per Breger et al.).
-
-    Returns ``{"scores": {image_id: beta}, "se": {...}, "n_comparisons", "n_sets"}``.
+    Published comparisons embedded in the manifest (``human_comparisons``) and
+    approved contributed comparisons from the annotator store are merged into
+    ``(by_ref, items_by_ref)`` keyed by reference-set id — exactly how the MOS
+    path pools manifest ratings with contributed ratings.
     """
+    by_ref: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    items_by_ref: dict[str, set[str]] = defaultdict(set)
+
+    # Published comparisons that ship with the dataset (always included).
+    for ref, winner, loser in comparisons_from_manifest(manifest, task):
+        by_ref[ref].append((winner, loser))
+        items_by_ref[ref].update((winner, loser))
+
+    # Contributed comparisons, restricted to approved contributors.
     with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         sessions = store.sessions()
         approved = store.approved_uids()
-
-    by_ref: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    items_by_ref: dict[str, set[str]] = defaultdict(set)
     for s in sessions:
         if s.get("dataset") != dataset_name or s.get("task") != task:
             continue
-        # Hard-exclude pending/unapproved/deleted contributors from results.
         if s.get("user_uid") not in approved:
             continue
         ref = s.get("reference")
         for c in s.get("comparisons", []):
             by_ref[ref].append((c["winner"], c["loser"]))
             items_by_ref[ref].update((c["winner"], c["loser"]))
+
+    return by_ref, items_by_ref
+
+
+def bt_scores_for_dataset_task(
+    workspace: Workspace,
+    dataset_name: str,
+    task: str | None,
+    manifest: dict | None = None,
+) -> dict:
+    """Per-image Bradley-Terry quality scores from pairwise comparisons.
+
+    Comparisons — published (manifest) and approved contributed, pooled — are
+    aggregated per reference set (across all annotators), and each set is fit
+    independently and anchored at its reference image (beta = 0), so a variant's
+    score is its *deficit below ground truth*, a scale comparable across
+    reference sets. Reference (GT) items are excluded from the returned per-image
+    mapping: full-reference IQMs are computed against the GT, so including it
+    would trivially inflate their correlation (per Breger et al.).
+
+    Returns ``{"scores": {image_id: beta}, "se": {...}, "n_comparisons", "n_sets"}``.
+    """
+    if manifest is None:
+        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    by_ref, items_by_ref = _pooled_comparisons(workspace, dataset_name, task, manifest)
 
     scores: dict[str, float] = {}
     ses: dict[str, float] = {}
@@ -1052,7 +1091,7 @@ def _sources_for(
     out: list[dict] = []
     if task and mos_values_for_dataset_task(workspace, dataset_name, task, manifest):
         out.append({"key": "mos", "label": _SOURCE_LABELS["mos"]})
-    if bt_scores_for_dataset_task(workspace, dataset_name, task)["scores"]:
+    if bt_scores_for_dataset_task(workspace, dataset_name, task, manifest)["scores"]:
         out.append({"key": "bt", "label": _SOURCE_LABELS["bt"]})
     return out
 
@@ -1063,8 +1102,10 @@ def human_score_sources(workspace: Workspace, dataset_name: str) -> list[dict]:
     if ds is None or not ds["prepared"]:
         return []
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
-    tasks = annotation_tasks_in_manifest(manifest)
-    return _sources_for(manifest, workspace, dataset_name, tasks[0] if tasks else None)
+    # Consider MOS *and* pairwise tasks so a BT-only dataset still offers a source.
+    named, _ = _available_tasks(workspace, dataset_name, manifest)
+    first_task = named[0] if named else None
+    return _sources_for(manifest, workspace, dataset_name, first_task)
 
 
 def _available_tasks(
@@ -1078,9 +1119,10 @@ def _available_tasks(
     dataset with no sub-tasks (task=None).
     """
     mos_tasks = annotation_tasks_in_manifest(manifest)
+    comparison_tasks = comparison_tasks_in_manifest(manifest)
     with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
         contrib_tasks = store.dataset_tasks(dataset_name) | store.rating_tasks(dataset_name)
-    named = sorted(set(mos_tasks) | {t for t in contrib_tasks if t})
+    named = sorted(set(mos_tasks) | set(comparison_tasks) | {t for t in contrib_tasks if t})
     has_unnamed = None in contrib_tasks
     return named, has_unnamed
 
