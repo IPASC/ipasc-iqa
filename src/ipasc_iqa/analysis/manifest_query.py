@@ -66,6 +66,62 @@ def annotator_ratings_from_manifest(manifest: dict, task: str) -> dict[str, dict
     return out
 
 
+def comparison_tasks_in_manifest(manifest: dict) -> list[str]:
+    """Tasks that carry embedded pairwise comparisons (published 2AFC datasets).
+
+    Mirrors :func:`annotation_tasks_in_manifest` but for the ``human_comparisons``
+    block written by pairwise-study adapters (e.g. the Alladien datasets).
+    """
+    tasks = {c.get("task") for c in manifest.get("human_comparisons", []) if c.get("task")}
+    return sorted(tasks)
+
+
+#: Anchor pseudo-item prefix for a reference image (see gui.service._REF_PREFIX).
+_REF_ITEM_PREFIX = "__ref__"
+
+
+def ranking_observations_from_manifest(manifest: dict, task: str | None) -> int:
+    """Count published ranking *placements* for one *task*.
+
+    Each comparison set is one annotator ranking one reference set; it contributes
+    one observation per distinct **non-reference** variant it ranks (mirroring how
+    a contributed ranking session counts ``order`` placements). So an annotator's
+    many pairwise comparisons within a set count once per variant, and the
+    reference (``__ref__`` anchor) is excluded.
+    """
+    total = 0
+    for cset in manifest.get("human_comparisons", []):
+        if cset.get("task") != task:
+            continue
+        items = {
+            item
+            for pair in cset.get("comparisons", [])
+            for item in pair
+            if not str(item).startswith(_REF_ITEM_PREFIX)
+        }
+        total += len(items)
+    return total
+
+
+def comparisons_from_manifest(manifest: dict, task: str | None) -> list[tuple[str, str, str]]:
+    """Return ``(reference, winner, loser)`` triples embedded for one *task*.
+
+    The manifest stores published 2AFC comparisons in the same shape the
+    contributed pairwise pipeline uses, so the two pool cleanly: each set has a
+    ``reference`` (the per-scene group id) and a list of ``[winner, loser]`` image
+    ids, where the scene's pseudo-reference uses the ``__ref__<reference>``
+    pseudo-item (matching the contributed-comparison convention).
+    """
+    out: list[tuple[str, str, str]] = []
+    for cset in manifest.get("human_comparisons", []):
+        if cset.get("task") != task:
+            continue
+        ref = cset.get("reference")
+        for winner, loser in cset.get("comparisons", []):
+            out.append((ref, winner, loser))
+    return out
+
+
 def groups_from_manifest(manifest: dict, key: str = "algorithm") -> dict[str, str]:
     """Return ``{image_id: group}`` using a metadata *key* (default 'algorithm')."""
     out: dict[str, str] = {}
