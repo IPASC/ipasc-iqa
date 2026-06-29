@@ -3,7 +3,7 @@
 Shallow adapter over the ``lpips`` package
 (Zhang et al., CVPR 2018 — https://github.com/richzhang/PerceptualSimilarity).
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``lpips``) are
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``lpips``) are
 deferred to first use so the base install stays lightweight.
 """
 
@@ -68,7 +68,7 @@ class LPIPSMeasure(BaseMeasure):
             import lpips
         except ImportError as exc:
             raise ImportError(
-                "LPIPS requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "LPIPS rrequires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

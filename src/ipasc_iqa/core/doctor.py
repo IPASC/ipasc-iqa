@@ -119,7 +119,10 @@ def _check_torch_numpy_interop(required: bool) -> CheckResult:
             status=status,
             version=f"numpy={numpy_version or 'missing'}, torch=missing",
             message="Torch is not installed, so torch.from_numpy cannot be checked.",
-            suggestion="Install deep dependencies with: pip install 'ipasc_iqa[deep]'",
+            suggestion=(
+                "PyTorch-based metric dependencies are part of the default installation. "
+                "Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
+),
         )
 
     try:
@@ -153,9 +156,10 @@ def _check_torch_numpy_interop(required: bool) -> CheckResult:
 def run_doctor(*, require_gui: bool = False, require_deep: bool = False) -> list[CheckResult]:
     """Run dependency checks for the current Python environment.
 
-    Core dependencies are always required. GUI/deep dependencies are probed by
-    default, but missing optional dependencies are reported as ``skipped`` unless
-    the corresponding ``require_*`` flag is true.
+    Core dependencies are always required. GUI dependencies are optional.
+    PyTorch-based metric dependencies are part of the default installation, but
+    they are still probed separately so users can diagnose modified or broken
+    environments.
     """
 
     results: list[CheckResult] = []
@@ -190,7 +194,10 @@ def run_doctor(*, require_gui: bool = False, require_deep: bool = False) -> list
                 distribution=distribution,
                 group="deep",
                 required=require_deep,
-                install_hint="Install deep dependencies with: pip install 'ipasc_iqa[deep]'",
+                install_hint=(
+                    "PyTorch-based metric dependencies are part of the default installation. "
+                    "Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
+                ),
                 import_check=False,
             )
         )

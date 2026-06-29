@@ -18,7 +18,7 @@ class HaarPSIMedMeasure(BaseMeasure):
     3-scale Haar decomposition works well for images down to ~16×16; below
     that piq may raise an error.
 
-    Range: [0, 1], higher = more similar.  Requires ``ipasc_iqa[deep]``.
+    Range: [0, 1], higher = more similar.  Requires PyTorch-based metric dependencies.
     """
 
     metadata = MeasureMetadata(
@@ -65,7 +65,7 @@ class HaarPSIMedMeasure(BaseMeasure):
             from piq import haarpsi
         except ImportError as exc:
             raise ImportError(
-                "HaarPSI requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "HaarPSI requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

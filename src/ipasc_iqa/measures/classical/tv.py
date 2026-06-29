@@ -1,7 +1,7 @@
 """Total Variation (TV) — no-reference image smoothness measure.
 
-Implemented with NumPy only (no PyTorch required), so it is available in
-the base install without ``ipasc_iqa[deep]``.
+Implemented with NumPy only (no PyTorch required), so it is available as a
+ lightweight classical baseline without requiring PyTorch at import time.
 
 TV measures the sum of local intensity differences across the image.  Low TV
 indicates a smooth image; high TV indicates many sharp edges or noise.  As a
@@ -30,8 +30,7 @@ class TVMeasure(BaseMeasure):
     adjacent pixels.  Dividing by ``H × W`` makes the score resolution-
     independent.
 
-    Range: [0, ∞), lower = smoother image.  Available without
-    ``ipasc_iqa[deep]``.
+    Range: [0, ∞), lower = smoother image.
     """
 
     metadata = MeasureMetadata(

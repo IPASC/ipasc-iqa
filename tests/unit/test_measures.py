@@ -97,11 +97,11 @@ class TestTV:
 
 
 # ---------------------------------------------------------------------------
-# LPIPS — skipped when ipasc_iqa[deep] is not installed
+# LPIPS — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("torch", reason="requires ipasc_iqa[deep]")
-pytest.importorskip("lpips", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("torch", reason="requires PyTorch-based metric dependencies")
+pytest.importorskip("lpips", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.lpips import LPIPSMeasure  # noqa: E402
 
@@ -139,11 +139,11 @@ class TestLPIPS:
 
 
 # ---------------------------------------------------------------------------
-# DISTS — skipped when ipasc_iqa[deep] is not installed
+# DISTS — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("torch", reason="requires ipasc_iqa[deep]")
-pytest.importorskip("DISTS_pytorch", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("torch", reason="requires PyTorch-based metric dependencies")
+pytest.importorskip("DISTS_pytorch", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.dists import DISTSMeasure  # noqa: E402
 
@@ -177,10 +177,10 @@ class TestDISTS:
 
 
 # ---------------------------------------------------------------------------
-# MS-SSIM — skipped when ipasc_iqa[deep] is not installed
+# MS-SSIM — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.msssim import MSSSIMMeasure  # noqa: E402
 
@@ -229,10 +229,10 @@ class TestMSSSIM:
 
 
 # ---------------------------------------------------------------------------
-# IW-SSIM — skipped when ipasc_iqa[deep] is not installed
+# IW-SSIM — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.iwssim import IWSSIMMeasure  # noqa: E402
 
@@ -260,10 +260,10 @@ class TestIWSSIM:
 
 
 # ---------------------------------------------------------------------------
-# VIF — skipped when ipasc_iqa[deep] is not installed
+# VIF — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.vif import VIFMeasure  # noqa: E402
 
@@ -289,10 +289,10 @@ class TestVIF:
 
 
 # ---------------------------------------------------------------------------
-# FSIM — skipped when ipasc_iqa[deep] is not installed
+# FSIM — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.fsim import FSIMMeasure  # noqa: E402
 
@@ -317,10 +317,10 @@ class TestFSIM:
 
 
 # ---------------------------------------------------------------------------
-# GMSD — skipped when ipasc_iqa[deep] is not installed
+# GMSD — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.gmsd import GMSDMeasure  # noqa: E402
 
@@ -341,10 +341,10 @@ class TestGMSD:
 
 
 # ---------------------------------------------------------------------------
-# MS-GMSD — skipped when ipasc_iqa[deep] is not installed
+# MS-GMSD — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.msgmsd import MSGMSDMeasure  # noqa: E402
 
@@ -378,10 +378,10 @@ class TestMSGMSD:
 
 
 # ---------------------------------------------------------------------------
-# HaarPSI — skipped when ipasc_iqa[deep] is not installed
+# HaarPSI — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.haarpsi import HaarPSIMeasure  # noqa: E402
 
@@ -402,10 +402,10 @@ class TestHaarPSI:
 
 
 # ---------------------------------------------------------------------------
-# CLIP-IQA — skipped when ipasc_iqa[deep] is not installed
+# CLIP-IQA — skipped when PyTorch-based metric dependencies are unavailable
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("piq", reason="requires ipasc_iqa[deep]")
+pytest.importorskip("piq", reason="requires PyTorch-based metric dependencies")
 
 from ipasc_iqa.measures.deep.clipiqa import CLIPIQAMeasure  # noqa: E402
 

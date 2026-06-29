@@ -11,7 +11,7 @@ For small images the number of scales is automatically reduced so the
 gradient kernel still fits at every level.  Scale weights are renormalised
 when fewer than 4 scales are used.
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``piq``) are
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``piq``) are
 deferred to first use so the base install stays lightweight.
 """
 
@@ -39,7 +39,7 @@ class MSGMSDMeasure(BaseMeasure):
     For small images the number of active scales is reduced automatically;
     scale weights are renormalised to sum to 1.
 
-    Range: [0, ∞), lower = better quality.  Requires ``ipasc_iqa[deep]``.
+    Range: [0, ∞), lower = better quality.  Requires PyTorch-based metric dependencies.
     """
 
     metadata = MeasureMetadata(
@@ -106,7 +106,7 @@ class MSGMSDMeasure(BaseMeasure):
             from piq import multi_scale_gmsd
         except ImportError as exc:
             raise ImportError(
-                "MS-GMSD requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "MS-GMSD requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

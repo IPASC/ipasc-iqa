@@ -8,7 +8,7 @@ deviation captures the variation of local image distortions more precisely
 than a single global pooling step and is highly correlated with perceived
 quality.
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``piq``) are
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``piq``) are
 deferred to first use so the base install stays lightweight.
 """
 
@@ -26,7 +26,7 @@ class GMSDMeasure(BaseMeasure):
     Similarity (GMS) map.  Low deviation indicates consistently high
     similarity; high deviation indicates spatially variable distortions.
 
-    Range: [0, ∞), lower = better quality.  Requires ``ipasc_iqa[deep]``.
+    Range: [0, ∞), lower = better quality.  Requires PyTorch-based metric dependencies.
     """
 
     metadata = MeasureMetadata(
@@ -77,7 +77,7 @@ class GMSDMeasure(BaseMeasure):
             from piq import gmsd
         except ImportError as exc:
             raise ImportError(
-                "GMSD requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "GMSD requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

@@ -8,12 +8,12 @@ model compares the image embedding against a set of quality-related text
 prompts and outputs a quality score in [0, 1].
 
 piq bundles its own CLIP weights; no separate ``open_clip_torch`` package
-is required — just ``ipasc_iqa[deep]``.
+is required.
 
 The model is loaded lazily on the first ``evaluate()`` call so that
 ``ipasc_iqa list measures`` never triggers a download.
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``piq``) are
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``piq``) are
 deferred to first use so the base install stays lightweight.
 """
 
@@ -37,7 +37,7 @@ class CLIPIQAMeasure(BaseMeasure):
     CLIP (zero-copy ``.expand``).
 
     Range: [0, 1], higher = better perceived quality.
-    Requires ``ipasc_iqa[deep]`` (piq bundles CLIP weights).
+    Requires PyTorch-based metric dependencies. (piq bundles CLIP weights).
     """
 
     metadata = MeasureMetadata(
@@ -86,7 +86,7 @@ class CLIPIQAMeasure(BaseMeasure):
             from piq import CLIPIQA
         except ImportError as exc:
             raise ImportError(
-                "CLIP-IQA requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "CLIP-IQA requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 
