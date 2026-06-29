@@ -38,7 +38,7 @@
                 <tr>
                   <th>Measure</th>
                   <th class="num">Score</th>
-                  <th class="num">Relative</th>
+                  <th class="num">Relative quality</th>
                   <th>Direction</th>
                 </tr>
               </thead>
@@ -56,10 +56,10 @@
                 </td>
                 <td class="num mono">{{ '%.4g'|format(score.value) }}</td>
                 <td class="num mono">
-                    {% if score.relative_percent is not none %}
-                    {{ score.relative_percent }}%
+                    {% if score.quality_percent is not none %}
+                        {{ score.quality_percent }}%
                     {% else %}
-                    —
+                        —
                     {% endif %}
                 </td>
                 <td>

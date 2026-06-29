@@ -746,11 +746,14 @@ def image_detail_for_dataset(
                 if sub_value is not None:
                     distributions[f"{rec.measure}.{sub_name}"].append(float(sub_value))
 
-    def relative_position(key: str, value: float) -> dict:
-        """Return dataset-relative position for a score.
+    def relative_position(key: str, value: float, *, higher_is_better: bool) -> dict:
+        """Return dataset-relative quality position for a score.
 
-        0 means lowest value for this metric in the dataset.
-        1 means highest value for this metric in the dataset.
+        quality_position = 0 means worst value for this metric in the dataset.
+        quality_position = 1 means best value for this metric in the dataset.
+
+        For higher-is-better metrics, high numeric values are better.
+        For lower-is-better metrics, low numeric values are better.
         """
 
         values = distributions.get(key, [])
@@ -758,6 +761,8 @@ def image_detail_for_dataset(
             return {
                 "relative_position": None,
                 "relative_percent": None,
+                "quality_position": None,
+                "quality_percent": None,
                 "color_hue": None,
             }
 
@@ -765,16 +770,23 @@ def image_detail_for_dataset(
         hi = max(values)
 
         if hi == lo:
-            rel = 0.5
+            numeric_rel = 0.5
         else:
-            rel = (value - lo) / (hi - lo)
+            numeric_rel = (value - lo) / (hi - lo)
 
-        rel = max(0.0, min(1.0, rel))
+        numeric_rel = max(0.0, min(1.0, numeric_rel))
+
+        if higher_is_better:
+            quality_rel = numeric_rel
+        else:
+            quality_rel = 1.0 - numeric_rel
 
         return {
-            "relative_position": rel,
-            "relative_percent": round(rel * 100),
-            "color_hue": round(rel * 120),
+            "relative_position": numeric_rel,
+            "relative_percent": round(numeric_rel * 100),
+            "quality_position": quality_rel,
+            "quality_percent": round(quality_rel * 100),
+            "color_hue": round(quality_rel * 120),
         }
 
     scores: list[dict] = []
@@ -790,7 +802,7 @@ def image_detail_for_dataset(
                     "value": value,
                     "higher_is_better": higher_is_better,
                     "kind": "main",
-                    **relative_position(rec.measure, value),
+                    **relative_position(rec.measure, value, higher_is_better=higher_is_better),
                 }
             )
 
@@ -808,7 +820,7 @@ def image_detail_for_dataset(
                         "value": value,
                         "higher_is_better": higher_is_better,
                         "kind": "sub_score",
-                        **relative_position(key, value),
+                        **relative_position(key, value, higher_is_better=higher_is_better),
                     }
                 )
 
