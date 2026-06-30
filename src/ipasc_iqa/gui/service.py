@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from collections import defaultdict
+from urllib.parse import urlencode
 
 import numpy as np
 
@@ -42,6 +43,7 @@ from ipasc_iqa.analysis.manifest_query import (
     groups_from_manifest,
     ranking_observations_from_manifest,
 )
+from ipasc_iqa.analysis.image_explorer import image_group_detail
 from ipasc_iqa.analysis.mos import composite_mos
 from ipasc_iqa.analysis.scatter import build_scatter
 from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
@@ -871,6 +873,71 @@ def image_detail_for_dataset(
         "dataset": dataset_name,
         "image_id": image_id,
         "scores": scores,
+    }
+
+def image_explorer_for_dataset(
+    workspace: Workspace,
+    dataset_name: str,
+    *,
+    stem: str | None = None,
+) -> dict:
+    """Return grouped image variants and metric scores for the Image explorer tab."""
+
+    ds = get_dataset(workspace, dataset_name)
+    if ds is None:
+        return {
+            "error": "dataset not found",
+            "dataset": dataset_name,
+            "groups": [],
+            "active_stem": None,
+            "items": [],
+        }
+
+    if not ds["prepared"]:
+        return {
+            "error": "dataset not downloaded yet — run a benchmark on it first",
+            "dataset": dataset_name,
+            "groups": [],
+            "active_stem": None,
+            "items": [],
+        }
+
+    run = _merged_run(workspace, dataset_name)
+    if run is None:
+        return {
+            "error": "no benchmark run found for this dataset — run a benchmark first",
+            "dataset": dataset_name,
+            "groups": [],
+            "active_stem": None,
+            "items": [],
+        }
+
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+
+    directions = {
+        measure["name"]: bool(measure["higher_is_better"])
+        for measure in list_measures()
+    }
+
+    detail = image_group_detail(
+        manifest,
+        run.results,
+        dataset_name,
+        stem=stem,
+        higher_is_better_by_measure=directions,
+    )
+
+    for item in detail["items"]:
+        item["image_url"] = "/api/annotate/image?" + urlencode(
+            {
+                "dataset": dataset_name,
+                "item": item["image_id"],
+            }
+        )
+
+    return {
+        "dataset": dataset_name,
+        **detail,
     }
 
 

@@ -21,10 +21,12 @@
   <div class="analysis-tabs">
     <input type="radio" id="tab-metric-overview" name="analysis-tab" checked>
     <input type="radio" id="tab-human-agreement" name="analysis-tab">
+    <input type="radio" id="tab-image-explorer" name="analysis-tab">
 
     <div class="analysis-tabs__nav">
       <label for="tab-metric-overview">Metric overview</label>
       <label for="tab-human-agreement">Human agreement</label>
+      <label for="tab-image-explorer">Image explorer</label>
     </div>
 
     <section class="analysis-tabs__panel analysis-tabs__panel--metric">
@@ -317,4 +319,12 @@
         <div id="scatter-result" class="scatter-result"></div>
       {% endif %}
     </section>
+    <section id="image-explorer-panel"
+          class="analysis-tabs__panel analysis-tabs__panel--explorer"
+          hx-get="/api/analysis/image-explorer?dataset={{ result.dataset | urlencode }}"
+          hx-trigger="load"
+          hx-target="this"
+          hx-swap="innerHTML">
+    <p class="muted">Loading image explorer…</p>
+  </section>
   </div>

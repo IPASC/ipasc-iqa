@@ -1,0 +1,102 @@
+{% if explorer['error'] %}
+  <p class="notice notice--warn">{{ explorer['error'] }}</p>
+{% elif not explorer['groups'] %}
+  <p class="muted">No image groups available for this dataset.</p>
+{% else %}
+
+<div class="image-explorer">
+  <div class="image-explorer__controls">
+    <label class="field">
+      <span class="field__label">Image group</span>
+      <select name="stem"
+              class="select"
+              hx-get="/api/analysis/image-explorer"
+              hx-target="#image-explorer-panel"
+              hx-swap="innerHTML"
+              hx-include="[name='dataset'], this">
+        {% for group in explorer['groups'] %}
+        <option value="{{ group['stem'] }}" {{ 'selected' if group['stem'] == explorer['active_stem'] }}>
+          {{ group['label'] }} · {{ group['n_items'] }} version{{ '' if group['n_items'] == 1 else 's' }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <p class="panel__hint">
+      Variants are grouped by manifest metadata, such as shared stem/reference and reconstruction algorithm.
+    </p>
+  </div>
+
+  <div class="image-explorer__grid image-explorer__grid--images">
+    {% for item in explorer['items'] %}
+    <article class="image-explorer-card image-explorer-card--image">
+      <header class="image-explorer-card__head">
+        <div>
+          <h4 class="image-explorer-card__title">{{ item['label'] }}</h4>
+          <p class="mono image-explorer-card__id" title="{{ item['image_id'] }}">
+            {{ item['image_id'] }}
+          </p>
+        </div>
+      </header>
+
+      <div class="image-explorer-card__preview">
+        <img src="{{ item['image_url'] }}"
+             alt="{{ item['image_id'] }}"
+             loading="lazy">
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+
+  {% if explorer['score_table'] %}
+  <section class="image-explorer-scores">
+    <h4 class="image-explorer-scores__title">Metric comparison</h4>
+    <p class="muted">
+      Cell colors show relative quality within the selected image group.
+    </p>
+
+    <div class="table-scroll">
+      <table class="data-table image-explorer-score-table">
+        <thead>
+          <tr>
+            <th>Measure</th>
+            {% for item in explorer['items'] %}
+            <th class="num" title="{{ item['image_id'] }}">
+              {{ item['label'] }}
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in explorer['score_table'] %}
+          <tr>
+            <td class="mono">
+              {{ row['measure'] }}
+              <span class="muted">
+                {{ '↑' if row['higher_is_better'] else '↓' }}
+              </span>
+            </td>
+
+            {% for cell in row['values'] %}
+              {% if cell['value'] is not none %}
+              <td class="num mono image-explorer-score-cell"
+                  style="--score-hue: {{ cell['color_hue'] }};"
+                  title="{{ cell['label'] }} · {{ row['measure'] }} · quality {{ cell['quality_percent'] }}%">
+                {{ '%.4g'|format(cell['value']) }}
+              </td>
+              {% else %}
+              <td class="num muted">—</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% else %}
+  <p class="muted">No metric scores available for this image group.</p>
+  {% endif %}
+</div>
+
+{% endif %}

@@ -107,6 +107,24 @@ def analysis_image_detail_fragment(
         {"detail": model},
     )
 
+@router.get("/api/analysis/image-explorer", response_class=HTMLResponse)
+def image_explorer_fragment(
+    request: Request,
+    dataset: str,
+    stem: str | None = None,
+) -> HTMLResponse:
+    workspace = _ws(request)
+    explorer = service.image_explorer_for_dataset(
+        workspace,
+        dataset,
+        stem=stem,
+    )
+    return templates.TemplateResponse(
+        request,
+        "fragments/image_explorer.html",
+        {"explorer": explorer},
+    )
+
 @router.get("/api/analysis", response_class=HTMLResponse)
 def analysis_fragment(
     request: Request,
