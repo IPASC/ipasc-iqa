@@ -1122,3 +1122,21 @@ dialog.image-detail-dialog[open]:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+.notice--info {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.run-device-note {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.run-device-note .muted {
+  display: inline-block;
+  margin-top: 0.2rem;
+  color: inherit;
+  opacity: 0.75;
+}

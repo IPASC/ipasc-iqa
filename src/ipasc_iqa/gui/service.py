@@ -105,11 +105,65 @@ class Workspace:
             data_dir=Path(data_dir).resolve() if data_dir else default_data_dir(),
         )
 
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+
+def torch_device_status() -> dict:
+    """Return the PyTorch execution backend visible to the GUI server."""
+    try:
+        import torch
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend": "none",
+            "label": "PyTorch not available",
+            "message": (
+                "PyTorch is not available in this environment. "
+                "PyTorch-based metrics cannot run until PyTorch is installed."
+            ),
+            "detail": str(exc),
+        }
+
+    cuda_available = bool(torch.cuda.is_available())
+    mps_available = bool(
+        hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    )
+
+    if cuda_available:
+        name = torch.cuda.get_device_name(0)
+        return {
+            "available": True,
+            "backend": "cuda",
+            "label": f"GPU available: CUDA ({name})",
+            "message": "PyTorch-based metrics can use CUDA GPU acceleration.",
+            "detail": f"torch {torch.__version__}, CUDA {torch.version.cuda}",
+        }
+
+    if mps_available:
+        return {
+            "available": True,
+            "backend": "mps",
+            "label": "GPU available: Apple MPS",
+            "message": "PyTorch-based metrics can use Apple Silicon GPU acceleration.",
+            "detail": f"torch {torch.__version__}",
+        }
+
+    return {
+        "available": False,
+        "backend": "cpu",
+        "label": "No compatible GPU backend detected",
+        "message": (
+            "PyTorch-based metrics will run on CPU and may be slower on large datasets."
+        ),
+        "detail": f"torch {torch.__version__}",
+    }
 
 # ---------------------------------------------------------------------------
 # Measures
 # ---------------------------------------------------------------------------
-
 
 def list_measures() -> list[dict]:
     out = []
