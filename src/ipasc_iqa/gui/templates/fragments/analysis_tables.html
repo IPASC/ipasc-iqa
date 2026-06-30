@@ -54,7 +54,21 @@
             <tbody>
               {% for stat in result.metric_summary.statistics %}
               <tr>
-                <td class="mono">{{ stat.measure }}</td>
+                <td class="mono">
+                  <span class="measure-cell">
+                    <span class="measure-cell__icon">
+                      {% if stat.bibtex %}
+                      <button type="button" class="cite-btn cite-btn--inline"
+                              data-bibtex="{{ stat.bibtex }}"
+                              title="Show BibTeX citation"
+                              aria-label="Citation for {{ stat.measure }}">
+                        <i class="fa-solid fa-quote-right"></i>
+                      </button>
+                      {% endif %}
+                    </span>
+                    <span>{{ stat.measure }}</span>
+                  </span>
+                </td>
                 <td class="num">{{ stat.n }}</td>
                 <td class="num mono">{{ '%.4g'|format(stat.mean) }}</td>
                 <td class="num mono">{{ '%.4g'|format(stat.std) }}</td>
@@ -84,6 +98,40 @@
             </span>
           </summary>
 
+          {% if groups.distribution is defined and groups.distribution.bins is defined and groups.distribution.bins %}
+          <div class="metric-distribution">
+            <div class="metric-distribution__head">
+              <span class="metric-distribution__title">Score distribution</span>
+              <span class="muted">
+                min {{ '%.4g'|format(groups.distribution.min) }}
+                · max {{ '%.4g'|format(groups.distribution.max) }}
+              </span>
+            </div>
+
+            <div class="metric-distribution__plot">
+              <div class="metric-distribution__y-axis" aria-hidden="true">
+                <span>{{ groups.distribution.max_count }}</span>
+                <span>0</span>
+              </div>
+
+              <div class="metric-distribution__chart"
+                  role="img"
+                  aria-label="Score distribution for {{ measure_name }}. Maximum bin count: {{ groups.distribution.max_count }}.">
+                {% for hist_bin in groups.distribution.bins %}
+                <div class="metric-distribution__bar"
+                    title="{{ hist_bin.count }} image(s), {{ '%.4g'|format(hist_bin.x0) }}–{{ '%.4g'|format(hist_bin.x1) }}"
+                    style="--bar-height: {{ hist_bin.height_pct }}%;"></div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="metric-distribution__axis">
+              <span>{{ '%.4g'|format(groups.distribution.min) }}</span>
+              <span>{{ '%.4g'|format(groups.distribution.max) }}</span>
+            </div>
+          </div>
+          {% endif %}
+
           <div class="analysis-example-grid">
             <div>
               <h4>Best examples</h4>
@@ -97,9 +145,10 @@
                 <tbody>
                   {% for row in groups.best %}
                   <tr>
-                    <td class="mono">
+                    <td class="mono image-id-cell">
                       <button type="button"
-                              class="link-button mono"
+                              class="link-button mono image-id-link"
+                              title="{{ row.dataset }}/{{ row.image_id }}"
                               hx-get="/api/analysis/image-detail?dataset={{ row.dataset | urlencode }}&image_id={{ row.image_id | urlencode }}"
                               hx-target="#metric-image-detail"
                               hx-swap="innerHTML">
@@ -125,9 +174,10 @@
                 <tbody>
                   {% for row in groups.worst %}
                   <tr>
-                    <td class="mono">
+                    <td class="mono image-id-cell">
                       <button type="button"
-                              class="link-button mono"
+                              class="link-button mono image-id-link"
+                              title="{{ row.dataset }}/{{ row.image_id }}"
                               hx-get="/api/analysis/image-detail?dataset={{ row.dataset | urlencode }}&image_id={{ row.image_id | urlencode }}"
                               hx-target="#metric-image-detail"
                               hx-swap="innerHTML">

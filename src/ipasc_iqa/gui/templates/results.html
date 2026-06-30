@@ -83,6 +83,26 @@
   const preset = document.getElementById("measure-preset");
   if (!form || !preset) return;
 
+  const defaultAnalysisTab = "tab-metric-overview";
+  let activeAnalysisTab = defaultAnalysisTab;
+  let lastDataset = currentDataset();
+
+  function currentDataset() {
+    const datasetField = form.querySelector('[name="dataset"]');
+    return datasetField ? datasetField.value : "";
+  }
+
+  function currentAnalysisTab() {
+    const checked = document.querySelector('input[name="analysis-tab"]:checked');
+    return checked ? checked.id : defaultAnalysisTab;
+  }
+
+  function restoreAnalysisTab() {
+    const tab = document.getElementById(activeAnalysisTab)
+      || document.getElementById(defaultAnalysisTab);
+    if (tab) tab.checked = true;
+  }
+
   function applyPreset(value) {
     if (value === "custom") return;
     form.querySelectorAll('input[name="measures"]').forEach(function (cb) {
@@ -105,6 +125,29 @@
     if (e.target && e.target.matches && e.target.matches('input[name="measures"]')) {
       preset.value = "custom";
     }
+  });
+
+  // Remember the selected analysis tab while the user stays on the same dataset.
+  // Changing dataset intentionally resets the panel to Metric overview.
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.matches && e.target.matches('input[name="analysis-tab"]')) {
+      activeAnalysisTab = e.target.id;
+    }
+  });
+
+  document.body.addEventListener("htmx:beforeRequest", function (e) {
+    if (e.detail.elt !== form) return;
+
+    const nextDataset = currentDataset();
+    activeAnalysisTab = nextDataset === lastDataset
+      ? currentAnalysisTab()
+      : defaultAnalysisTab;
+    lastDataset = nextDataset;
+  });
+
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (!e.detail.target || e.detail.target.id !== "correlation-result") return;
+    restoreAnalysisTab();
   });
 })();
 </script>

@@ -49,11 +49,55 @@ def measure_directions(measures: Iterable[object]) -> dict[str, bool]:
 
     return directions
 
+def _score_distribution(values: np.ndarray, *, bins: int = 20) -> dict:
+    """Return compact histogram data for template rendering."""
+    if values.size == 0:
+        return {"bins": [], "min": None, "max": None, "max_count": 0}
+
+    lo = float(values.min())
+    hi = float(values.max())
+
+    if lo == hi:
+        return {
+            "bins": [
+                {
+                    "x0": lo,
+                    "x1": hi,
+                    "count": int(values.size),
+                    "height_pct": 100.0,
+                }
+            ],
+            "min": lo,
+            "max": hi,
+            "max_count": int(values.size),
+        }
+
+    counts, edges = np.histogram(values, bins=bins)
+    max_count = int(counts.max()) if counts.size else 0
+
+    hist_bins = []
+    for count, x0, x1 in zip(counts, edges[:-1], edges[1:]):
+        hist_bins.append(
+            {
+                "x0": float(x0),
+                "x1": float(x1),
+                "count": int(count),
+                "height_pct": float((count / max_count) * 100) if max_count else 0.0,
+            }
+        )
+
+    return {
+        "bins": hist_bins,
+        "min": lo,
+        "max": hi,
+        "max_count": max_count,
+    }
 
 def rich_measure_summary(
     records: Iterable[ResultRecord],
     *,
     higher_is_better_by_measure: dict[str, bool] | None = None,
+    bibtex_by_measure: dict[str, str | None] | None = None,
     top: int = 5,
 ) -> dict:
     """Return annotation-free statistics and best/worst examples.
@@ -62,6 +106,7 @@ def rich_measure_summary(
     records and does not require human annotations.
     """
     higher_is_better_by_measure = higher_is_better_by_measure or {}
+    bibtex_by_measure = bibtex_by_measure or {}
 
     buckets: dict[str, list[dict]] = defaultdict(list)
 
@@ -95,6 +140,7 @@ def rich_measure_summary(
 
         base_measure = measure_name.split(".", 1)[0]
         higher_is_better = higher_is_better_by_measure.get(base_measure, True)
+        bibtex = bibtex_by_measure.get(measure_name) or bibtex_by_measure.get(base_measure)
 
         rows_sorted = sorted(rows, key=lambda row: row["value"])
 
@@ -115,11 +161,15 @@ def rich_measure_summary(
                 "min": float(values.min()),
                 "max": float(values.max()),
                 "higher_is_better": bool(higher_is_better),
+                "bibtex": bibtex,
+
             }
         )
 
         examples[measure_name] = {
             "higher_is_better": bool(higher_is_better),
+            "bibtex": bibtex,
+            "distribution": _score_distribution(values),
             "best": best_rows,
             "worst": worst_rows,
         }

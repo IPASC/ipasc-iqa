@@ -477,17 +477,24 @@ def analysis_for_dataset(
             **_empty,
         }
     
+    measures_meta = list_measures()
+
     directions = {
         measure["name"]: bool(measure["higher_is_better"])
-        for measure in list_measures()
+        for measure in measures_meta
+    }
+
+    bibtex_by_measure = {
+        measure["name"]: measure.get("bibtex")
+        for measure in measures_meta
     }
 
     metric_summary = rich_measure_summary(
         [rec for rec in run.results if rec.dataset == dataset_name],
         higher_is_better_by_measure=directions,
+        bibtex_by_measure=bibtex_by_measure,
         top=5,
     )
-
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
     # Tasks can come from manifest MOS *or* from contributed pairwise comparisons,
     # so a dataset with no expert ratings is still analysable once BT data exists.
@@ -538,7 +545,6 @@ def analysis_for_dataset(
 
     # Annotate each row with its measure's BibTeX (for the citation icon) and the
     # pre-computed per-dataset mean/std of its values.
-    bibtex_by_measure = {m["name"]: m["bibtex"] for m in list_measures()}
     stats_by_measure = dataset_measure_stats(workspace, dataset_name)
     row_dicts = []
     for r in rows:
@@ -565,6 +571,31 @@ def analysis_for_dataset(
         "error": None,
     }
 
+def _annotate_metric_summary_bibtex(metric_summary: dict, measures_meta: list[dict]) -> dict:
+    """Attach BibTeX citations to Metric overview statistics and examples."""
+    bibtex_by_measure = {
+        measure["name"]: measure.get("bibtex")
+        for measure in measures_meta
+    }
+
+    for stat in metric_summary.get("statistics", []):
+        measure_name = stat.get("measure")
+        if not measure_name:
+            continue
+        base_measure = measure_name.split(".", 1)[0]
+        stat["bibtex"] = (
+            bibtex_by_measure.get(measure_name)
+            or bibtex_by_measure.get(base_measure)
+        )
+
+    for measure_name, groups in metric_summary.get("examples", {}).items():
+        base_measure = measure_name.split(".", 1)[0]
+        groups["bibtex"] = (
+            bibtex_by_measure.get(measure_name)
+            or bibtex_by_measure.get(base_measure)
+        )
+
+    return metric_summary
 
 def task_annotation_summary(
     workspace: Workspace, dataset_name: str, task: str | None, manifest: dict

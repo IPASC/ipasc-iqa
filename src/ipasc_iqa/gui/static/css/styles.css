@@ -860,3 +860,121 @@ dialog.image-detail-dialog[open]:focus-visible {
 .image-detail__score-row[style]:hover td {
   background: hsl(var(--score-hue), 75%, 86%);
 }
+
+.metric-distribution {
+  margin: 0.85rem 0 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border, #d7dde8);
+  border-radius: 0.85rem;
+  background: var(--panel, #fff);
+}
+
+.metric-distribution__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.metric-distribution__title {
+  font-weight: 650;
+}
+
+.metric-distribution__chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 110px;
+  padding: 0.5rem 0.45rem 0;
+  border: 1px solid var(--border, #d7dde8);
+  border-radius: 0.65rem;
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 100% 25%;
+}
+
+.metric-distribution__bar {
+  flex: 1 1 0;
+  height: var(--bar-height);
+  min-height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--accent, #3b82f6);
+  opacity: 0.85;
+}
+
+.metric-distribution__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.35rem;
+  margin-left: 2.7rem;
+  font-size: 0.78rem;
+  color: var(--muted, #667085);
+}
+
+.metric-distribution__plot {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.metric-distribution__y-axis {
+  height: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: end;
+  padding-top: 0.5rem;
+  padding-bottom: 0;
+  font-size: 0.72rem;
+  color: var(--muted, #667085);
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-example-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.analysis-example-grid > div {
+  min-width: 0;
+}
+
+.analysis-example-grid .data-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.analysis-example-grid .data-table th:first-child,
+.analysis-example-grid .data-table td:first-child {
+  width: min(34rem, 78%);
+}
+
+.analysis-example-grid .data-table th:last-child,
+.analysis-example-grid .data-table td:last-child {
+  width: 7rem;
+  white-space: nowrap;
+}
+
+.image-id-cell {
+  min-width: 0;
+  max-width: 0;
+}
+
+.image-id-link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+@media (max-width: 1100px) {
+  .analysis-example-grid {
+    grid-template-columns: 1fr;
+  }
+}
