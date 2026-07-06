@@ -220,6 +220,32 @@ def _measure_usable(measure_meta: dict, caps: dict) -> bool:
     return not (measure_meta["requires_noise_roi"] and not caps.get("has_noise_roi"))
 
 
+def _selected_measure_records(
+    run: RunResults,
+    manifest: dict,
+    dataset_name: str,
+    measures: list[str] | None,
+) -> tuple[list, list[str]]:
+    """Filter run records by dataset capabilities and the selected measures.
+
+    This is the shared measure-selection logic for all analysis panels. The
+    Metric overview, Human agreement, and Image explorer should all see the
+    same selected/usable metric set.
+    """
+    measure_meta = list_measures()
+    caps = _capabilities_from_manifest(manifest)
+    usable = [m["name"] for m in measure_meta if _measure_usable(m, caps)]
+    chosen = [m for m in (measures or usable) if m in usable]
+
+    selected_records = [
+        rec
+        for rec in run.results
+        if rec.dataset == dataset_name and rec.measure in chosen
+    ]
+
+    return selected_records, chosen
+
+
 # Human-readable labels for the measure-type enum (used in the analysis UI).
 _MEASURE_TYPE_LABELS = {
     MeasureType.FULL_REFERENCE: "full-reference",
@@ -545,17 +571,27 @@ def analysis_for_dataset(
         for measure in measures_meta
     }
 
-    metric_summary = rich_measure_summary(
-        [rec for rec in run.results if rec.dataset == dataset_name],
-        higher_is_better_by_measure=directions,
-        bibtex_by_measure=bibtex_by_measure,
-        top=5,
-    )
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+
     # Tasks can come from manifest MOS *or* from contributed pairwise comparisons,
     # so a dataset with no expert ratings is still analysable once BT data exists.
     task = task or None
     task_names, has_unnamed = _available_tasks(workspace, dataset_name, manifest)
+
+    # Apply the same usable/selected measure filter to every analysis panel.
+    selected_records, chosen = _selected_measure_records(
+        run,
+        manifest,
+        dataset_name,
+        measures,
+    )
+
+    metric_summary = rich_measure_summary(
+        selected_records,
+        higher_is_better_by_measure=directions,
+        top=5,
+    )
+
     if not task_names and not has_unnamed:
         return {
             "dataset": dataset_name,
@@ -578,12 +614,6 @@ def analysis_for_dataset(
     # Resolve the active task. A dataset with no sub-tasks but contributed
     # comparisons has a single unnamed task (active_task=None, no dropdown).
     active_task = _resolve_active_task(task, task_names)
-
-    # Only correlate measures the dataset can actually support, intersected with
-    # the user's selection — so unusable measures never produce empty rows.
-    caps = _capabilities_from_manifest(manifest)
-    usable = [m["name"] for m in list_measures() if _measure_usable(m, caps)]
-    chosen = [m for m in (measures or usable) if m in usable]
 
     # Resolve the human-score source (MOS vs contributed Bradley-Terry).
     mos_values = mos_values_for_dataset_task(workspace, dataset_name, active_task, manifest)
@@ -934,6 +964,7 @@ def image_explorer_for_dataset(
     dataset_name: str,
     *,
     stem: str | None = None,
+    measures: list[str] | None = None,
 ) -> dict:
     """Return grouped image variants and metric scores for the Image explorer tab."""
 
@@ -973,9 +1004,16 @@ def image_explorer_for_dataset(
         for measure in list_measures()
     }
 
+    selected_records, chosen = _selected_measure_records(
+        run,
+        manifest,
+        dataset_name,
+        measures,
+    )
+
     detail = image_group_detail(
         manifest,
-        run.results,
+        selected_records,
         dataset_name,
         stem=stem,
         higher_is_better_by_measure=directions,
@@ -991,6 +1029,7 @@ def image_explorer_for_dataset(
 
     return {
         "dataset": dataset_name,
+        "selected_measures": chosen,
         **detail,
     }
 

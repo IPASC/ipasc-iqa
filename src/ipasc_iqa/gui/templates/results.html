@@ -7,10 +7,10 @@
   <p class="empty">No datasets found in the workspace.</p>
 {% else %}
 <div class="analysis-layout">
-  <form class="controls"
+  <form id="analysis-controls" class="controls"
         hx-get="/api/analysis"
         hx-target="#correlation-result"
-        hx-trigger="load, change"
+        hx-trigger="load, change delay:250ms queue:last"
         hx-swap="innerHTML">
 
     <label class="field">
@@ -94,7 +94,7 @@
 
   function currentAnalysisTab() {
     const checked = document.querySelector('input[name="analysis-tab"]:checked');
-    return checked ? checked.id : defaultAnalysisTab;
+    return checked ? checked.id : null;
   }
 
   function restoreAnalysisTab() {
@@ -139,9 +139,18 @@
     if (e.detail.elt !== form) return;
 
     const nextDataset = currentDataset();
-    activeAnalysisTab = nextDataset === lastDataset
-      ? currentAnalysisTab()
-      : defaultAnalysisTab;
+
+    if (nextDataset !== lastDataset) {
+      activeAnalysisTab = defaultAnalysisTab;
+      lastDataset = nextDataset;
+      return;
+    }
+
+    const visibleTab = currentAnalysisTab();
+    if (visibleTab) {
+      activeAnalysisTab = visibleTab;
+    }
+
     lastDataset = nextDataset;
   });
 

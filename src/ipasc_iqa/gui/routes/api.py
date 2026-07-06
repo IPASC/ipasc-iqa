@@ -112,12 +112,14 @@ def image_explorer_fragment(
     request: Request,
     dataset: str,
     stem: str | None = None,
+    measures: list[str] | None = Query(None),
 ) -> HTMLResponse:
     workspace = _ws(request)
     explorer = service.image_explorer_for_dataset(
         workspace,
         dataset,
         stem=stem,
+        measures=measures,
     )
     return templates.TemplateResponse(
         request,

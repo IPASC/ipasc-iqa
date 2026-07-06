@@ -13,7 +13,7 @@
               hx-get="/api/analysis/image-explorer"
               hx-target="#image-explorer-panel"
               hx-swap="innerHTML"
-              hx-include="[name='dataset'], this">
+              hx-include="#analysis-controls">
         {% for group in explorer['groups'] %}
         <option value="{{ group['stem'] }}" {{ 'selected' if group['stem'] == explorer['active_stem'] }}>
           {{ group['label'] }} · {{ group['n_items'] }} version{{ '' if group['n_items'] == 1 else 's' }}
