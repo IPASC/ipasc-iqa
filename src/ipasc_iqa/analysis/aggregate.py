@@ -49,7 +49,7 @@ def measure_directions(measures: Iterable[object]) -> dict[str, bool]:
 
     return directions
 
-def _score_distribution(values: np.ndarray, *, bins: int = 20) -> dict:
+def _score_distribution(values: np.ndarray, *, bins: int = 30) -> dict:
     """Return compact histogram data for template rendering."""
     if values.size == 0:
         return {"bins": [], "min": None, "max": None, "max_count": 0}

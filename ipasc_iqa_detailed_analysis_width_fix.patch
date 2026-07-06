@@ -1,0 +1,122 @@
+diff -ruN a/src/ipasc_iqa/gui/static/css/styles.css b/src/ipasc_iqa/gui/static/css/styles.css
+--- a/src/ipasc_iqa/gui/static/css/styles.css	2026-07-06 15:02:22.309530563 +0000
++++ b/src/ipasc_iqa/gui/static/css/styles.css	2026-07-06 15:02:23.320620052 +0000
+@@ -235,14 +235,19 @@
+ .htmx-request.htmx-indicator { opacity: 1; }
+ 
+ /* ---------- Analysis / controls ---------- */
++/* The Detailed analysis page needs more horizontal room than the default
++   content column because its metric tables are intentionally wide. */
++.content:has(.analysis-layout) {
++  max-width: min(1600px, calc(100vw - 2rem));
++}
++
+ .analysis-layout {
+   display: grid;
+-  grid-template-columns: 260px minmax(0, max-content);
++  grid-template-columns: 260px minmax(0, 1fr);
+   gap: 1.5rem;
+-  width: fit-content;
++  width: 100%;
+   max-width: 100%;
+-  margin-inline: auto;
+-  justify-content: center;
++  align-items: start;
+ }
+ @media (max-width: 820px) {
+   .analysis-layout {
+@@ -464,60 +469,39 @@
+   display: block;
+ }
+ 
+-/* Detailed analysis should size to its actual content instead of stretching
+-   the white result panels across the full available column. */
+-.analysis-layout {
+-  grid-template-columns: 260px minmax(0, max-content);
+-  justify-content: center;
+-  align-items: start;
+-}
+-
+-.result-area {
+-  width: fit-content;
+-  max-width: 100%;
+-}
+-
+-.analysis-tabs {
+-  width: fit-content;
++/* Detailed analysis panels should use all available page width. Wide tables
++   scroll inside their own white panel instead of being clipped by the page. */
++.result-area,
++.analysis-tabs,
++.analysis-tabs__panel {
++  width: 100%;
+   max-width: 100%;
++  min-width: 0;
+ }
+ 
+ .analysis-tabs__nav {
+-  width: fit-content;
+-  max-width: 100%;
+-}
+-
+-.analysis-tabs__panel {
+-  width: fit-content;
++  width: 100%;
+   max-width: 100%;
++  overflow-x: auto;
+ }
+ 
+-.analysis-tabs .data-table {
+-  width: auto;
++.analysis-tabs .table-scroll {
++  width: 100%;
+   max-width: 100%;
++  overflow-x: auto;
+ }
+ 
+-.analysis-tabs .table-scroll {
+-  width: fit-content;
+-  max-width: 100%;
++/* Main summary/correlation tables may be wider than the panel. Keep their
++   intrinsic width and let .table-scroll expose the missing columns. */
++.analysis-tabs__panel > .task-block > .table-scroll > .data-table {
++  width: max-content;
++  min-width: 100%;
++  max-width: none;
+ }
+ 
+ @media (max-width: 820px) {
+-  .analysis-layout {
+-    grid-template-columns: 1fr;
+-    justify-content: stretch;
+-  }
+-
+-  .result-area,
+-  .analysis-tabs,
+-  .analysis-tabs__nav,
+-  .analysis-tabs__panel,
+-  .analysis-tabs .table-scroll {
+-    width: 100%;
+-  }
+-
+-  .analysis-tabs .data-table {
+-    width: 100%;
++  .content:has(.analysis-layout) {
++    max-width: 100%;
+   }
+ }
+ 
+@@ -1236,13 +1220,6 @@
+ }
+ 
+ .metric-name--clickable {
+-  font-weight: 700;
+-  text-decoration: underline;
+-  text-decoration-thickness: 0.08em;
+-  text-underline-offset: 0.16em;
+-}
+-
+-.metric-name--clickable {
+   font-weight: 700;
+   text-decoration: underline;
+   text-decoration-thickness: 0.08em;
