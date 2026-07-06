@@ -70,6 +70,15 @@
               </tbody>
             </table>
           </div>
+
+          <p class="legend score-legend">
+            Cells shaded by relative quality within this dataset:
+            <span class="legend__swatch score-legend__swatch score-legend__swatch--low"></span>
+            worse
+            →
+            <span class="legend__swatch score-legend__swatch score-legend__swatch--high"></span>
+            better.
+          </p>
           {% else %}
             <p class="muted">No scores available for this image.</p>
           {% endif %}

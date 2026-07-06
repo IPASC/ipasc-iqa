@@ -64,12 +64,12 @@
 
     <!-- label box -->
     <g class="scatter__label">
-      <rect x="{{ c.plot.x + 6 }}" y="{{ c.plot.y + 6 }}" width="118" height="58" rx="5"
+      <rect x="{{ c.plot.x + 6 }}" y="{{ c.plot.y + 6 }}" width="140" height="70" rx="5"
             fill="#ffffff" fill-opacity="0.85" stroke="#94a3b8"/>
       <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 24 }}" class="scatter__label-name">{{ s.measure }}</text>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 40 }}" class="scatter__label-stat">
+      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 42 }}" class="scatter__label-stat">
         &#961; = {{ '%.3f'|format(s.srcc) if s.srcc is not none else '—' }}</text>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 55 }}" class="scatter__label-stat">
+      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 60 }}" class="scatter__label-stat">
         &#964; = {{ '%.3f'|format(s.krcc) if s.krcc is not none else '—' }}</text>
     </g>
 
@@ -87,7 +87,9 @@
       <span class="scatter__swatch" style="background: {{ item.color }}"></span>{{ item.label }}
     </span>
     {% endfor %}
-    <span class="scatter__legend-item muted">— rank-mean trend</span>
+    <span class="scatter__legend-item muted">
+      ρ = Spearman; τ = Kendall
+    </span>
   </div>
   {% endif %}
 

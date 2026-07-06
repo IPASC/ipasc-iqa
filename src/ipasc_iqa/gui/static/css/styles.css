@@ -540,9 +540,10 @@ img, svg, video, table { max-width: 100%; }
 }
 
 /* ---------- Detailed analysis: clickable rows + scatter plot ---------- */
-.measure-row { cursor: pointer; transition: background 0.1s ease; }
-.measure-row:hover td { background: #eef2ff; }
-.measure-row:hover td.corr-cell { filter: brightness(0.97); }
+.measure-row {
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
 
 .scatter-result { margin-top: 1.5rem; }
 .scatter {
@@ -686,6 +687,46 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
 }
 .annotate-rate__confirm small { font-weight: 400; opacity: 0.85; }
 .annotate-rate__finish { margin-top: 0.75rem; text-align: center; }
+
+/* Human agreement expandable scatter rows: reuse the Metric overview row style. */
+.human-measure-row {
+  cursor: pointer;
+}
+
+.human-measure-row:hover td,
+.human-measure-row:focus-visible td {
+  background: #f8fafc;
+}
+
+.human-measure-row:hover td.corr-cell {
+  filter: brightness(0.97);
+}
+
+.human-detail-row > td {
+  padding: 0.2rem 0.9rem 1rem;
+  background: #f8fafc;
+}
+
+.human-row-detail {
+  padding: 0;
+  overflow: hidden;
+}
+
+.human-scatter-detail {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.human-scatter-detail .scatter {
+  box-shadow: none;
+  border: none;
+  border-radius: var(--radius);
+}
+
+.human-scatter-detail .scatter-result {
+  margin-top: 0;
+}
 
 /* ---------- Annotation stage: fit one screen on mobile (controls stay visible) ----------
    The rate stage carries a slider + Confirm + Finish below the images, so it
@@ -1048,6 +1089,22 @@ dialog.image-detail-dialog[open]:focus-visible {
   .analysis-example-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.score-legend {
+  margin-top: 0.75rem;
+}
+
+.score-legend__swatch {
+  margin-inline: 0.25rem;
+}
+
+.score-legend__swatch--low {
+  background: hsl(0, 70%, 92%);
+}
+
+.score-legend__swatch--high {
+  background: hsl(120, 70%, 92%);
 }
 
 /* ---------- Image explorer tab ---------- */
