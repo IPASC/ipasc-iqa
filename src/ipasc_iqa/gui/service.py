@@ -586,10 +586,13 @@ def analysis_for_dataset(
         measures,
     )
 
-    metric_summary = rich_measure_summary(
-        selected_records,
-        higher_is_better_by_measure=directions,
-        top=5,
+    metric_summary = _annotate_metric_summary_bibtex(
+        rich_measure_summary(
+            selected_records,
+            higher_is_better_by_measure=directions,
+            top=5,
+        ),
+        measures_meta,
     )
 
     if not task_names and not has_unnamed:
@@ -999,9 +1002,14 @@ def image_explorer_for_dataset(
 
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
 
+    measures_meta = list_measures()
     directions = {
         measure["name"]: bool(measure["higher_is_better"])
-        for measure in list_measures()
+        for measure in measures_meta
+    }
+    bibtex_by_measure = {
+        measure["name"]: measure.get("bibtex")
+        for measure in measures_meta
     }
 
     selected_records, chosen = _selected_measure_records(
@@ -1025,6 +1033,16 @@ def image_explorer_for_dataset(
                 "dataset": dataset_name,
                 "item": item["image_id"],
             }
+        )
+
+    for row in detail.get("score_table", []):
+        measure_name = row.get("measure")
+        if not measure_name:
+            continue
+        base_measure = measure_name.split(".", 1)[0]
+        row["bibtex"] = (
+            bibtex_by_measure.get(measure_name)
+            or bibtex_by_measure.get(base_measure)
         )
 
     return {

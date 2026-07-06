@@ -71,10 +71,22 @@
           {% for row in explorer['score_table'] %}
           <tr>
             <td class="mono">
-              {{ row['measure'] }}
-              <span class="muted">
-                {{ '↑' if row['higher_is_better'] else '↓' }}
-              </span>
+                <span class="measure-cell">
+                    <span class="measure-cell__icon">
+                        {% if row['bibtex'] %}
+                        <button type="button" class="cite-btn cite-btn--inline"
+                                data-bibtex="{{ row['bibtex'] }}"
+                                title="Show BibTeX citation"
+                                aria-label="Citation for {{ row['measure'] }}">
+                            <i class="fa-solid fa-quote-right"></i>
+                        </button>
+                        {% endif %}
+                        </span>
+                        <span>{{ row['measure'] }}</span>
+                        <span class="muted">
+                        {{ '↑' if row['higher_is_better'] else '↓' }}
+                    </span>
+                </span>
             </td>
 
             {% for cell in row['values'] %}
