@@ -29,7 +29,9 @@
 
   <div class="image-explorer__grid image-explorer__grid--images">
     {% for item in explorer['items'] %}
-    <article class="image-explorer-card image-explorer-card--image">
+    {% set is_focused = item['image_id'] == explorer.get('focus_image_id') %}
+    <article class="image-explorer-card image-explorer-card--image{% if is_focused %} image-explorer-card--focused{% endif %}"
+            {% if is_focused %}data-image-explorer-focus="true"{% endif %}>
       <header class="image-explorer-card__head">
         <div>
           <h4 class="image-explorer-card__title">{{ item['label'] }}</h4>
@@ -110,5 +112,17 @@
   <p class="muted">No metric scores available for this image group.</p>
   {% endif %}
 </div>
+
+{% if explorer.get('focus_image_id') %}
+<script>
+  (() => {
+    const panel = document.getElementById("image-explorer-panel");
+    const focused = panel?.querySelector("[data-image-explorer-focus='true']");
+    if (focused) {
+      focused.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  })();
+</script>
+{% endif %}
 
 {% endif %}

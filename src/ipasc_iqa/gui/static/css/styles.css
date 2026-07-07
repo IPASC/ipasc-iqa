@@ -1275,6 +1275,72 @@ dialog.image-detail-dialog[open]:focus-visible {
   color: inherit;
   opacity: 0.75;
 }
+
+.image-detail__explorer-btn {
+  white-space: nowrap;
+}
+
+.image-explorer-card--focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18), var(--shadow);
+}
+
+.image-explorer-card--focused .image-explorer-card__title::after {
+  content: "selected";
+  display: inline-flex;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: var(--accent);
+  border: 1px solid #bfdbfe;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.image-detail__actions {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.image-detail__explorer-btn--primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--navy);
+
+  background: var(--navy);
+  color: #fff;
+
+  font-size: 0.95rem;
+  font-weight: 750;
+  line-height: 1.1;
+  white-space: nowrap;
+
+  box-shadow: 0 6px 16px rgba(0, 31, 76, 0.18);
+  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.image-detail__explorer-btn--primary:hover {
+  background: var(--navy-700);
+  border-color: var(--navy-700);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 9px 22px rgba(0, 31, 76, 0.24);
+}
+
+.image-detail__explorer-btn--primary:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
 /* ---------- Metric overview expandable rows ---------- */
 .metric-summary-row--clickable {
   cursor: pointer;

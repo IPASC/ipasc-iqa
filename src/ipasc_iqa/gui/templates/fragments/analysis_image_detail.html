@@ -15,6 +15,17 @@
         {{ detail.dataset }}/{{ detail.image_id }}
       </p>
       {% endif %}
+
+      {% if detail.image_explorer_url %}
+      <div class="image-detail__actions">
+        <button type="button"
+                class="btn btn--sm image-detail__explorer-btn image-detail__explorer-btn--primary"
+                data-image-explorer-url="{{ detail.image_explorer_url }}"
+                onclick="jumpFromImageDetailToExplorer(this)">
+          Open in Image explorer →
+        </button>
+      </div>
+      {% endif %}
     </div>
 
     {% if detail.error %}
@@ -89,6 +100,48 @@
 </dialog>
 
 <script>
+  window.jumpFromImageDetailToExplorer = function (button) {
+    const url = button.dataset.imageExplorerUrl;
+    const dialog = button.closest("dialog");
+    const panel = document.getElementById("image-explorer-panel");
+    const explorerTab = document.getElementById("tab-image-explorer");
+
+    if (!url || !panel || !window.htmx) {
+      if (dialog) dialog.close();
+      return;
+    }
+
+    const nextUrl = new URL(url, window.location.origin);
+
+    // Preserve selected measures from the Detailed analysis controls.
+    const form = document.getElementById("analysis-controls");
+    if (form) {
+      const data = new FormData(form);
+      nextUrl.searchParams.delete("measures");
+      for (const [name, value] of data.entries()) {
+        if (name === "measures") {
+          nextUrl.searchParams.append("measures", value);
+        }
+      }
+    }
+
+    if (explorerTab) {
+      explorerTab.checked = true;
+      explorerTab.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    // Close the modal before loading the explorer. Otherwise the modal backdrop
+    // can stay above the page and block all clicks.
+    if (dialog) {
+      dialog.close();
+    }
+
+    window.htmx.ajax("GET", nextUrl.pathname + nextUrl.search, {
+      target: panel,
+      swap: "innerHTML",
+    });
+  };
+
   (() => {
     const root = document.querySelector("#metric-image-detail");
     const dialog = root?.querySelector(".image-detail-dialog");

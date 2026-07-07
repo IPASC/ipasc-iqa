@@ -43,7 +43,7 @@ from ipasc_iqa.analysis.manifest_query import (
     groups_from_manifest,
     ranking_observations_from_manifest,
 )
-from ipasc_iqa.analysis.image_explorer import image_group_detail
+from ipasc_iqa.analysis.image_explorer import image_group_detail, image_groups_from_manifest
 from ipasc_iqa.analysis.mos import composite_mos
 from ipasc_iqa.analysis.scatter import build_scatter
 from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
@@ -955,10 +955,33 @@ def image_detail_for_dataset(
                     }
                 )
 
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    groups = image_groups_from_manifest(manifest)
+
+    active_stem: str | None = None
+    for group in groups:
+        items = group.get("items", [])
+        if any(item.get("image_id") == image_id for item in items):
+            stem = group.get("stem")
+            active_stem = str(stem) if stem is not None else None
+            break
+
+    image_explorer_url = None
+    if active_stem is not None:
+        image_explorer_url = "/api/analysis/image-explorer?" + urlencode(
+            {
+                "dataset": dataset_name,
+                "stem": active_stem,
+                "focus_image_id": image_id,
+            }
+        )
+
     return {
         "error": None,
         "dataset": dataset_name,
         "image_id": image_id,
+        "stem": active_stem,
+        "image_explorer_url": image_explorer_url,
         "scores": scores,
     }
 
@@ -968,6 +991,7 @@ def image_explorer_for_dataset(
     *,
     stem: str | None = None,
     measures: list[str] | None = None,
+    focus_image_id: str | None = None,
 ) -> dict:
     """Return grouped image variants and metric scores for the Image explorer tab."""
 
@@ -1048,6 +1072,7 @@ def image_explorer_for_dataset(
     return {
         "dataset": dataset_name,
         "selected_measures": chosen,
+        "focus_image_id": focus_image_id,
         **detail,
     }
 

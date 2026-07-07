@@ -112,6 +112,7 @@ def image_explorer_fragment(
     request: Request,
     dataset: str,
     stem: str | None = None,
+    focus_image_id: str | None = None,
     measures: list[str] | None = Query(None),
 ) -> HTMLResponse:
     workspace = _ws(request)
@@ -120,6 +121,7 @@ def image_explorer_fragment(
         dataset,
         stem=stem,
         measures=measures,
+        focus_image_id=focus_image_id,
     )
     return templates.TemplateResponse(
         request,
