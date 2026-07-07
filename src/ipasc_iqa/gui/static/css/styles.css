@@ -1495,3 +1495,116 @@ dialog.image-detail-dialog[open]:focus-visible {
     min-width: 760px;
   }
 }
+
+/* ---------- Image explorer group strip ---------- */
+
+.image-group-strip-wrap {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.image-group-strip__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.image-group-strip__title {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1rem;
+}
+
+.image-group-strip__head .panel__hint {
+  margin: 0;
+}
+
+.image-group-strip {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.2rem 0.15rem 0.85rem;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.image-group-card {
+  flex: 0 0 9.5rem;
+  scroll-snap-align: start;
+
+  display: grid;
+  grid-template-rows: 5.75rem auto auto;
+  gap: 0.35rem;
+
+  padding: 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+
+  box-shadow: 0 1px 2px rgba(0, 31, 76, 0.04);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.image-group-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 31, 76, 0.12);
+}
+
+.image-group-card:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.image-group-card--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18), var(--shadow);
+}
+
+.image-group-card__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.image-group-card__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.image-group-card__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-weight: 750;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.image-group-card__count {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.image-explorer__controls--compact {
+  margin-top: 0.15rem;
+}

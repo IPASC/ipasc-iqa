@@ -1051,6 +1051,25 @@ def image_explorer_for_dataset(
         higher_is_better_by_measure=directions,
     )
 
+    for group in detail.get("groups", []):
+        items = group.get("items", [])
+        preview_item = items[0] if items else None
+        preview_image_id = preview_item.get("image_id") if preview_item else None
+
+        group["preview_image_id"] = preview_image_id
+        group["preview_image_url"] = (
+            "/api/annotate/image?"
+            + urlencode(
+                {
+                    "dataset": dataset_name,
+                    "item": preview_image_id,
+                }
+            )
+            if preview_image_id
+            else None
+        )
+        group["is_active"] = group.get("stem") == detail.get("active_stem")
+
     for item in detail["items"]:
         item["image_url"] = "/api/annotate/image?" + urlencode(
             {

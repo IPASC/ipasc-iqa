@@ -5,7 +5,42 @@
 {% else %}
 
 <div class="image-explorer">
-  <div class="image-explorer__controls">
+  <section class="image-group-strip-wrap" aria-label="Image groups">
+    <div class="image-group-strip__head">
+      <h4 class="image-group-strip__title">Image groups</h4>
+      <p class="panel__hint">
+        Select a representative thumbnail to compare all variants from that group.
+      </p>
+    </div>
+
+    <div class="image-group-strip">
+      {% for group in explorer['groups'] %}
+      <button type="button"
+              class="image-group-card{% if group.get('is_active') %} image-group-card--active{% endif %}"
+              title="{{ group['label'] }}"
+              hx-get="/api/analysis/image-explorer?dataset={{ explorer['dataset'] | urlencode }}&stem={{ group['stem'] | urlencode }}"
+              hx-target="#image-explorer-panel"
+              hx-swap="innerHTML"
+              hx-include="#measure-chips input[name='measures']:checked">
+        <span class="image-group-card__preview">
+          {% if group.get('preview_image_url') %}
+          <img src="{{ group['preview_image_url'] }}"
+               alt="Preview for {{ group['label'] }}"
+               loading="lazy">
+          {% else %}
+          <span class="muted">No preview</span>
+          {% endif %}
+        </span>
+        <span class="image-group-card__name">{{ group['label'] }}</span>
+        <span class="image-group-card__count">
+          {{ group['n_items'] }} version{{ '' if group['n_items'] == 1 else 's' }}
+        </span>
+      </button>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="image-explorer__controls image-explorer__controls--compact">
     <label class="field">
       <span class="field__label">Image group</span>
       <select name="stem"
