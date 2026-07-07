@@ -3,7 +3,7 @@
 Shallow adapter over the ``DISTS-pytorch`` package
 (Ding et al., IEEE TPAMI 2022 — https://github.com/dingkeyan93/DISTS).
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``DISTS_pytorch``)
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``DISTS_pytorch``)
 are deferred to first use so the base install stays lightweight.
 """
 
@@ -65,7 +65,7 @@ class DISTSMeasure(BaseMeasure):
             from DISTS_pytorch import DISTS
         except ImportError as exc:
             raise ImportError(
-                "DISTS requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "DISTS requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

@@ -91,6 +91,43 @@ def scatter_fragment(
         return _recomputing(request)
     return templates.TemplateResponse(request, "fragments/scatter.html", {"s": model})
 
+@router.get("/api/analysis/image-detail", response_class=HTMLResponse)
+def analysis_image_detail_fragment(
+    request: Request,
+    dataset: str,
+    image_id: str,
+) -> HTMLResponse:
+    """Image detail panel for the Metric overview best/worst examples."""
+
+    ws = _ws(request)
+    model = service.image_detail_for_dataset(ws, dataset, image_id)
+    return templates.TemplateResponse(
+        request,
+        "fragments/analysis_image_detail.html",
+        {"detail": model},
+    )
+
+@router.get("/api/analysis/image-explorer", response_class=HTMLResponse)
+def image_explorer_fragment(
+    request: Request,
+    dataset: str,
+    stem: str | None = None,
+    focus_image_id: str | None = None,
+    measures: list[str] | None = Query(None),
+) -> HTMLResponse:
+    workspace = _ws(request)
+    explorer = service.image_explorer_for_dataset(
+        workspace,
+        dataset,
+        stem=stem,
+        measures=measures,
+        focus_image_id=focus_image_id,
+    )
+    return templates.TemplateResponse(
+        request,
+        "fragments/image_explorer.html",
+        {"explorer": explorer},
+    )
 
 @router.get("/api/analysis", response_class=HTMLResponse)
 def analysis_fragment(

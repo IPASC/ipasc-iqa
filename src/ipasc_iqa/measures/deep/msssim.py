@@ -4,7 +4,7 @@ Shallow adapter over ``piq.multi_scale_ssim`` (Wang et al., 2003).
 Neither scipy nor scikit-image provide an MS-SSIM implementation;
 ``piq`` is the authoritative PyTorch reference.
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``piq``)
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``piq``)
 are deferred to first use so the base install stays lightweight.
 """
 
@@ -33,7 +33,7 @@ class MSSSIMMeasure(BaseMeasure):
     the Gaussian kernel (``kernel_size × kernel_size``) still fits at
     every scale.  Scale weights are renormalised accordingly.
 
-    Range: [0, 1], higher = more similar.  Requires ``ipasc_iqa[deep]``.
+    Range: [0, 1], higher = more similar.  Requires PyTorch-based metric dependencies.
     """
 
     metadata = MeasureMetadata(
@@ -133,7 +133,7 @@ class MSSSIMMeasure(BaseMeasure):
             from piq import multi_scale_ssim
         except ImportError as exc:
             raise ImportError(
-                "MS-SSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "MS-SSIM requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

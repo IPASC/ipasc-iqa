@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from collections import defaultdict
+from urllib.parse import urlencode
 
 import numpy as np
 
@@ -41,6 +43,7 @@ from ipasc_iqa.analysis.manifest_query import (
     groups_from_manifest,
     ranking_observations_from_manifest,
 )
+from ipasc_iqa.analysis.image_explorer import image_group_detail, image_groups_from_manifest
 from ipasc_iqa.analysis.mos import composite_mos
 from ipasc_iqa.analysis.scatter import build_scatter
 from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
@@ -102,11 +105,65 @@ class Workspace:
             data_dir=Path(data_dir).resolve() if data_dir else default_data_dir(),
         )
 
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+
+def torch_device_status() -> dict:
+    """Return the PyTorch execution backend visible to the GUI server."""
+    try:
+        import torch
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend": "none",
+            "label": "PyTorch not available",
+            "message": (
+                "PyTorch is not available in this environment. "
+                "PyTorch-based metrics cannot run until PyTorch is installed."
+            ),
+            "detail": str(exc),
+        }
+
+    cuda_available = bool(torch.cuda.is_available())
+    mps_available = bool(
+        hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    )
+
+    if cuda_available:
+        name = torch.cuda.get_device_name(0)
+        return {
+            "available": True,
+            "backend": "cuda",
+            "label": f"GPU available: CUDA ({name})",
+            "message": "PyTorch-based metrics can use CUDA GPU acceleration.",
+            "detail": f"torch {torch.__version__}, CUDA {torch.version.cuda}",
+        }
+
+    if mps_available:
+        return {
+            "available": True,
+            "backend": "mps",
+            "label": "GPU available: Apple MPS",
+            "message": "PyTorch-based metrics can use Apple Silicon GPU acceleration.",
+            "detail": f"torch {torch.__version__}",
+        }
+
+    return {
+        "available": False,
+        "backend": "cpu",
+        "label": "No compatible GPU backend detected",
+        "message": (
+            "PyTorch-based metrics will run on CPU and may be slower on large datasets."
+        ),
+        "detail": f"torch {torch.__version__}",
+    }
 
 # ---------------------------------------------------------------------------
 # Measures
 # ---------------------------------------------------------------------------
-
 
 def list_measures() -> list[dict]:
     out = []
@@ -161,6 +218,32 @@ def _measure_usable(measure_meta: dict, caps: dict) -> bool:
     if measure_meta["requires_signal_roi"] and not caps.get("has_signal_roi"):
         return False
     return not (measure_meta["requires_noise_roi"] and not caps.get("has_noise_roi"))
+
+
+def _selected_measure_records(
+    run: RunResults,
+    manifest: dict,
+    dataset_name: str,
+    measures: list[str] | None,
+) -> tuple[list, list[str]]:
+    """Filter run records by dataset capabilities and the selected measures.
+
+    This is the shared measure-selection logic for all analysis panels. The
+    Metric overview, Human agreement, and Image explorer should all see the
+    same selected/usable metric set.
+    """
+    measure_meta = list_measures()
+    caps = _capabilities_from_manifest(manifest)
+    usable = [m["name"] for m in measure_meta if _measure_usable(m, caps)]
+    chosen = [m for m in (measures or usable) if m in usable]
+
+    selected_records = [
+        rec
+        for rec in run.results
+        if rec.dataset == dataset_name and rec.measure in chosen
+    ]
+
+    return selected_records, chosen
 
 
 # Human-readable labels for the measure-type enum (used in the analysis UI).
@@ -476,18 +559,42 @@ def analysis_for_dataset(
             **_empty,
         }
     
-    directions = measure_directions(run.measures)
-    metric_summary = rich_measure_summary(
-        [rec for rec in run.results if rec.dataset == dataset_name],
-        higher_is_better_by_measure=directions,
-        top=5,
-    )
+    measures_meta = list_measures()
+
+    directions = {
+        measure["name"]: bool(measure["higher_is_better"])
+        for measure in measures_meta
+    }
+
+    bibtex_by_measure = {
+        measure["name"]: measure.get("bibtex")
+        for measure in measures_meta
+    }
 
     manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+
     # Tasks can come from manifest MOS *or* from contributed pairwise comparisons,
     # so a dataset with no expert ratings is still analysable once BT data exists.
     task = task or None
     task_names, has_unnamed = _available_tasks(workspace, dataset_name, manifest)
+
+    # Apply the same usable/selected measure filter to every analysis panel.
+    selected_records, chosen = _selected_measure_records(
+        run,
+        manifest,
+        dataset_name,
+        measures,
+    )
+
+    metric_summary = _annotate_metric_summary_bibtex(
+        rich_measure_summary(
+            selected_records,
+            higher_is_better_by_measure=directions,
+            top=5,
+        ),
+        measures_meta,
+    )
+
     if not task_names and not has_unnamed:
         return {
             "dataset": dataset_name,
@@ -511,12 +618,6 @@ def analysis_for_dataset(
     # comparisons has a single unnamed task (active_task=None, no dropdown).
     active_task = _resolve_active_task(task, task_names)
 
-    # Only correlate measures the dataset can actually support, intersected with
-    # the user's selection — so unusable measures never produce empty rows.
-    caps = _capabilities_from_manifest(manifest)
-    usable = [m["name"] for m in list_measures() if _measure_usable(m, caps)]
-    chosen = [m for m in (measures or usable) if m in usable]
-
     # Resolve the human-score source (MOS vs contributed Bradley-Terry).
     mos_values = mos_values_for_dataset_task(workspace, dataset_name, active_task, manifest)
     bt = bt_scores_for_dataset_task(workspace, dataset_name, active_task, manifest)
@@ -533,7 +634,6 @@ def analysis_for_dataset(
 
     # Annotate each row with its measure's BibTeX (for the citation icon) and the
     # pre-computed per-dataset mean/std of its values.
-    bibtex_by_measure = {m["name"]: m["bibtex"] for m in list_measures()}
     stats_by_measure = dataset_measure_stats(workspace, dataset_name)
     row_dicts = []
     for r in rows:
@@ -560,6 +660,31 @@ def analysis_for_dataset(
         "error": None,
     }
 
+def _annotate_metric_summary_bibtex(metric_summary: dict, measures_meta: list[dict]) -> dict:
+    """Attach BibTeX citations to Metric overview statistics and examples."""
+    bibtex_by_measure = {
+        measure["name"]: measure.get("bibtex")
+        for measure in measures_meta
+    }
+
+    for stat in metric_summary.get("statistics", []):
+        measure_name = stat.get("measure")
+        if not measure_name:
+            continue
+        base_measure = measure_name.split(".", 1)[0]
+        stat["bibtex"] = (
+            bibtex_by_measure.get(measure_name)
+            or bibtex_by_measure.get(base_measure)
+        )
+
+    for measure_name, groups in metric_summary.get("examples", {}).items():
+        base_measure = measure_name.split(".", 1)[0]
+        groups["bibtex"] = (
+            bibtex_by_measure.get(measure_name)
+            or bibtex_by_measure.get(base_measure)
+        )
+
+    return metric_summary
 
 def task_annotation_summary(
     workspace: Workspace, dataset_name: str, task: str | None, manifest: dict
@@ -692,6 +817,282 @@ def scatter_for_measure(
         "description": meta.description,
         "measure_type": _MEASURE_TYPE_LABELS.get(meta.measure_type, meta.measure_type.name.lower()),
         "value_range": _format_value_range(meta.value_range),
+    }
+
+def image_detail_for_dataset(
+    workspace: Workspace,
+    dataset_name: str,
+    image_id: str,
+) -> dict:
+    """Return image-level metric scores for the Metric overview detail dialog."""
+
+    ds = get_dataset(workspace, dataset_name)
+    if ds is None or not ds["prepared"]:
+        return {
+            "error": "dataset not available",
+            "dataset": dataset_name,
+            "image_id": image_id,
+            "scores": [],
+        }
+
+    run = _merged_run(workspace, dataset_name)
+    if run is None:
+        return {
+            "error": "no benchmark run found for this dataset",
+            "dataset": dataset_name,
+            "image_id": image_id,
+            "scores": [],
+        }
+
+    records = [
+        rec
+        for rec in run.results
+        if rec.dataset == dataset_name and rec.image_id == image_id
+    ]
+
+    if not records:
+        return {
+            "error": f"no metric results found for image '{image_id}'",
+            "dataset": dataset_name,
+            "image_id": image_id,
+            "scores": [],
+        }
+
+    directions = {
+        measure["name"]: bool(measure["higher_is_better"])
+        for measure in list_measures()
+    }
+
+    distributions: dict[str, list[float]] = defaultdict(list)
+
+    for rec in run.results:
+        if rec.dataset != dataset_name:
+            continue
+
+        if rec.value is not None:
+            distributions[rec.measure].append(float(rec.value))
+
+        if rec.sub_scores:
+            for sub_name, sub_value in rec.sub_scores.items():
+                if sub_value is not None:
+                    distributions[f"{rec.measure}.{sub_name}"].append(float(sub_value))
+
+    def relative_position(key: str, value: float, *, higher_is_better: bool) -> dict:
+        """Return dataset-relative quality position for a score.
+
+        quality_position = 0 means worst value for this metric in the dataset.
+        quality_position = 1 means best value for this metric in the dataset.
+
+        For higher-is-better metrics, high numeric values are better.
+        For lower-is-better metrics, low numeric values are better.
+        """
+
+        values = distributions.get(key, [])
+        if not values:
+            return {
+                "relative_position": None,
+                "relative_percent": None,
+                "quality_position": None,
+                "quality_percent": None,
+                "color_hue": None,
+            }
+
+        lo = min(values)
+        hi = max(values)
+
+        if hi == lo:
+            numeric_rel = 0.5
+        else:
+            numeric_rel = (value - lo) / (hi - lo)
+
+        numeric_rel = max(0.0, min(1.0, numeric_rel))
+
+        if higher_is_better:
+            quality_rel = numeric_rel
+        else:
+            quality_rel = 1.0 - numeric_rel
+
+        return {
+            "relative_position": numeric_rel,
+            "relative_percent": round(numeric_rel * 100),
+            "quality_position": quality_rel,
+            "quality_percent": round(quality_rel * 100),
+            "color_hue": round(quality_rel * 120),
+        }
+
+    scores: list[dict] = []
+
+    for rec in sorted(records, key=lambda r: r.measure):
+        higher_is_better = directions.get(rec.measure, True)
+
+        if rec.value is not None:
+            value = float(rec.value)
+            scores.append(
+                {
+                    "measure": rec.measure,
+                    "value": value,
+                    "higher_is_better": higher_is_better,
+                    "kind": "main",
+                    **relative_position(rec.measure, value, higher_is_better=higher_is_better),
+                }
+            )
+
+        if rec.sub_scores:
+            for sub_name, sub_value in sorted(rec.sub_scores.items()):
+                if sub_value is None:
+                    continue
+
+                key = f"{rec.measure}.{sub_name}"
+                value = float(sub_value)
+
+                scores.append(
+                    {
+                        "measure": key,
+                        "value": value,
+                        "higher_is_better": higher_is_better,
+                        "kind": "sub_score",
+                        **relative_position(key, value, higher_is_better=higher_is_better),
+                    }
+                )
+
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    groups = image_groups_from_manifest(manifest)
+
+    active_stem: str | None = None
+    for group in groups:
+        items = group.get("items", [])
+        if any(item.get("image_id") == image_id for item in items):
+            stem = group.get("stem")
+            active_stem = str(stem) if stem is not None else None
+            break
+
+    image_explorer_url = None
+    if active_stem is not None:
+        image_explorer_url = "/api/analysis/image-explorer?" + urlencode(
+            {
+                "dataset": dataset_name,
+                "stem": active_stem,
+                "focus_image_id": image_id,
+            }
+        )
+
+    return {
+        "error": None,
+        "dataset": dataset_name,
+        "image_id": image_id,
+        "stem": active_stem,
+        "image_explorer_url": image_explorer_url,
+        "scores": scores,
+    }
+
+def image_explorer_for_dataset(
+    workspace: Workspace,
+    dataset_name: str,
+    *,
+    stem: str | None = None,
+    measures: list[str] | None = None,
+    focus_image_id: str | None = None,
+) -> dict:
+    """Return grouped image variants and metric scores for the Image explorer tab."""
+
+    ds = get_dataset(workspace, dataset_name)
+    if ds is None:
+        return {
+            "error": "dataset not found",
+            "dataset": dataset_name,
+            "groups": [],
+            "active_stem": None,
+            "items": [],
+        }
+
+    if not ds["prepared"]:
+        return {
+            "error": "dataset not downloaded yet — run a benchmark on it first",
+            "dataset": dataset_name,
+            "groups": [],
+            "active_stem": None,
+            "items": [],
+        }
+
+    run = _merged_run(workspace, dataset_name)
+    if run is None:
+        return {
+            "error": "no benchmark run found for this dataset — run a benchmark first",
+            "dataset": dataset_name,
+            "groups": [],
+            "active_stem": None,
+            "items": [],
+        }
+
+    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+
+    measures_meta = list_measures()
+    directions = {
+        measure["name"]: bool(measure["higher_is_better"])
+        for measure in measures_meta
+    }
+    bibtex_by_measure = {
+        measure["name"]: measure.get("bibtex")
+        for measure in measures_meta
+    }
+
+    selected_records, chosen = _selected_measure_records(
+        run,
+        manifest,
+        dataset_name,
+        measures,
+    )
+
+    detail = image_group_detail(
+        manifest,
+        selected_records,
+        dataset_name,
+        stem=stem,
+        higher_is_better_by_measure=directions,
+    )
+
+    for group in detail.get("groups", []):
+        items = group.get("items", [])
+        preview_item = items[0] if items else None
+        preview_image_id = preview_item.get("image_id") if preview_item else None
+
+        group["preview_image_id"] = preview_image_id
+        group["preview_image_url"] = (
+            "/api/annotate/image?"
+            + urlencode(
+                {
+                    "dataset": dataset_name,
+                    "item": preview_image_id,
+                }
+            )
+            if preview_image_id
+            else None
+        )
+        group["is_active"] = group.get("stem") == detail.get("active_stem")
+
+    for item in detail["items"]:
+        item["image_url"] = "/api/annotate/image?" + urlencode(
+            {
+                "dataset": dataset_name,
+                "item": item["image_id"],
+            }
+        )
+
+    for row in detail.get("score_table", []):
+        measure_name = row.get("measure")
+        if not measure_name:
+            continue
+        base_measure = measure_name.split(".", 1)[0]
+        row["bibtex"] = (
+            bibtex_by_measure.get(measure_name)
+            or bibtex_by_measure.get(base_measure)
+        )
+
+    return {
+        "dataset": dataset_name,
+        "selected_measures": chosen,
+        "focus_image_id": focus_image_id,
+        **detail,
     }
 
 

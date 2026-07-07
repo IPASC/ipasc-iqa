@@ -13,7 +13,7 @@ IQ chrominance channels.  For single-channel photoacoustic images the
 default ``chromatic=False`` is used; if you pass multi-channel images and
 want to use colour information set ``chromatic=True``, which requires C=3.
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``piq``) are
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``piq``) are
 deferred to first use so the base install stays lightweight.
 """
 
@@ -32,7 +32,7 @@ class FSIMMeasure(BaseMeasure):
     and works with any number of channels.  With ``chromatic=True`` the
     IQ colour channels are also compared; C must equal 3 in that case.
 
-    Range: [0, 1], higher = more similar.  Requires ``ipasc_iqa[deep]``.
+    Range: [0, 1], higher = more similar.  Requires PyTorch-based metric dependencies.
     """
 
     metadata = MeasureMetadata(
@@ -87,7 +87,7 @@ class FSIMMeasure(BaseMeasure):
             from piq import fsim
         except ImportError as exc:
             raise ImportError(
-                "FSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "FSIM requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

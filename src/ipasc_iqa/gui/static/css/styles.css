@@ -235,8 +235,26 @@ img, svg, video, table { max-width: 100%; }
 .htmx-request.htmx-indicator { opacity: 1; }
 
 /* ---------- Analysis / controls ---------- */
-.analysis-layout { display: grid; grid-template-columns: 260px 1fr; gap: 1.5rem; }
-@media (max-width: 820px) { .analysis-layout { grid-template-columns: 1fr; } }
+/* The Detailed analysis page needs more horizontal room than the default
+   content column because its metric tables are intentionally wide. */
+.content:has(.analysis-layout) {
+  max-width: min(1600px, calc(100vw - 2rem));
+}
+
+.analysis-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .analysis-layout {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+}
 /* Grid items default to min-width:auto and won't shrink below their content,
    which overflows narrow screens — let them shrink so chips/tables fit. */
 .analysis-layout > * { min-width: 0; }
@@ -259,7 +277,11 @@ img, svg, video, table { max-width: 100%; }
                   text-decoration: line-through; }
 .chip--disabled input { cursor: not-allowed; }
 
-.result-area { min-height: 4rem; }
+.result-area {
+  min-height: 4rem;
+  width: fit-content;
+  max-width: 100%;
+}
 .task-block { margin-bottom: 1.5rem; }
 .task-block__title { color: var(--navy); font-size: 1rem; margin: 0 0 0.5rem;
                      text-transform: capitalize; }
@@ -406,6 +428,8 @@ img, svg, video, table { max-width: 100%; }
 /* ---------- Tabs in Deatailed analysis -------------------------------- */
 .analysis-tabs {
   margin-top: 1rem;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .analysis-tabs > input {
@@ -445,11 +469,40 @@ img, svg, video, table { max-width: 100%; }
   display: block;
 }
 
-.analysis-example-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
-  margin-top: 0.75rem;
+/* Detailed analysis panels should use all available page width. Wide tables
+   scroll inside their own white panel instead of being clipped by the page. */
+.result-area,
+.analysis-tabs,
+.analysis-tabs__panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.analysis-tabs__nav {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.analysis-tabs .table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Main summary/correlation tables may be wider than the panel. Keep their
+   intrinsic width and let .table-scroll expose the missing columns. */
+.analysis-tabs__panel > .task-block > .table-scroll > .data-table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+}
+
+@media (max-width: 820px) {
+  .content:has(.analysis-layout) {
+    max-width: 100%;
+  }
 }
 
 .corr-cell {
@@ -464,6 +517,22 @@ img, svg, video, table { max-width: 100%; }
   background: hsl(120, 70%, 90%);
 }
 
+.link-button {
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.link-button:hover {
+  color: var(--navy);
+}
+
 @media (max-width: 900px) {
   .analysis-example-grid {
     grid-template-columns: 1fr;
@@ -471,9 +540,10 @@ img, svg, video, table { max-width: 100%; }
 }
 
 /* ---------- Detailed analysis: clickable rows + scatter plot ---------- */
-.measure-row { cursor: pointer; transition: background 0.1s ease; }
-.measure-row:hover td { background: #eef2ff; }
-.measure-row:hover td.corr-cell { filter: brightness(0.97); }
+.measure-row {
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
 
 .scatter-result { margin-top: 1.5rem; }
 .scatter {
@@ -618,6 +688,46 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
 .annotate-rate__confirm small { font-weight: 400; opacity: 0.85; }
 .annotate-rate__finish { margin-top: 0.75rem; text-align: center; }
 
+/* Human agreement expandable scatter rows: reuse the Metric overview row style. */
+.human-measure-row {
+  cursor: pointer;
+}
+
+.human-measure-row:hover td,
+.human-measure-row:focus-visible td {
+  background: #f8fafc;
+}
+
+.human-measure-row:hover td.corr-cell {
+  filter: brightness(0.97);
+}
+
+.human-detail-row > td {
+  padding: 0.2rem 0.9rem 1rem;
+  background: #f8fafc;
+}
+
+.human-row-detail {
+  padding: 0;
+  overflow: hidden;
+}
+
+.human-scatter-detail {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.human-scatter-detail .scatter {
+  box-shadow: none;
+  border: none;
+  border-radius: var(--radius);
+}
+
+.human-scatter-detail .scatter-result {
+  margin-top: 0;
+}
+
 /* ---------- Annotation stage: fit one screen on mobile (controls stay visible) ----------
    The rate stage carries a slider + Confirm + Finish below the images, so it
    needs more room for controls (smaller images) than the comparison stage, which
@@ -677,4 +787,824 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
   color: #166534;
 }
 
+/* ---------- Metric overview image detail dialog ---------- */
 
+#metric-image-detail:empty {
+  display: none;
+}
+
+dialog.image-detail-dialog {
+  border: none !important;
+  outline: none !important;
+  padding: 0 !important;
+  margin: auto !important;
+
+  width: min(1360px, calc(100vw - 2rem)) !important;
+  max-width: none !important;
+  max-height: calc(100vh - 2rem) !important;
+
+  background: transparent !important;
+  color: var(--text);
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+dialog.image-detail-dialog::backdrop {
+  background: rgba(0, 31, 76, 0.45);
+}
+
+dialog.image-detail-dialog:focus,
+dialog.image-detail-dialog:focus-visible,
+dialog.image-detail-dialog[open],
+dialog.image-detail-dialog[open]:focus,
+dialog.image-detail-dialog[open]:focus-visible {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.image-detail-dialog__card {
+  position: relative;
+  width: 100%;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+
+  background: var(--surface);
+  border-radius: 22px;
+  padding: 1.5rem;
+}
+
+.image-detail__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 999px;
+
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-detail__close:hover {
+  background: var(--border);
+  color: var(--navy);
+}
+
+.image-detail__head {
+  padding-right: 2.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.image-detail__title {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1.1rem;
+}
+
+.image-detail__subtitle {
+  margin: 0.25rem 0 0;
+  word-break: break-word;
+}
+
+.image-detail__grid {
+  display: grid !important;
+  grid-template-columns: minmax(520px, 680px) minmax(420px, 1fr) !important;
+  gap: 1.75rem;
+  align-items: start;
+}
+
+.image-detail__preview {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+
+  background: var(--bg);
+  border-radius: 16px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.image-detail__preview img {
+  display: block;
+  width: 100%;
+  max-width: 660px;
+  max-height: 76vh;
+  height: auto;
+  margin: 0 auto;
+
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 12px;
+
+  image-rendering: pixelated;
+}
+
+.image-detail__scores {
+  min-width: 0;
+}
+
+.image-detail__scores-title {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: var(--navy);
+}
+
+/* Stack only on genuinely small screens */
+@media (max-width: 760px) {
+  dialog.image-detail-dialog {
+    width: calc(100vw - 1rem) !important;
+    max-height: calc(100vh - 1rem) !important;
+  }
+
+  .image-detail-dialog__card {
+    max-height: calc(100vh - 1rem);
+    padding: 1rem;
+    border-radius: 16px;
+  }
+
+  .image-detail__grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .image-detail__preview img {
+    max-width: 100%;
+    max-height: 55vh;
+  }
+}
+
+.image-detail__score-row[style] td {
+  background: hsl(var(--score-hue), 70%, 92%);
+}
+
+.image-detail__score-row[style]:hover td {
+  background: hsl(var(--score-hue), 75%, 86%);
+}
+
+.metric-distribution {
+  margin: 0.85rem auto 1rem;
+  padding: 0.95rem 1rem 1rem;
+  border: 1px solid var(--border, #d7dde8);
+  border-radius: 0.85rem;
+  background: var(--panel, #fff);
+
+  /* Keep the chart readable instead of stretching forever. */
+  width: min(100%, 54rem);
+  max-width: 100%;
+}
+
+.metric-distribution__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.metric-distribution__title {
+  font-weight: 750;
+  font-size: 1.02rem;
+  color: var(--navy);
+}
+
+.metric-distribution__head .muted {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.metric-distribution__plot {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: stretch;
+}
+
+.metric-distribution__y-axis {
+  height: 9rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: end;
+  padding-top: 0.45rem;
+  padding-bottom: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--muted, #667085);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-distribution__chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 9rem;
+  padding: 0.75rem 0.75rem 0;
+  border: 1px solid var(--border, #d7dde8);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(to top, rgba(0, 31, 76, 0.08) 1px, transparent 1px);
+  background-size: 100% 33.333%;
+  overflow: hidden;
+}
+
+.metric-distribution__bar {
+  flex: 1 1 0;
+  height: var(--bar-height);
+  min-height: 4px;
+  border-radius: 8px 8px 0 0;
+  background: var(--accent, #3b82f6);
+  opacity: 0.9;
+}
+
+.metric-distribution__bar:hover {
+  opacity: 1;
+}
+
+.metric-distribution__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.45rem;
+  margin-left: 3.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted, #667085);
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-example-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.analysis-example-grid > div {
+  min-width: 0;
+}
+
+.analysis-example-grid .data-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.analysis-example-grid .data-table th:first-child,
+.analysis-example-grid .data-table td:first-child {
+  width: min(34rem, 78%);
+}
+
+.analysis-example-grid .data-table th:last-child,
+.analysis-example-grid .data-table td:last-child {
+  width: 7rem;
+  white-space: nowrap;
+}
+
+.image-id-cell {
+  min-width: 0;
+  max-width: 0;
+}
+
+.image-id-link {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+@media (max-width: 1100px) {
+  .analysis-example-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.score-legend {
+  margin-top: 0.75rem;
+}
+
+.score-legend__swatch {
+  margin-inline: 0.25rem;
+}
+
+.score-legend__swatch--low {
+  background: hsl(0, 70%, 92%);
+}
+
+.score-legend__swatch--high {
+  background: hsl(120, 70%, 92%);
+}
+
+/* ---------- Image explorer tab ---------- */
+
+#tab-image-explorer:checked ~ .analysis-tabs__nav label[for="tab-image-explorer"] {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.analysis-tabs:has(#tab-image-explorer:checked) .analysis-tabs__panel {
+  display: none;
+}
+
+.analysis-tabs:has(#tab-image-explorer:checked) .analysis-tabs__panel--explorer {
+  display: block;
+}
+
+.image-explorer {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.image-explorer__controls {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.image-explorer__grid {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.image-explorer__grid--images {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.image-explorer-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+  padding: 0.85rem;
+}
+
+.image-explorer-card--image {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.image-explorer-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: start;
+  margin-bottom: 0.35rem;
+  min-width: 0;
+}
+
+.image-explorer-card__head > div {
+  min-width: 0;
+}
+
+.image-explorer-card__title {
+  margin: 0;
+  color: var(--text);
+}
+
+.image-explorer-card__id {
+  margin: 0.2rem 0 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.image-explorer-card__preview {
+  width: 100%;
+  min-width: 0;
+  height: 18rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.025);
+  overflow: hidden;
+}
+
+.image-explorer-card__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.image-explorer-scores {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.image-explorer-scores__title {
+  margin: 0 0 0.25rem;
+  color: var(--navy);
+}
+
+.image-explorer-score-table {
+  table-layout: fixed;
+  min-width: 44rem;
+}
+
+.image-explorer-score-table th:first-child,
+.image-explorer-score-table td:first-child {
+  width: 14rem;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.image-explorer-score-table th:not(:first-child),
+.image-explorer-score-table td:not(:first-child) {
+  width: 8rem;
+}
+
+.image-explorer-score-cell {
+  background: hsl(var(--score-hue, 60), 70%, 88%);
+}
+
+.image-explorer-score-cell:hover {
+  background: hsl(var(--score-hue, 60), 75%, 82%);
+}
+
+@media (max-width: 900px) {
+  .image-explorer__grid--images {
+    grid-template-columns: 1fr;
+  }
+}
+
+.notice--info {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.run-device-note {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.run-device-note .muted {
+  display: inline-block;
+  margin-top: 0.2rem;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.image-detail__explorer-btn {
+  white-space: nowrap;
+}
+
+.image-explorer-card--focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18), var(--shadow);
+}
+
+.image-explorer-card--focused .image-explorer-card__title::after {
+  content: "selected";
+  display: inline-flex;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: var(--accent);
+  border: 1px solid #bfdbfe;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.image-detail__actions {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.image-detail__explorer-btn--primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--navy);
+
+  background: var(--navy);
+  color: #fff;
+
+  font-size: 0.95rem;
+  font-weight: 750;
+  line-height: 1.1;
+  white-space: nowrap;
+
+  box-shadow: 0 6px 16px rgba(0, 31, 76, 0.18);
+  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.image-detail__explorer-btn--primary:hover {
+  background: var(--navy-700);
+  border-color: var(--navy-700);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 9px 22px rgba(0, 31, 76, 0.24);
+}
+
+.image-detail__explorer-btn--primary:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+/* ---------- Metric overview expandable rows ---------- */
+.metric-summary-row--clickable {
+  cursor: pointer;
+}
+
+.metric-summary-row--clickable:hover td,
+.metric-summary-row--clickable:focus-visible td {
+  background: #f8fafc;
+}
+
+.metric-summary-row--clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.metric-summary-row--open td {
+  border-bottom-color: transparent;
+}
+
+.metric-name--clickable {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+.metric-expand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--navy);
+  background: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.metric-summary-row--open .metric-expand-icon {
+  color: #fff;
+  background: var(--navy);
+  border-color: var(--navy);
+}
+
+.metric-detail-row > td {
+  padding: 0.2rem 0.9rem 1rem;
+  background: #f8fafc;
+}
+
+.metric-row-detail {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.9rem;
+}
+
+.metric-row-detail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.metric-distribution--embedded {
+  margin-top: 0;
+}
+
+/* Detailed analysis: controlled page width, with wide tables scrolling inside
+   their own panel instead of forcing the whole page wider. */
+.content--analysis {
+  width: 100%;
+  max-width: min(1240px, calc(100vw - 2rem));
+}
+
+.content--analysis .analysis-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  justify-content: stretch;
+  align-items: start;
+}
+
+.content--analysis .result-area,
+.content--analysis .analysis-tabs,
+.content--analysis .analysis-tabs__nav,
+.content--analysis .analysis-tabs__panel,
+.content--analysis .task-block {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.content--analysis .analysis-tabs .table-scroll {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/* Default: tables should fit their panel, not define an infinite intrinsic width. */
+.content--analysis .analysis-tabs .data-table {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Only top-level tables can request a finite minimum width.
+   This gives columns room but still allows internal scrolling. */
+.content--analysis .analysis-tabs__panel > .task-block > .table-scroll > .data-table {
+  min-width: 820px;
+}
+
+/* Expanded metric detail must never enlarge the outer metric table. */
+.content--analysis .metric-detail-row > td {
+  max-width: 0;
+}
+
+.content--analysis .metric-row-detail,
+.content--analysis .metric-distribution,
+.content--analysis .metric-distribution__plot,
+.content--analysis .metric-distribution__chart,
+.content--analysis .analysis-example-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.content--analysis .metric-distribution__chart {
+  overflow: hidden;
+}
+
+@media (max-width: 820px) {
+  .content--analysis {
+    max-width: 100%;
+  }
+
+  .content--analysis .analysis-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .content--analysis .analysis-tabs__panel > .task-block > .table-scroll > .data-table {
+    min-width: 760px;
+  }
+}
+
+/* ---------- Image explorer group strip ---------- */
+
+.image-group-strip-wrap {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.image-group-strip__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.image-group-strip__title {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1rem;
+}
+
+.image-group-strip__head .panel__hint {
+  margin: 0;
+}
+
+.image-group-strip {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.2rem 0.15rem 0.85rem;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.image-group-card {
+  flex: 0 0 9.5rem;
+  scroll-snap-align: start;
+
+  display: grid;
+  grid-template-rows: 5.75rem auto auto;
+  gap: 0.35rem;
+
+  padding: 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+
+  box-shadow: 0 1px 2px rgba(0, 31, 76, 0.04);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.image-group-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 31, 76, 0.12);
+}
+
+.image-group-card:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.image-group-card--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18), var(--shadow);
+}
+
+.image-group-card__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.image-group-card__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.image-group-card__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-weight: 750;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.image-group-card__count {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.image-explorer__controls--compact {
+  margin-top: 0.15rem;
+}

@@ -1,6 +1,6 @@
 """Blind/Referenceless Image Spatial Quality Evaluator (BRISQUE).
 
-No-reference measure implemented via ``piq``.  Requires ``ipasc_iqa[deep]``.
+No-reference measure implemented via ``piq``.  Requires ``Requires PyTorch-based metric dependencies.``.
 All heavy imports are deferred to first use so the base install stays lightweight.
 """
 
@@ -55,7 +55,7 @@ class BRISQUEMeasure(BaseMeasure):
             from piq import brisque
         except ImportError as exc:
             raise ImportError(
-                "BRISQUE requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "BRISQUE requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

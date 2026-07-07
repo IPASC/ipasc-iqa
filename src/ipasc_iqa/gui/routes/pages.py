@@ -37,6 +37,7 @@ def run_page(request: Request) -> HTMLResponse:
             "datasets": service.discover_datasets(ws),
             "measures": service.list_measures(),
             "active_job": active_job,
+            "device_status": service.torch_device_status(),
         },
     )
 

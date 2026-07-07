@@ -94,6 +94,16 @@
 
   </div>
 
+  {% if device_status %}
+  <div class="notice {{ 'notice--ok' if device_status.available else 'notice--info' }} run-device-note">
+    <strong>Execution device:</strong>
+    {{ device_status.label }}.
+    {{ device_status.message }}
+    <br>
+    <span class="muted">{{ device_status.detail }}</span>
+  </div>
+  {% endif %}
+
   <div class="actions actions--sticky">
     <button type="submit" class="btn btn--primary" hx-disabled-elt="this">Run ▶</button>
   </div>

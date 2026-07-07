@@ -168,10 +168,20 @@ def test_run_then_analysis_all_tasks(client: TestClient) -> None:
     assert "overall_quality" in frag.text
     assert "edge_visibility" in frag.text
     assert "SRCC" in frag.text and "PSNR" in frag.text
+    # Metric overview rows should carry the same per-measure citation buttons
+    # used by the Human agreement rows.
+    assert frag.text.count('aria-label="Citation for PSNR"') >= 2
     # 'mini' has references but no ROI masks -> cnr/snr are disabled, not shown.
     assert 'value="CNR"' in frag.text  # present as a disabled chip (oob)
     assert "disabled" in frag.text
 
+def test_image_explorer_score_table_has_measure_citations(client: TestClient) -> None:
+    _run_and_wait(client, ["mini"], ["PSNR", "SSIM"])
+
+    frag = client.get("/api/analysis/image-explorer", params={"dataset": "mini"})
+    assert frag.status_code == 200
+    assert "Metric comparison" in frag.text
+    assert 'aria-label="Citation for PSNR"' in frag.text
 
 def test_measure_options_reflect_capabilities(client: TestClient) -> None:
     from ipasc_iqa.gui import service

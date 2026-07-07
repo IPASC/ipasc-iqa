@@ -16,9 +16,8 @@ See [`docs/IMPLEMENTATION_ROADMAP.md`](docs/IMPLEMENTATION_ROADMAP.md) for the f
 Requires **Python ≥ 3.12**.
 
 ```bash
-pip install ipasc_iqa            # core (CLI + classical measures)
-pip install "ipasc_iqa[gui]"     # + the web GUI
-pip install "ipasc_iqa[deep]"    # + PyTorch-based measures
+pip install ipasc_iqa            # core (CLI + classical measures + PyTorch-based measures)
+pip install "ipasc_iqa[gui]"     # + the web GUI 
 ```
 
 NumPy 2.x is currently not part of the tested environment for deep metrics.

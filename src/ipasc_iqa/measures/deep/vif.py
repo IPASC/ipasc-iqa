@@ -8,7 +8,7 @@ an additive white Gaussian noise (AWGN) channel.  The pixel-domain variant
 (VIF-P) replaces the wavelet decomposition with a Gaussian pyramid for
 computational simplicity.
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``piq``) are
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``piq``) are
 deferred to first use so the base install stays lightweight.
 """
 
@@ -31,7 +31,7 @@ class VIFMeasure(BaseMeasure):
     size: 41×41 (the pyramid kernel is 11×11 at the finest scale).
 
     Range: [0, ∞), typical range [0, 1].  Higher = more similar.
-    Requires ``ipasc_iqa[deep]``.
+    Requires PyTorch-based metric dependencies.
     """
 
     metadata = MeasureMetadata(
@@ -82,7 +82,7 @@ class VIFMeasure(BaseMeasure):
             from piq import vif_p
         except ImportError as exc:
             raise ImportError(
-                "VIF requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "VIF requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

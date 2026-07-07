@@ -1,0 +1,167 @@
+<dialog class="image-detail-dialog" aria-labelledby="image-detail-title">
+  <div class="image-detail-dialog__card">
+    <button type="button"
+            class="image-detail__close"
+            aria-label="Close image detail"
+            onclick="this.closest('dialog').close()">
+      ×
+    </button>
+
+    <div class="image-detail__head">
+      <h3 id="image-detail-title" class="image-detail__title">Image detail</h3>
+
+      {% if detail.dataset and detail.image_id %}
+      <p class="muted mono image-detail__subtitle">
+        {{ detail.dataset }}/{{ detail.image_id }}
+      </p>
+      {% endif %}
+
+      {% if detail.image_explorer_url %}
+      <div class="image-detail__actions">
+        <button type="button"
+                class="btn btn--sm image-detail__explorer-btn image-detail__explorer-btn--primary"
+                data-image-explorer-url="{{ detail.image_explorer_url }}"
+                onclick="jumpFromImageDetailToExplorer(this)">
+          Open in Image explorer →
+        </button>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if detail.error %}
+      <p class="notice notice--warn">{{ detail.error }}</p>
+    {% else %}
+      <div class="image-detail__grid">
+        <div class="image-detail__preview">
+          <img
+            src="/api/annotate/image?dataset={{ detail.dataset | urlencode }}&item={{ detail.image_id | urlencode }}"
+            alt="{{ detail.image_id }}"
+          >
+        </div>
+
+        <div class="image-detail__scores">
+          <h4 class="image-detail__scores-title">Metric scores</h4>
+
+          {% if detail.scores %}
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Measure</th>
+                  <th class="num">Score</th>
+                  <th class="num">Relative quality</th>
+                  <th>Direction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for score in detail.scores %}
+                <tr class="image-detail__score-row"
+                    {% if score.color_hue is not none %}
+                    style="--score-hue: {{ score.color_hue }};"
+                    {% endif %}>
+                <td class="mono">
+                    {{ score.measure }}
+                    {% if score.kind == "sub_score" %}
+                    <span class="badge badge--muted">sub</span>
+                    {% endif %}
+                </td>
+                <td class="num mono">{{ '%.4g'|format(score.value) }}</td>
+                <td class="num mono">
+                    {% if score.quality_percent is not none %}
+                        {{ score.quality_percent }}%
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    {{ 'higher is better' if score.higher_is_better else 'lower is better' }}
+                </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <p class="legend score-legend">
+            Cells shaded by relative quality within this dataset:
+            <span class="legend__swatch score-legend__swatch score-legend__swatch--low"></span>
+            worse
+            →
+            <span class="legend__swatch score-legend__swatch score-legend__swatch--high"></span>
+            better.
+          </p>
+          {% else %}
+            <p class="muted">No scores available for this image.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</dialog>
+
+<script>
+  window.jumpFromImageDetailToExplorer = function (button) {
+    const url = button.dataset.imageExplorerUrl;
+    const dialog = button.closest("dialog");
+    const panel = document.getElementById("image-explorer-panel");
+    const explorerTab = document.getElementById("tab-image-explorer");
+
+    if (!url || !panel || !window.htmx) {
+      if (dialog) dialog.close();
+      return;
+    }
+
+    const nextUrl = new URL(url, window.location.origin);
+
+    // Preserve selected measures from the Detailed analysis controls.
+    const form = document.getElementById("analysis-controls");
+    if (form) {
+      const data = new FormData(form);
+      nextUrl.searchParams.delete("measures");
+      for (const [name, value] of data.entries()) {
+        if (name === "measures") {
+          nextUrl.searchParams.append("measures", value);
+        }
+      }
+    }
+
+    if (explorerTab) {
+      explorerTab.checked = true;
+      explorerTab.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    // Close the modal before loading the explorer. Otherwise the modal backdrop
+    // can stay above the page and block all clicks.
+    if (dialog) {
+      dialog.close();
+    }
+
+    window.htmx.ajax("GET", nextUrl.pathname + nextUrl.search, {
+      target: panel,
+      swap: "innerHTML",
+    });
+  };
+
+  (() => {
+    const root = document.querySelector("#metric-image-detail");
+    const dialog = root?.querySelector(".image-detail-dialog");
+
+    if (!dialog) {
+      return;
+    }
+
+    if (!dialog.open) {
+      dialog.showModal();
+    }
+
+    dialog.addEventListener("close", () => {
+      root.innerHTML = "";
+    });
+
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) {
+        dialog.close();
+      }
+    });
+  })();
+</script>

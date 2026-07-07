@@ -9,7 +9,7 @@ via a Gaussian scale-mixture model on steerable pyramid sub-bands.  This
 makes it more sensitive to perceptually important fine-detail regions than
 plain SSIM.
 
-Requires ``ipasc_iqa[deep]``.  All heavy imports (``torch``, ``piq``)
+Requires PyTorch-based metric dependencies.  All heavy imports (``torch``, ``piq``)
 are deferred to first use so the base install stays lightweight.
 """
 
@@ -33,7 +33,7 @@ class IWSSIMMeasure(BaseMeasure):
     Minimum recommended image size: 32×32 (the internal pyramid uses four
     decomposition levels).
 
-    Range: [0, 1], higher = more similar.  Requires ``ipasc_iqa[deep]``.
+    Range: [0, 1], higher = more similar.  Requires PyTorch-based metric dependencies.
     """
 
     metadata = MeasureMetadata(
@@ -114,7 +114,7 @@ class IWSSIMMeasure(BaseMeasure):
             from piq import information_weighted_ssim
         except ImportError as exc:
             raise ImportError(
-                "IW-SSIM requires 'ipasc_iqa[deep]'. Install with:  pip install 'ipasc_iqa[deep]'"
+                "IW-SSIM requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 
