@@ -80,6 +80,16 @@ def standings_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "standings.html", {"active": "standings"})
 
 
+@router.get("/imprint", response_class=HTMLResponse)
+def imprint_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "imprint.html", {"active": "imprint"})
+
+
+@router.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "privacy.html", {"active": "privacy"})
+
+
 @router.get("/download", response_class=HTMLResponse)
 def download_page(request: Request) -> HTMLResponse:
     ws = _ws(request)

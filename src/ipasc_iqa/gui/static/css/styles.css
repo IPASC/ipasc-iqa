@@ -101,6 +101,17 @@ img, svg, video, table { max-width: 100%; }
 .content { max-width: var(--maxw); margin: 0 auto; padding: 2rem 1.5rem 4rem; }
 .page-title { color: var(--navy); margin: 0 0 1.25rem; font-size: 1.6rem; }
 .footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 1.5rem; }
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--navy); text-decoration: underline; }
+.footer__sep { margin: 0 0.5rem; opacity: 0.5; }
+
+/* ---------- Legal pages (imprint / privacy) ---------- */
+.legal { max-width: 46rem; line-height: 1.6; }
+.legal__block { margin: 1.5rem 0; }
+.legal h2 { color: var(--navy); font-size: 1.1rem; margin: 0 0 0.4rem; }
+.legal p { margin: 0 0 0.6rem; }
+.legal ul { margin: 0 0 0.6rem 1.25rem; }
+.legal li { margin: 0.2rem 0; }
 .muted { color: var(--muted); }
 .empty { color: var(--muted); padding: 2rem; text-align: center;
          background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }

@@ -31,6 +31,8 @@ PUBLIC_PREFIXES = (
     "/logout",
     "/standings",
     "/api/standings",
+    "/imprint",
+    "/privacy",
     "/static",
     "/favicon.ico",
 )
