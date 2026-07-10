@@ -129,6 +129,38 @@ def image_explorer_fragment(
         {"explorer": explorer},
     )
 
+@router.get("/api/analysis/metric-overview", response_class=HTMLResponse)
+def metric_overview_fragment(
+    request: Request,
+    dataset: str,
+    measures: list[str] | None = Query(default=None),
+) -> HTMLResponse:
+    ws = _ws(request)
+    params = {
+        "dataset": dataset,
+        "measures": sorted(measures) if measures else None,
+    }
+
+    result = request.app.state.result_cache.get_or_schedule(
+        "metric-overview",
+        params,
+        service.results_epoch(ws),
+        lambda: service.metric_overview_for_dataset(
+            ws,
+            dataset,
+            measures=measures,
+        ),
+    )
+
+    if result is None:
+        return _recomputing(request)
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/metric_overview.html",
+        {"result": result},
+    )
+
 @router.get("/api/analysis", response_class=HTMLResponse)
 def analysis_fragment(
     request: Request,

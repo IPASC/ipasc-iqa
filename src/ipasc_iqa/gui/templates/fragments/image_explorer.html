@@ -13,7 +13,7 @@
       </p>
     </div>
 
-    <div class="image-group-strip">
+    <div id="image-group-strip" class="image-group-strip">
       {% for group in explorer['groups'] %}
       <button type="button"
               class="image-group-card{% if group.get('is_active') %} image-group-card--active{% endif %}"
@@ -21,7 +21,12 @@
               hx-get="/api/analysis/image-explorer?dataset={{ explorer['dataset'] | urlencode }}&stem={{ group['stem'] | urlencode }}"
               hx-target="#image-explorer-panel"
               hx-swap="innerHTML"
-              hx-include="#measure-chips input[name='measures']:checked">
+              hx-include="#measure-chips input[name='measures']:checked"
+              hx-on::before-request="
+                window.__imageGroupStripScrollLeft =
+                  document.getElementById('image-group-strip')?.scrollLeft || 0;
+                window.__imageGroupStripPreserveScroll = true;
+              ">
         <span class="image-group-card__preview">
           {% if group.get('preview_image_url') %}
           <img src="{{ group['preview_image_url'] }}"
@@ -161,3 +166,23 @@
 {% endif %}
 
 {% endif %}
+
+<script>
+  if (!window.__imageExplorerStripScrollListenerInstalled) {
+    window.__imageExplorerStripScrollListenerInstalled = true;
+
+    document.body.addEventListener("htmx:afterSwap", function (event) {
+      if (event.detail && event.detail.target && event.detail.target.id === "image-explorer-panel") {
+        const strip = document.getElementById("image-group-strip");
+
+        if (strip && window.__imageGroupStripPreserveScroll) {
+          strip.scrollLeft = window.__imageGroupStripScrollLeft || 0;
+        } else if (strip) {
+          strip.scrollLeft = 0;
+        }
+
+        window.__imageGroupStripPreserveScroll = false;
+      }
+    });
+  }
+</script>
