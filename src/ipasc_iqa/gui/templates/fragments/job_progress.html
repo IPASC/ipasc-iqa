@@ -14,11 +14,16 @@
     {% if status == "running" %}
       <span class="progress-spinner"></span> Benchmark running
     {% elif status == "done" %}
-      <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting…
+      {% if run_issues %}
+        <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete with warnings
+      {% else %}
+        <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting…
+      {% endif %}
     {% else %}
       <span class="progress-err">✗</span> Run failed
     {% endif %}
   </div>
+
 
   {% if progress %}
 {% for ds in progress %}
@@ -44,10 +49,14 @@
 
   <ul class="progress-chips">
     {% for m in ds.measures %}
-    <li class="progress-chip progress-chip--{{ 'done' if status == 'done' else 'active' }}">
+    <li class="progress-chip progress-chip--{{ 'warn' if status == 'done' and m.issues else ('done' if status == 'done' else 'active') }}">
       <span class="progress-chip__name">{{ m.name }}</span>
       {% if status == "done" %}
-        <span class="progress-chip__count">✓</span>
+        {% if m.issues %}
+          <span class="progress-chip__count">⚠ {{ m.issues }} skipped</span>
+        {% else %}
+          <span class="progress-chip__count">✓</span>
+        {% endif %}
       {% else %}
         <span class="progress-chip__count">{{ m.percent }}%</span>
       {% endif %}
@@ -70,6 +79,33 @@
       Dataset download or preparation may take a few minutes on the first run.
     </p>
   </section>
+  {% endif %}
+
+  {% if status == "done" and run_issues %}
+  <div class="notice notice--warn" style="margin-top:1rem">
+    <strong>Some metric calculations were skipped or failed.</strong>
+    The run completed, but these selected dataset/measure combinations did not
+    produce values for all images.
+
+    <ul class="run-issues">
+      {% for issue in run_issues %}
+      <li>
+        <strong>{{ issue.dataset }} · {{ issue.measure }}</strong>:
+        {{ issue.count }} skipped/failed
+        {% if issue.reasons %}
+          <ul>
+            {% for reason in issue.reasons[:3] %}
+            <li>{{ reason.count }}× {{ reason.reason }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <a href="/results" class="btn btn--primary" style="margin-top:0.75rem;display:inline-block">
+      View results
+    </a>
+  </div>
   {% endif %}
 
   {% if status == "error" %}

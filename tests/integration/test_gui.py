@@ -21,6 +21,8 @@ from ipasc_iqa.datasets.local import LocalDataset  # noqa: E402
 from ipasc_iqa.datasets.registry import registry as dataset_registry  # noqa: E402
 from ipasc_iqa.gui.app import create_app  # noqa: E402
 
+from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType  # noqa: E402
+from ipasc_iqa.core.registry import registry as measure_registry  # noqa: E402
 
 class MiniDataset(LocalDataset):
     """A pre-prepared adapter for tests (no download)."""
@@ -29,6 +31,52 @@ class MiniDataset(LocalDataset):
     DATASET_VERSION = "0.1.0"
     DATASET_DESCRIPTION = "Tiny synthetic test dataset."
 
+class GuiBrokenMeasure(BaseMeasure):
+    metadata = MeasureMetadata(
+        name="GUI_BROKEN_TEST",
+        version="0.0.1",
+        measure_type=MeasureType.NO_REFERENCE,
+        requires_signal_roi=False,
+        requires_noise_roi=False,
+        description="Measure used by GUI tests to exercise metric failures.",
+    )
+
+    def evaluate(self, image, **kwargs):  # noqa: ANN001, ANN003
+        raise RuntimeError("intentional GUI metric failure")
+
+def test_run_status_reports_metric_failures(client: TestClient) -> None:
+    measure_registry._classes["GUI_BROKEN_TEST"] = GuiBrokenMeasure
+    measure_registry._distributions["GUI_BROKEN_TEST"] = "tests"
+    try:
+        status = _run_and_wait(client, ["mini"], ["GUI_BROKEN_TEST"])
+    finally:
+        measure_registry._classes.pop("GUI_BROKEN_TEST", None)
+        measure_registry._distributions.pop("GUI_BROKEN_TEST", None)
+
+    assert status.headers.get("HX-Redirect") is None
+    assert "Some metric calculations were skipped or failed" in status.text
+    assert "mini · GUI_BROKEN_TEST" in status.text
+    assert "intentional GUI metric failure" in status.text
+
+def test_analysis_reports_latest_run_metric_failures(client: TestClient) -> None:
+    measure_registry._classes["GUI_BROKEN_TEST"] = GuiBrokenMeasure
+    measure_registry._distributions["GUI_BROKEN_TEST"] = "tests"
+    try:
+        _run_and_wait(client, ["mini"], ["PSNR", "GUI_BROKEN_TEST"])
+
+        frag = client.get(
+            "/api/analysis",
+            params={"dataset": "mini", "measures": ["PSNR", "GUI_BROKEN_TEST"]},
+        )
+    finally:
+        measure_registry._classes.pop("GUI_BROKEN_TEST", None)
+        measure_registry._distributions.pop("GUI_BROKEN_TEST", None)
+
+    assert frag.status_code == 200
+    assert "Some selected metrics are missing or incomplete" in frag.text
+    assert "GUI_BROKEN_TEST" in frag.text
+    assert "intentional GUI metric failure" in frag.text
+    assert "PSNR" in frag.text
 
 def _write_mini_dataset(root: Path) -> None:
     """Materialise the 'mini' dataset under <root>/mini/ following the contract."""

@@ -54,7 +54,7 @@ def run_job_status(request: Request, job_id: str) -> Response:
         return HTMLResponse("<p class='notice notice--warn'>Job not found.</p>")
     snap = jobs[job_id].snapshot()
     resp = templates.TemplateResponse(request, "fragments/job_progress.html", snap)
-    if snap["status"] == "done":
+    if snap["status"] == "done" and not snap.get("run_issues"):
         resp.headers["HX-Redirect"] = "/results"
     return resp
 
