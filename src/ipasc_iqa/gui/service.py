@@ -440,6 +440,7 @@ def run_benchmark(
     device: str = "auto",
     on_progress: Callable[[str, str], None] | None = None,
     on_plan: Callable[[dict[str, int], list[str]], None] | None = None,
+    on_skip: Callable[[str, str, str], None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
 
@@ -474,6 +475,7 @@ def run_benchmark(
             cache=store,
             progress=False,
             on_progress=on_progress,
+            on_skip=on_skip,
         )
         # Pre-compute per-dataset mean/std over the merged per-image results and
         # persist them, so reporting doesn't have to recompute from scratch.

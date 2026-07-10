@@ -119,6 +119,28 @@ class _JobState:
                 "progress": progress,
                 "run_issues": list(self.run_issues),
             }
+        
+    def record_skip(self, dataset: str, measure: str, reason: str) -> None:
+        with self._lock:
+            for issue in self.run_issues:
+                if issue["dataset"] == dataset and issue["measure"] == measure:
+                    issue["count"] += 1
+                    for item in issue["reasons"]:
+                        if item["reason"] == reason:
+                            item["count"] += 1
+                            break
+                    else:
+                        issue["reasons"].append({"reason": reason, "count": 1})
+                    return
+
+            self.run_issues.append(
+                {
+                    "dataset": dataset,
+                    "measure": measure,
+                    "count": 1,
+                    "reasons": [{"reason": reason, "count": 1}],
+                }
+            )
 
 def _summarize_run_issues(workspace: object, run_id: str) -> list[dict]:
     """Summarize skipped/failed calculations from the saved run JSON.
@@ -185,6 +207,7 @@ def launch_run(
                 device=device,
                 on_progress=job.record_progress,
                 on_plan=job.set_plan,
+                on_skip=job.record_skip,
             )
             job.finish(run_id, _summarize_run_issues(ws, run_id))
         except Exception as exc:  # noqa: BLE001

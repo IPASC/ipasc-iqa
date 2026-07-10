@@ -1,35 +1,14 @@
 {% if status == "running" %}
-<div id="run-container" class="run-progress"
-     hx-get="/api/run/{{ job_id }}/status"
-     hx-trigger="every 1.5s"
-     hx-target="this"
-     hx-swap="outerHTML">
-{% elif status == "error" %}
-<div id="run-container" class="run-progress">
-{% else %}
-<div id="run-container" class="run-progress run-progress--done">
-{% endif %}
 
-  <div class="run-progress__header">
-    {% if status == "running" %}
-      <span class="progress-spinner"></span> Benchmark running
-    {% elif status == "done" %}
-      {% if run_issues %}
-        <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete with warnings
-      {% else %}
-        <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting…
-      {% endif %}
-    {% else %}
-      <span class="progress-err">✗</span> Run failed
-    {% endif %}
-  </div>
+<div id="run-container" class="run-progress" hx-get="/api/run/{{ job_id }}/status" hx-trigger="every 1.5s" hx-target="this" hx-swap="outerHTML"> {% elif status == "error" %} <div id="run-container" class="run-progress"> {% else %} <div id="run-container" class="run-progress run-progress--done"> {% endif %}
 
+<div class="run-progress__header"> {% if status == "running" %} <span class="progress-spinner"></span> Benchmark running {% elif status == "done" %} {% if run_issues %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete with warnings {% else %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting… {% endif %} {% else %} <span class="progress-err">✗</span> Run failed {% endif %} </div>
 
-  {% if progress %}
+{% if progress %}
 {% for ds in progress %}
 <section class="run-dataset">
-  <div class="run-dataset__head">
-    <span class="run-dataset__name">{{ ds.dataset }}</span>
+<div class="run-dataset__head">
+<span class="run-dataset__name">{{ ds.dataset }}</span>
 
     {% if status == "done" %}
       {% set dataset_percent = 100 %}
@@ -49,14 +28,12 @@
 
   <ul class="progress-chips">
     {% for m in ds.measures %}
-    <li class="progress-chip progress-chip--{{ 'warn' if status == 'done' and m.issues else ('done' if status == 'done' else 'active') }}">
+    <li class="progress-chip progress-chip--{{ 'warn' if m.issues else ('done' if status == 'done' else 'active') }}">
       <span class="progress-chip__name">{{ m.name }}</span>
-      {% if status == "done" %}
-        {% if m.issues %}
-          <span class="progress-chip__count">⚠ {{ m.issues }} skipped</span>
-        {% else %}
-          <span class="progress-chip__count">✓</span>
-        {% endif %}
+      {% if m.issues %}
+        <span class="progress-chip__count">⚠ {{ m.issues }} skipped</span>
+      {% elif status == "done" %}
+        <span class="progress-chip__count">✓</span>
       {% else %}
         <span class="progress-chip__count">{{ m.percent }}%</span>
       {% endif %}
@@ -65,52 +42,70 @@
   </ul>
 </section>
 {% endfor %}
-  {% elif status == "running" %}
-  <section class="run-dataset">
-    <div class="run-dataset__head">
-      <span class="run-dataset__name">{{ message or "Preparing/downloading datasets..." }}</span>
-      <span class="run-dataset__pct">please wait</span>
-    </div>
-    <div class="run-bar run-bar--indeterminate" role="progressbar"
-        aria-label="{{ message or 'Preparing/downloading datasets' }}">
-      <div class="run-bar__fill"></div>
-    </div>
-    <p class="muted" style="margin:0.75rem 0 0">
-      Dataset download or preparation may take a few minutes on the first run.
-    </p>
-  </section>
-  {% endif %}
 
-  {% if status == "done" and run_issues %}
-  <div class="notice notice--warn" style="margin-top:1rem">
-    <strong>Some metric calculations were skipped or failed.</strong>
-    The run completed, but these selected dataset/measure combinations did not
-    produce values for all images.
+{% elif status == "running" %}
+<section class="run-dataset">
+<div class="run-dataset__head">
+<span class="run-dataset__name">{{ message or "Preparing/downloading datasets..." }}</span>
+<span class="run-dataset__pct">please wait</span>
+</div>
+<div class="run-bar run-bar--indeterminate" role="progressbar" aria-label="{{ message or 'Preparing/downloading datasets' }}">
+<div class="run-bar__fill"></div>
+</div>
+<p class="muted" style="margin:0.75rem 0 0">
+Dataset download or preparation may take a few minutes on the first run.
+</p>
+</section>
+{% endif %}
 
-    <ul class="run-issues">
-      {% for issue in run_issues %}
-      <li>
-        <strong>{{ issue.dataset }} · {{ issue.measure }}</strong>:
-        {{ issue.count }} skipped/failed
-        {% if issue.reasons %}
-          <ul>
-            {% for reason in issue.reasons[:3] %}
-            <li>{{ reason.count }}× {{ reason.reason }}</li>
-            {% endfor %}
-          </ul>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
+{% if run_issues %}
+<div class="notice notice--warn" style="margin-top:1rem">
+<strong>
+{% if status == "done" %}
+Some metric calculations were skipped or failed.
+{% else %}
+Some metric calculations are already being skipped or failing.
+{% endif %}
+</strong>
+
+  <p style="margin:0.35rem 0 0">
+    {% if status == "done" %}
+      The run completed, but these selected dataset/measure combinations did not
+      produce values for all images.
+    {% else %}
+      The benchmark is still running, but the following selected dataset/measure
+      combinations have already produced skipped/failed calculations.
+    {% endif %}
+  </p>
+
+  <ul class="run-issues">
+    {% for issue in run_issues %}
+    <li>
+      <strong>{{ issue.dataset }} · {{ issue.measure }}</strong>:
+      {{ issue.count }} skipped/failed
+      {% if issue.reasons %}
+        <ul>
+          {% for reason in issue.reasons[:3] %}
+          <li>{{ reason.count }}× {{ reason.reason }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if status == "done" %}
     <a href="/results" class="btn btn--primary" style="margin-top:0.75rem;display:inline-block">
       View results
     </a>
-  </div>
   {% endif %}
+</div>
 
-  {% if status == "error" %}
-  <p class="notice notice--warn" style="margin-top:1rem">{{ error }}</p>
-  <a href="/run" class="btn" style="margin-top:0.75rem;display:inline-block">← Back</a>
-  {% endif %}
+{% endif %}
+
+{% if status == "error" %}
+<p class="notice notice--warn" style="margin-top:1rem">{{ error }}</p>
+<a href="/run" class="btn" style="margin-top:0.75rem;display:inline-block">← Back</a>
+{% endif %}
 
 </div>

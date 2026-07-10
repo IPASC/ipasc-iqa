@@ -131,3 +131,19 @@ def test_metric_evaluation_errors_are_recorded_as_skipped(synthetic_dataset: Pat
     assert len(run.skipped) == len(ds)
     assert {s.measure for s in run.skipped} == {"BROKEN_TEST"}
     assert all("evaluation error: intentional metric failure" in s.reason for s in run.skipped)
+
+def test_metric_evaluation_errors_call_on_skip(synthetic_dataset: Path) -> None:
+    ds = LocalDataset(synthetic_dataset)
+    events = []
+
+    run = run_evaluation(
+        [ds],
+        [BrokenMeasure()],
+        progress=False,
+        on_skip=lambda dataset, measure, reason: events.append((dataset, measure, reason)),
+    )
+
+    assert len(run.skipped) == len(ds)
+    assert len(events) == len(ds)
+    assert {measure for _, measure, _ in events} == {"BROKEN_TEST"}
+    assert all("intentional metric failure" in reason for _, _, reason in events)

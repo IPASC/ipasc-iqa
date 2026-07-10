@@ -69,3 +69,17 @@ def test_done_snapshot_includes_skipped_measure_issues() -> None:
     assert broken["issues"] == 3
     assert psnr["issues"] == 0
 
+def test_running_snapshot_marks_measure_with_live_issues() -> None:
+    job = _JobState("j")
+    job.set_plan({"mini": 3}, ["PSNR", "BROKEN"])
+    job.record_progress("mini", "PSNR")
+    job.record_skip("mini", "BROKEN", "evaluation error: boom")
+    job.record_progress("mini", "BROKEN")
+
+    snap = job.snapshot()
+    mini = _by_dataset(snap)["mini"]
+    broken = next(m for m in mini["measures"] if m["name"] == "BROKEN")
+
+    assert snap["status"] == "running"
+    assert snap["run_issues"][0]["measure"] == "BROKEN"
+    assert broken["issues"] == 1

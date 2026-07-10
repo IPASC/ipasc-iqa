@@ -92,6 +92,7 @@ def run_evaluation(
     cache: ResultStore | None = None,
     progress: bool = True,
     on_progress: Callable[[str, str], None] | None = None,
+    on_skip=None,    
 ) -> RunResults:
     from ipasc_iqa import __version__
     from ipasc_iqa.core.cache import make_cache_key
@@ -143,25 +144,27 @@ def run_evaluation(
 
                 # Check ROI requirements
                 if measure.metadata.requires_signal_roi and record.signal_roi is None:
-                    skipped.append(
-                        SkippedRecord(
-                            dataset=ds.name,
-                            image_id=record.id,
-                            measure=measure.metadata.name,
-                            reason="signal_roi required but not available",
-                        )
+                    skip = SkippedRecord(
+                        dataset=ds.name,
+                        image_id=record.id,
+                        measure=measure.metadata.name,
+                        reason="signal_roi required but not available",
                     )
+                    skipped.append(skip)
+                    if on_skip is not None:
+                        on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
 
                 if measure.metadata.requires_noise_roi and record.noise_roi is None:
-                    skipped.append(
-                        SkippedRecord(
-                            dataset=ds.name,
-                            image_id=record.id,
-                            measure=measure.metadata.name,
-                            reason="noise_roi required but not available",
-                        )
+                    skip = SkippedRecord(
+                        dataset=ds.name,
+                        image_id=record.id,
+                        measure=measure.metadata.name,
+                        reason="noise_roi required but not available",
                     )
+                    skipped.append(skip)
+                    if on_skip is not None:
+                        on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
 
                 reference, reference_type = _pick_reference(
@@ -172,14 +175,15 @@ def run_evaluation(
                     measure.metadata.measure_type == MeasureType.FULL_REFERENCE
                     and reference is None
                 ):
-                    skipped.append(
-                        SkippedRecord(
-                            dataset=ds.name,
-                            image_id=record.id,
-                            measure=measure.metadata.name,
-                            reason="no reference of accepted type available",
-                        )
+                    skip = SkippedRecord(
+                        dataset=ds.name,
+                        image_id=record.id,
+                        measure=measure.metadata.name,
+                        reason="no reference of accepted type available",
                     )
+                    skipped.append(skip)
+                    if on_skip is not None:
+                        on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
 
                 ref_sha = record.hashes.references.get(reference_type) if reference_type else None
@@ -212,14 +216,15 @@ def run_evaluation(
                         noise_roi=record.noise_roi,
                     )
                 except Exception as exc:
-                    skipped.append(
-                        SkippedRecord(
-                            dataset=ds.name,
-                            image_id=record.id,
-                            measure=measure.metadata.name,
-                            reason=f"evaluation error: {exc}",
-                        )
+                    skip = SkippedRecord(
+                        dataset=ds.name,
+                        image_id=record.id,
+                        measure=measure.metadata.name,
+                        reason=f"evaluation error: {exc}",
                     )
+                    skipped.append(skip)
+                    if on_skip is not None:
+                        on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
                 wall_time = time.perf_counter() - t0
 
