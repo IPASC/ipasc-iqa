@@ -81,7 +81,7 @@ def image_groups_from_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]
         )
 
     out: list[dict[str, Any]] = []
-    for stem, items in sorted(grouped.items(), key=lambda pair: pair[0]):
+    for stem, items in sorted(grouped.items(), key=lambda pair: _natural_sort_key(pair[0])):
         def _item_sort_key(item: dict[str, Any]) -> tuple:
             metadata = item.get("metadata", {}) or {}
             algorithm_index = _optional_int(metadata.get("algorithm_index"))

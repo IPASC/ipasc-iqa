@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 from collections import defaultdict
 from urllib.parse import urlencode
+import os
 
 import numpy as np
 
@@ -81,6 +82,15 @@ class Workspace:
         return self.results_dir / "cache"
 
     @property
+    def model_cache_dir(self) -> Path:
+        """Writable cache for third-party model weights used by deep metrics.
+
+        Some libraries default to ~/.cache or /opt/.cache in web deployments.
+        The GUI should instead use a workspace-owned directory.
+        """
+        return self.results_dir / "model_cache"
+
+    @property
     def annotations_path(self) -> Path:
         """diskcache directory for contributed annotations (rankings + ratings)."""
         return self.root / "annotations"
@@ -97,6 +107,7 @@ class Workspace:
     def ensure(self) -> None:
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.model_cache_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def resolve(root: Path | str, data_dir: Path | str | None = None) -> Workspace:
@@ -343,11 +354,20 @@ def _last_selection_path(workspace: Workspace) -> Path:
     return workspace.results_dir / "last_selection.json"
 
 
-def save_last_selection(workspace: Workspace, datasets: list[str], measures: list[str]) -> None:
+def save_last_selection(
+    workspace: Workspace,
+    datasets: list[str],
+    measures: list[str],
+    *,
+    run_id: str | None = None,
+) -> None:
     """Persist the dataset/measure selection from the most recent benchmark run."""
     workspace.ensure()
+    payload = {"datasets": list(datasets), "measures": list(measures)}
+    if run_id is not None:
+        payload["run_id"] = run_id
     _last_selection_path(workspace).write_text(
-        json.dumps({"datasets": list(datasets), "measures": list(measures)}),
+        json.dumps(payload),
         encoding="utf-8",
     )
 
@@ -356,14 +376,15 @@ def load_last_selection(workspace: Workspace) -> dict:
     """Most recent benchmark selection, or empty lists if none was recorded."""
     path = _last_selection_path(workspace)
     if not path.exists():
-        return {"datasets": [], "measures": []}
+        return {"datasets": [], "measures": [], "run_id": None}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {"datasets": [], "measures": []}
+        return {"datasets": [], "measures": [], "run_id": None}
     return {
         "datasets": list(data.get("datasets", [])),
         "measures": list(data.get("measures", [])),
+        "run_id": data.get("run_id"),
     }
 
 
@@ -378,6 +399,37 @@ def get_dataset(workspace: Workspace, name: str) -> dict | None:
 # Runs
 # ---------------------------------------------------------------------------
 
+def _can_write_dir(path: Path) -> bool:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".ipasc_iqa_write_test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def ensure_writable_model_cache(workspace: Workspace) -> None:
+    """Use a workspace-owned cache for third-party metric model files.
+
+    This avoids deployments where libraries try to write model weights under
+    non-writable locations such as /opt/.cache.
+    """
+    cache_dir = workspace.model_cache_dir
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    defaults = {
+        "XDG_CACHE_HOME": cache_dir / "xdg",
+        "TORCH_HOME": cache_dir / "torch",
+        "HF_HOME": cache_dir / "hf",
+    }
+
+    for key, fallback in defaults.items():
+        current = os.environ.get(key)
+        if current is None or not _can_write_dir(Path(current)):
+            fallback.mkdir(parents=True, exist_ok=True)
+            os.environ[key] = str(fallback)
 
 def run_benchmark(
     workspace: Workspace,
@@ -388,6 +440,7 @@ def run_benchmark(
     device: str = "auto",
     on_progress: Callable[[str, str], None] | None = None,
     on_plan: Callable[[dict[str, int], list[str]], None] | None = None,
+    on_skip: Callable[[str, str, str], None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
 
@@ -400,11 +453,15 @@ def run_benchmark(
     display; ``on_progress(dataset, measure)`` then fires once per evaluated pair.
     """
     workspace.ensure()
+    ensure_writable_model_cache(workspace)
+
     datasets = [
         dataset_registry.instantiate(name, workspace.data_dir, download=True)
         for name in dataset_names
     ]
+
     measures = [measure_registry.instantiate(m, device=device) for m in measure_names]
+
     if reference_preference is None:
         reference_preference = ["ground_truth", "pseudo_reference"]
     if on_plan is not None:
@@ -418,6 +475,7 @@ def run_benchmark(
             cache=store,
             progress=False,
             on_progress=on_progress,
+            on_skip=on_skip,
         )
         # Pre-compute per-dataset mean/std over the merged per-image results and
         # persist them, so reporting doesn't have to recompute from scratch.
@@ -427,6 +485,8 @@ def run_benchmark(
     # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
+
+    save_last_selection(workspace, dataset_names, measure_names, run_id=run.run_id)
 
     # New measure values → invalidate cached analysis/standings/scatter views.
     with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
@@ -511,6 +571,92 @@ def _merged_run(workspace: Workspace, dataset_name: str) -> RunResults | None:
     )
 
 
+def _latest_selected_run(workspace: Workspace, dataset_name: str) -> RunResults | None:
+    """Return the latest run associated with the saved GUI selection, if relevant."""
+    last = load_last_selection(workspace)
+    run_id = last.get("run_id")
+    if not run_id or dataset_name not in last.get("datasets", []):
+        return None
+
+    path = workspace.results_dir / f"{run_id}.json"
+    if not path.exists():
+        return None
+
+    try:
+        return load_results(path)
+    except Exception:
+        return None
+
+
+def _analysis_run_issues(
+    workspace: Workspace,
+    dataset_name: str,
+    selected_measures: list[str],
+    selected_records: list,
+) -> list[dict]:
+    """Explain selected metrics that are missing or incomplete in analysis.
+
+    The analysis tables read from the merged result store, which only contains
+    successful metric values. This helper re-attaches the skipped/failure audit
+    from the latest run so failed metrics do not disappear silently.
+    """
+    produced = {rec.measure for rec in selected_records if rec.dataset == dataset_name}
+    selected = set(selected_measures)
+
+    latest = _latest_selected_run(workspace, dataset_name)
+
+    grouped: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    if latest is not None:
+        for skipped in latest.skipped:
+            if skipped.dataset != dataset_name:
+                continue
+            if skipped.measure not in selected:
+                continue
+            grouped[skipped.measure][skipped.reason] += 1
+
+    issues: list[dict] = []
+    for measure in sorted(selected):
+        reasons = grouped.get(measure, {})
+        missing_completely = measure not in produced
+
+        if not reasons and not missing_completely:
+            continue
+
+        if reasons:
+            reason_items = [
+                {"reason": reason, "count": count}
+                for reason, count in sorted(
+                    reasons.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+            ]
+            count = sum(reasons.values())
+        else:
+            reason_items = [
+                {
+                    "reason": (
+                        "Selected for the latest run, but no cached values are available "
+                        "for this dataset/measure. The run may have been interrupted, "
+                        "or these values may come from an older cache state."
+                    ),
+                    "count": 1,
+                }
+            ]
+            count = 0
+
+        issues.append(
+            {
+                "dataset": dataset_name,
+                "measure": measure,
+                "count": count,
+                "missing_completely": missing_completely,
+                "reasons": reason_items,
+            }
+        )
+
+    return issues
+
 # ---------------------------------------------------------------------------
 # Detailed analysis — one correlation table per available task
 # ---------------------------------------------------------------------------
@@ -586,6 +732,13 @@ def analysis_for_dataset(
         measures,
     )
 
+    run_issues = _analysis_run_issues(
+        workspace,
+        dataset_name,
+        chosen,
+        selected_records,
+    )
+
     metric_summary = _annotate_metric_summary_bibtex(
         rich_measure_summary(
             selected_records,
@@ -608,6 +761,7 @@ def analysis_for_dataset(
             "sources": [],
             "active_source": source,
             "metric_summary": metric_summary,
+            "run_issues": run_issues,
             "human_analysis_message": (
                 "No expert annotations or contributed comparisons are available for this dataset."
             ),
@@ -656,6 +810,7 @@ def analysis_for_dataset(
         "sources": sources,
         "active_source": active_source,
         "metric_summary": metric_summary,
+        "run_issues": run_issues,
         "human_analysis_message": None,
         "error": None,
     }

@@ -2,6 +2,40 @@
   <p class="notice notice--warn">{{ result.error }}</p>
 {% endif %}
 
+{% if result.run_issues %}
+  <div class="notice notice--warn">
+    <strong>Some selected metrics are missing or incomplete for this dataset.</strong>
+    <p style="margin:0.35rem 0 0">
+      The analysis tables only include successfully computed metric values.
+      The following selected metrics had skipped/failed calculations in the latest run.
+    </p>
+
+    <ul class="run-issues">
+      {% for issue in result.run_issues %}
+      <li>
+        <strong>{{ issue.measure }}</strong>
+        {% if issue.missing_completely %}
+          — no values available
+        {% elif issue.count %}
+          — {{ issue.count }} skipped/failed
+        {% endif %}
+
+        {% if issue.reasons %}
+        <ul>
+          {% for reason in issue.reasons[:3] %}
+          <li>
+            {% if reason.count > 1 %}{{ reason.count }}× {% endif %}
+            {{ reason.reason }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
 <div class="result-head">
     <div class="result-head__top">
       <h2 class="result-head__title">{{ result.dataset }}</h2>

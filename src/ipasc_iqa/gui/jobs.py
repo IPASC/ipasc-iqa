@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+from collections import Counter, defaultdict
 
 
 class _JobState:
@@ -25,6 +26,7 @@ class _JobState:
         "run_id",
         "error",
         "message",
+        "run_issues",
         "_n_images",
         "_measures",
         "_done",
@@ -38,6 +40,7 @@ class _JobState:
         self.error: str | None = None
         self._n_images: dict[str, int] = {}  # dataset -> image count (the denominator)
         self.message: str = "Preparing/downloading datasets..."
+        self.run_issues: list[dict] = []
         self._measures: list[str] = []  # measure names, in selection order
         self._done: dict[tuple[str, str], int] = {}  # (dataset, measure) -> pairs done
         self._lock = threading.Lock()
@@ -57,9 +60,10 @@ class _JobState:
             key = (dataset, measure)
             self._done[key] = self._done.get(key, 0) + 1
 
-    def finish(self, run_id: str) -> None:
+    def finish(self, run_id: str, run_issues: list[dict] | None = None) -> None:
         with self._lock:
             self.run_id = run_id
+            self.run_issues = list(run_issues or [])
             self.status = "done"
 
     def fail(self, error: str) -> None:
@@ -82,6 +86,10 @@ class _JobState:
         per-measure breakdown.
         """
         with self._lock:
+            issue_counts = {
+                (issue["dataset"], issue["measure"]): issue["count"]
+                for issue in self.run_issues
+            }
             progress = []
             for dataset, n_images in self._n_images.items():
                 measures = [
@@ -90,6 +98,7 @@ class _JobState:
                         "done": min(self._done.get((dataset, m), 0), n_images),
                         "total": n_images,
                         "percent": self._pct(self._done.get((dataset, m), 0), n_images),
+                        "issues": issue_counts.get((dataset, m), 0),
                     }
                     for m in self._measures
                 ]
@@ -108,8 +117,62 @@ class _JobState:
                 "error": self.error,
                 "message": self.message,
                 "progress": progress,
+                "run_issues": list(self.run_issues),
             }
+        
+    def record_skip(self, dataset: str, measure: str, reason: str) -> None:
+        with self._lock:
+            for issue in self.run_issues:
+                if issue["dataset"] == dataset and issue["measure"] == measure:
+                    issue["count"] += 1
+                    for item in issue["reasons"]:
+                        if item["reason"] == reason:
+                            item["count"] += 1
+                            break
+                    else:
+                        issue["reasons"].append({"reason": reason, "count": 1})
+                    return
 
+            self.run_issues.append(
+                {
+                    "dataset": dataset,
+                    "measure": measure,
+                    "count": 1,
+                    "reasons": [{"reason": reason, "count": 1}],
+                }
+            )
+
+def _summarize_run_issues(workspace: object, run_id: str) -> list[dict]:
+    """Summarize skipped/failed calculations from the saved run JSON.
+
+    The runner already records both expected skips, such as missing references
+    or ROIs, and unexpected metric exceptions in run.skipped. The GUI only needs
+    a compact per-dataset/per-measure summary for the progress panel.
+    """
+    from ipasc_iqa.gui.service import Workspace
+    from ipasc_iqa.io.results import load_results
+
+    ws: Workspace = workspace  # type: ignore[assignment]
+    run = load_results(ws.results_dir / f"{run_id}.json")
+
+    grouped: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
+    for skipped in run.skipped:
+        grouped[(skipped.dataset, skipped.measure)][skipped.reason] += 1
+
+    out = []
+    for (dataset, measure), reasons in sorted(grouped.items()):
+        out.append(
+            {
+                "dataset": dataset,
+                "measure": measure,
+                "count": sum(reasons.values()),
+                "reasons": [
+                    {"reason": reason, "count": count}
+                    for reason, count in reasons.most_common()
+                ],
+            }
+        )
+    return out
 
 def launch_run(
     workspace: object,
@@ -144,8 +207,9 @@ def launch_run(
                 device=device,
                 on_progress=job.record_progress,
                 on_plan=job.set_plan,
+                on_skip=job.record_skip,
             )
-            job.finish(run_id)
+            job.finish(run_id, _summarize_run_issues(ws, run_id))
         except Exception as exc:  # noqa: BLE001
             job.fail(str(exc))
 

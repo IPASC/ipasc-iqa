@@ -68,7 +68,7 @@ class LPIPSMeasure(BaseMeasure):
             import lpips
         except ImportError as exc:
             raise ImportError(
-                "LPIPS rrequires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
+                "LPIPS requires PyTorch-based metric dependencies. Reinstall ipasc_iqa, or reinstall PyTorch following the official PyTorch selector."
             ) from exc
         import torch
 

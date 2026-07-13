@@ -41,3 +41,45 @@ def test_progress_caps_at_100() -> None:
     duke = _by_dataset(job.snapshot())["duke"]
     assert duke["percent"] == 100
     assert duke["measures"][0]["done"] == 2  # capped at the image count
+
+def test_done_snapshot_includes_skipped_measure_issues() -> None:
+    job = _JobState("j")
+    job.set_plan({"mini": 3}, ["PSNR", "BROKEN"])
+    for _ in range(3):
+        job.record_progress("mini", "PSNR")
+        job.record_progress("mini", "BROKEN")
+
+    job.finish(
+        "run-1",
+        [
+            {
+                "dataset": "mini",
+                "measure": "BROKEN",
+                "count": 3,
+                "reasons": [{"reason": "evaluation error: boom", "count": 3}],
+            }
+        ],
+    )
+
+    snap = job.snapshot()
+    broken = next(m for m in _by_dataset(snap)["mini"]["measures"] if m["name"] == "BROKEN")
+    psnr = next(m for m in _by_dataset(snap)["mini"]["measures"] if m["name"] == "PSNR")
+
+    assert snap["run_issues"][0]["measure"] == "BROKEN"
+    assert broken["issues"] == 3
+    assert psnr["issues"] == 0
+
+def test_running_snapshot_marks_measure_with_live_issues() -> None:
+    job = _JobState("j")
+    job.set_plan({"mini": 3}, ["PSNR", "BROKEN"])
+    job.record_progress("mini", "PSNR")
+    job.record_skip("mini", "BROKEN", "evaluation error: boom")
+    job.record_progress("mini", "BROKEN")
+
+    snap = job.snapshot()
+    mini = _by_dataset(snap)["mini"]
+    broken = next(m for m in mini["measures"] if m["name"] == "BROKEN")
+
+    assert snap["status"] == "running"
+    assert snap["run_issues"][0]["measure"] == "BROKEN"
+    assert broken["issues"] == 1

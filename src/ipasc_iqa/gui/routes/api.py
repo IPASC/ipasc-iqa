@@ -54,7 +54,7 @@ def run_job_status(request: Request, job_id: str) -> Response:
         return HTMLResponse("<p class='notice notice--warn'>Job not found.</p>")
     snap = jobs[job_id].snapshot()
     resp = templates.TemplateResponse(request, "fragments/job_progress.html", snap)
-    if snap["status"] == "done":
+    if snap["status"] == "done" and not snap.get("run_issues"):
         resp.headers["HX-Redirect"] = "/results"
     return resp
 
@@ -127,6 +127,38 @@ def image_explorer_fragment(
         request,
         "fragments/image_explorer.html",
         {"explorer": explorer},
+    )
+
+@router.get("/api/analysis/metric-overview", response_class=HTMLResponse)
+def metric_overview_fragment(
+    request: Request,
+    dataset: str,
+    measures: list[str] | None = Query(default=None),
+) -> HTMLResponse:
+    ws = _ws(request)
+    params = {
+        "dataset": dataset,
+        "measures": sorted(measures) if measures else None,
+    }
+
+    result = request.app.state.result_cache.get_or_schedule(
+        "metric-overview",
+        params,
+        service.results_epoch(ws),
+        lambda: service.metric_overview_for_dataset(
+            ws,
+            dataset,
+            measures=measures,
+        ),
+    )
+
+    if result is None:
+        return _recomputing(request)
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/metric_overview.html",
+        {"result": result},
     )
 
 @router.get("/api/analysis", response_class=HTMLResponse)

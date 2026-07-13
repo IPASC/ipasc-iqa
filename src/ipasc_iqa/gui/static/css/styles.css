@@ -429,11 +429,20 @@ img, svg, video, table { max-width: 100%; }
 .progress-chip--done {
   background: #ecfdf5; border: 1px solid #6ee7b7; color: var(--ok);
 }
+.progress-chip--warn {
+  background: #fffbeb; border: 1px solid #fde68a; color: var(--warn);
+}
 .progress-chip__count {
   font-size: 0.72rem; background: #dbeafe; color: #1d4ed8;
   border-radius: 999px; padding: 0.05rem 0.45rem; min-width: 1.4em; text-align: center;
   font-variant-numeric: tabular-nums;
 }
+.progress-chip--warn .progress-chip__count {
+  background: #fef3c7; color: var(--warn);
+}
+
+.run-issues { margin: 0.6rem 0 0; padding-left: 1.2rem; }
+.run-issues ul { margin: 0.3rem 0 0.5rem; padding-left: 1.2rem; }
 .progress-chip__check { font-size: 0.85rem; }
 
 /* ---------- Tabs in Deatailed analysis -------------------------------- */

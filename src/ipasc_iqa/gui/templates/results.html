@@ -12,7 +12,8 @@
         hx-get="/api/analysis"
         hx-target="#correlation-result"
         hx-trigger="load, change delay:250ms queue:last"
-        hx-swap="innerHTML">
+        hx-swap="innerHTML"
+        hx-sync="this:replace">
 
     <label class="field">
       <span class="field__label">Dataset</span>
