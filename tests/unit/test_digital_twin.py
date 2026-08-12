@@ -105,9 +105,13 @@ def test_bt_only_dataset_is_analysable(tmp_path: Path) -> None:
     ws.ensure()
     service.run_benchmark(ws, ["digital_twin"], ["PSNR", "SSIM"])
 
-    # No annotations of any kind yet → nothing to analyse.
+    # No annotations of any kind yet → the metric overview still renders, but
+    # there is no human-score analysis and the page says so (rather than erroring).
     before = service.analysis_for_dataset(ws, "digital_twin")
-    assert before["error"] is not None
+    assert before["error"] is None
+    assert before["human_analysis_message"]
+    assert before["tasks"] == [] and before["sources"] == []
+    assert before["metric_summary"]
 
     # Contribute pairwise comparisons (task=None) for the emitted testing scenes.
     with AnnotatorStore(ws.annotations_path) as store:

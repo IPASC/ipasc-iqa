@@ -180,20 +180,38 @@ class EarVesselsDataset(LocalDataset):
         noisy = ref + rng.normal(0.0, std, size=ref.shape)
         return np.clip(noisy, 0.0, 1.0)
 
-    @staticmethod
-    def _rois(png_path: Path) -> tuple[np.ndarray, np.ndarray] | tuple[None, None]:
+    #: Folder names the archive has used for the segmentation masks.
+    _MASK_DIRS = ("groundtruth", "ground_truth")
+
+    @classmethod
+    def _mask_path(cls, png_path: Path) -> Path | None:
+        """The segmentation mask for a source image, or ``None`` if absent.
+
+        Built structurally — swapping the ``image`` folder for its ``groundtruth``
+        sibling — rather than by substring-replacing the path, which would also
+        rewrite the file's own name (``image_01.png``) or any ancestor directory
+        that happens to contain "image".
+        """
+        for folder in cls._MASK_DIRS:
+            candidate = png_path.parent.parent / folder / png_path.name
+            if candidate.exists():
+                return candidate
+        return None
+
+    @classmethod
+    def _rois(cls, png_path: Path) -> tuple[np.ndarray, np.ndarray] | tuple[None, None]:
         """Load the manually annotated vessel segmentation as signal/noise ROIs.
 
-        The mask lives in the sibling ``<split>/ground_truth/`` folder under the
-        sibling ``groundtruth`` folder, under the same filename as ``png_path``.
-        Non-zero pixels are the vessel (signal) ROI; the complement is the noise
-        ROI. Returns ``(None, None)`` if the mask is missing or degenerate (one
-        side empty) so CNR/SNR simply skip it.
+        The mask lives in the ``<split>/groundtruth/`` folder next to the image's
+        own ``<split>/image/`` folder, under the same filename. Non-zero pixels
+        are the vessel (signal) ROI; the complement is the noise ROI. Returns
+        ``(None, None)`` if the mask is missing or degenerate (one side empty) so
+        CNR/SNR simply skip it.
         """
         from PIL import Image as PILImage
 
-        mask_path = Path(str(png_path).replace("image", "groundtruth"))
-        if not mask_path.exists():
+        mask_path = cls._mask_path(png_path)
+        if mask_path is None:
             return None, None
         mask = np.asarray(PILImage.open(mask_path))
         if mask.ndim == 3:  # defensive: collapse any stray channel axis
@@ -212,8 +230,9 @@ class EarVesselsDataset(LocalDataset):
         rng = np.random.default_rng(NOISE_SEED)
 
         # Only the source images live under ``<split>/image/``; the matching
-        # ``<split>/ground_truth/`` masks are picked up per-image by ``_rois``.
-        png_paths = sorted(p for p in png_dir.rglob("*.png") if p.parent.parent.name == "image")
+        # ``<split>/groundtruth/`` masks are picked up per-image by ``_rois``.
+        # (The check is on the *parent* folder — ``p.parent.parent`` is the split.)
+        png_paths = sorted(p for p in png_dir.rglob("*.png") if p.parent.name == "image")
         print(f"Converting {len(png_paths)} ear-vessel PAM images …")
 
         seen: set[str] = set()
