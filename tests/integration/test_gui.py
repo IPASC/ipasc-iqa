@@ -133,7 +133,12 @@ def _make_client(tmp_path: Path) -> TestClient:
     if "mini" not in dataset_registry._classes:
         dataset_registry.register(MiniDataset, distribution="tests")
     workspace_root = tmp_path / "ws"
-    return TestClient(create_app(workspace_root=workspace_root, data_dir=data_dir))
+    client = TestClient(create_app(workspace_root=workspace_root, data_dir=data_dir))
+    # Assert on freshly computed numbers: disable the "serve a recent value even
+    # though the data changed" window (exercised in test_result_cache.py, and in
+    # test_stale_results_are_served_during_annotation below).
+    client.app.state.result_cache.stale_ttl = 0
+    return client
 
 
 def _login(client: TestClient, email: str, password: str) -> None:
@@ -508,6 +513,40 @@ def test_annotation_images_share_reference_window(client: TestClient) -> None:
     assert w0 == (float(ref.min()), float(ref.max()))
 
 
+def test_annotation_images_are_cached_and_revalidatable(client: TestClient) -> None:
+    """Images are rendered once, then answered from cache / by a cheap 304."""
+    from ipasc_iqa.gui import service
+
+    url = "/api/annotate/image?dataset=mini&item=image0_alg0"
+    first = client.get(url)
+    assert first.status_code == 200
+    assert first.headers["cache-control"] == "private, max-age=604800, immutable"
+    etag = first.headers["etag"]
+    assert etag
+
+    # A rater who already has this image revalidates for free.
+    revalidated = client.get(url, headers={"If-None-Match": etag})
+    assert revalidated.status_code == 304
+    assert not revalidated.content
+
+    # The bytes are memoised, so a repeat request does no rendering work.
+    calls = {"n": 0}
+    original = service.render_item_png
+
+    def counting(*args: object, **kwargs: object) -> bytes:
+        calls["n"] += 1
+        return original(*args, **kwargs)
+
+    service.render_item_png = counting  # type: ignore[assignment]
+    try:
+        again = client.get(url)
+    finally:
+        service.render_item_png = original  # type: ignore[assignment]
+    assert again.status_code == 200
+    assert again.content == first.content
+    assert calls["n"] == 0
+
+
 def test_render_item_png_respects_explicit_window(tmp_path: Path) -> None:
     import io as _io
 
@@ -675,6 +714,48 @@ def test_admin_can_change_user_role(client: TestClient) -> None:
     resp = client.post(f"/admin/users/{ann['uid']}/role", data={"role": "admin"})
     assert resp.status_code == 200  # PRG → followed redirect to /admin/users
     assert {a["email"]: a["role"] for a in auth.list_accounts(ws)}["ann@test.com"] == "admin"
+
+
+def test_stale_results_are_served_during_annotation(client: TestClient) -> None:
+    """Contributions must not make every viewer pay for a recompute.
+
+    With the staleness window enabled (as in a deployment), a fresh annotation
+    bumps the epoch but recent results keep being served — labelled as such —
+    instead of recomputing the analyses after every single contribution.
+    """
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+    from ipasc_iqa.gui import service
+
+    _run_and_wait(client, ["mini"], ["PSNR"])
+    ws = client.app.state.workspace
+    cache = client.app.state.result_cache
+    cache.stale_ttl = 3600  # the production default
+
+    assert client.get("/api/standings").status_code == 200
+
+    with AnnotatorStore(ws.annotations_path) as store:
+        u = store.create_user(
+            email="s@x.com", name="S", role=ROLE_ANNOTATOR, password_hash=None, approved=True
+        )
+        store.add_rating(
+            {
+                "user_uid": u["uid"],
+                "dataset": "mini",
+                "image_id": "image0_alg0",
+                "task": "overall_quality",
+                "score": 3,
+            }
+        )
+
+    epoch = service.results_epoch(ws)
+    resp = client.get("/api/standings")
+    assert resp.status_code == 200
+    # The previous numbers, labelled with when they were computed.
+    assert "Last updated:" in resp.text
+    assert "newer annotations are included at the next refresh" in resp.text
+    # …and nothing was recomputed for the new epoch.
+    assert cache.get("standings", {"source": "mos"}, epoch) is None
+    assert not cache.is_recomputing("standings", {"source": "mos"})
 
 
 def test_results_view_cache_and_epoch_invalidation(client: TestClient) -> None:

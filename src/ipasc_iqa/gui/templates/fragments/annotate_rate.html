@@ -8,6 +8,12 @@
 
   <p class="annotate-prompt">{{ prompt }}</p>
 
+  {# Prefetch the images queued behind this one (see service.RATING_LOOKAHEAD). #}
+  {% for entry in upcoming | default([]) %}{% for item in entry['items'] %}
+  <link rel="prefetch" as="image"
+        href="/api/annotate/image?dataset={{ entry['dataset'] | urlencode }}&item={{ item | urlencode }}">
+  {% endfor %}{% endfor %}
+
   <div class="annotate-pair">
     <figure class="annotate-rate__panel">
       <span class="annotate-zoom">
@@ -26,6 +32,7 @@
   </div>
 
   <form hx-post="/contribute/rate" hx-target="#contribute-root" hx-swap="innerHTML"
+        hx-indicator="#contribute-root" hx-disabled-elt="find button"
         class="annotate-rate__form">
     <input type="hidden" name="dataset" value="{{ dataset }}">
     <input type="hidden" name="image_id" value="{{ image_id }}">
@@ -53,6 +60,7 @@
   </form>
 
   <form hx-post="/contribute/finish" hx-target="#contribute-root" hx-swap="innerHTML"
+        hx-indicator="#contribute-root" hx-disabled-elt="find button"
         class="annotate-rate__finish">
     <button type="submit" class="btn annotate-finish">Finish session</button>
   </form>

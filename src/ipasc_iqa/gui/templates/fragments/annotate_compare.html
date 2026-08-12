@@ -6,9 +6,17 @@
 
   <p class="annotate-prompt">{{ prompt }}</p>
 
+  {# Warm the browser cache with the rest of this reference set while the rater
+     decides, so the next pair appears without a round-trip. #}
+  {% for item in prefetch_items | default([]) %}
+  <link rel="prefetch" as="image"
+        href="/api/annotate/image?dataset={{ dataset | urlencode }}&item={{ item | urlencode }}">
+  {% endfor %}
+
   <div class="annotate-pair">
     {% for item in [left_item, right_item] %}
     <form hx-post="/contribute/choose" hx-target="#contribute-root" hx-swap="innerHTML"
+          hx-indicator="#contribute-root" hx-disabled-elt="find button"
           class="annotate-choice">
       <input type="hidden" name="session_id" value="{{ session_id }}">
       <input type="hidden" name="winner" value="{{ item }}">
@@ -24,7 +32,8 @@
     <span class="annotate-progress">
       Placing image {{ placed }} of {{ n_items }} · {{ n_comparisons }} comparison{{ '' if n_comparisons == 1 else 's' }}
     </span>
-    <form hx-post="/contribute/finish" hx-target="#contribute-root" hx-swap="innerHTML">
+    <form hx-post="/contribute/finish" hx-target="#contribute-root" hx-swap="innerHTML"
+          hx-indicator="#contribute-root" hx-disabled-elt="find button">
       <button type="submit" class="btn annotate-finish">Finish session</button>
     </form>
   </div>

@@ -94,6 +94,26 @@ variables.
 Because the GUI imports `ipasc_iqa` as a library, deploying it as a web service later is a matter of
 running it behind an ASGI server (e.g. `uvicorn`/`gunicorn`) and a reverse proxy.
 
+### Deployment notes
+
+**Run a single worker.** `ipasc_iqa-gui` does this by default. Ranking sessions in progress, the
+single-flight guard around result recomputation, and the rendered-image cache all live in process
+memory, so a second worker would hand raters "session expired" at random and duplicate the heavy
+recomputes. A single worker serves concurrent annotators fine — requests are handled on a thread
+pool and the store (SQLite via `diskcache`) is safe for concurrent readers and writers. If the
+deployment ever does need multiple workers, those three pieces have to move into the shared store
+first.
+
+Tuning knobs (environment variables, all optional):
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `IPASC_IQA_WORKSPACE` | Where results, annotations and accounts live. | current directory |
+| `IPASC_IQA_DATA_DIR` | Managed dataset directory. | platform data dir |
+| `IPASC_IQA_COOKIE_SECURE` | Set to `1` behind HTTPS so the session cookie is TLS-only. | `0` |
+| `IPASC_IQA_RESULT_STALE_TTL` | Seconds a computed analysis/standings view keeps being served after new annotations arrive. Every contribution invalidates the results, so recomputing eagerly would mean re-running the correlations continuously during a study; instead views are served with a "Last updated" stamp and refreshed at most this often. `0` recomputes on every change. | `3600` |
+| `IPASC_IQA_IMAGE_CACHE_BYTES` | Memory budget for rendered annotation PNGs. Raise it for large studies (each image is rendered once, then served from memory and revalidated by the browser via `ETag`). | `268435456` (256 MB) |
+
 ---
 
 ## Developing in PyCharm

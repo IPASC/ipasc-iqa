@@ -245,6 +245,26 @@ img, svg, video, table { max-width: 100%; }
 .htmx-request .htmx-indicator { opacity: 1; }
 .htmx-request.htmx-indicator { opacity: 1; }
 
+/* ---------- Saving state for the annotation area ----------
+   Submitting an annotation writes to the store and draws the next item, which
+   is not instantaneous on a modest server. While that is in flight the whole
+   stage is dimmed, made inert and given a busy cursor, so a rater can see the
+   click registered and cannot double-submit (htmx also disables the buttons via
+   hx-disabled-elt). */
+#contribute-root { transition: opacity 0.15s ease; }
+#contribute-root.htmx-request { opacity: 0.45; pointer-events: none; cursor: progress; }
+#contribute-root.htmx-request * { cursor: progress !important; }
+#contribute-root.htmx-request::after {
+  content: ""; position: fixed; inset: 0; z-index: 40; cursor: progress;
+}
+/* A spinner pinned over the dimmed stage, so the wait is visibly *ours*. */
+#contribute-root.htmx-request::before {
+  content: ""; position: fixed; top: 50%; left: 50%; z-index: 41;
+  width: 2.5rem; height: 2.5rem; margin: -1.25rem 0 0 -1.25rem;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.75s linear infinite;
+}
+
 /* ---------- Analysis / controls ---------- */
 /* The Detailed analysis page needs more horizontal room than the default
    content column because its metric tables are intentionally wide. */
@@ -660,16 +680,33 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
 .annotate-img-btn {
   padding: 0; border: 3px solid transparent; border-radius: 8px;
   background: #1a1a1a; cursor: pointer; line-height: 0;
-  transition: border-color 0.12s ease, transform 0.12s ease;
+  transition: border-color 0.12s ease;
   max-width: 100%; overflow: hidden;   /* clip the scroll-zoomed image */
 }
-/* Scroll-to-zoom: clip each image to its box; the transform is driven by JS. */
-.annotate-pair img { will-change: transform; }
+/* Scroll-to-zoom: clip each image to its box; the transform is driven by JS.
+
+   No interpolation, at any zoom level: raters must judge the stored pixels, not
+   the browser's resampling of them. `image-rendering: pixelated` alone is not
+   enough — promoting the image to its own compositing layer (will-change /
+   translateZ) makes the GPU rasterise it once at 1x and then *smoothly* scale
+   that bitmap, which is exactly the interpolation we must avoid. So the layer
+   promotion is deliberately absent here: the browser re-rasterises at the
+   current scale, nearest-neighbour, every frame. Note this also applies when an
+   image is shown smaller than its native size (nearest-neighbour downsampling
+   drops pixels rather than averaging them). */
+.annotate-pair img {
+  image-rendering: -webkit-optimize-contrast;  /* older WebKit */
+  image-rendering: -moz-crisp-edges;           /* older Firefox */
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
 .annotate-zoom {
   display: inline-block; overflow: hidden; line-height: 0;
   max-width: 100%; border-radius: 5px; background: #1a1a1a;
 }
-.annotate-img-btn:hover { border-color: #38bdf8; transform: scale(1.01); }
+/* Hover highlights the border only: scaling the button by a non-integer factor
+   would resample the image inside it (see the no-interpolation rule above). */
+.annotate-img-btn:hover { border-color: #38bdf8; }
 .annotate-img-btn:focus-visible { outline: none; border-color: #7dd3fc; }
 .annotate-img-btn img {
   display: block; max-width: 100%; height: auto; border-radius: 5px;
@@ -774,6 +811,11 @@ body:has(.annotate-stage) .footer { color: #8a8a8a; }
   .annotate-img-btn img { max-height: 60vh; max-height: 60dvh; }
   .annotate-rate__panel img { max-height: 44vh; max-height: 44dvh; }
 }
+
+/* When the results were computed. Always present above a results table, so a
+   leaderboard is never mistaken for a live view of the annotations. */
+.cache-status { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.75rem; }
+.cache-status.notice { color: var(--ok); display: flex; align-items: center; gap: 0.5rem; }
 
 /* ---------- Standings ---------- */
 .standings-head { display: flex; align-items: flex-end; justify-content: space-between;

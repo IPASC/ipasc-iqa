@@ -1,0 +1,25 @@
+{# Freshness line for a cached results view.
+
+   Expects `meta` (the `cache_meta` block attached by gui.result_cache) and
+   `poll_url`. Always states when the numbers were computed — with 20+ people
+   annotating at once the underlying data moves constantly, and a leaderboard
+   that does not say how current it is invites people to read it as live.
+
+   Results are deliberately allowed to lag behind the very latest contributions
+   (see result_cache.STALE_TTL); when a refresh is actually running the line
+   polls and swaps in the new numbers as soon as they land, so the tables stay
+   readable throughout instead of being replaced by a spinner. #}
+{% if meta %}
+<p class="cache-status {{ 'notice notice--ok' if meta.refreshing }}"
+   {% if meta.refreshing and poll_url %}
+   hx-get="{{ poll_url }}" hx-trigger="every 3s" hx-target="closest .result-area" hx-swap="innerHTML"
+   {% endif %}>
+  {% if meta.refreshing %}<span class="progress-spinner"></span>{% endif %}
+  <strong>Last updated:</strong> {{ meta.computed }}
+  {% set mins = (meta.age / 60) | round(0, 'floor') | int %}
+  ({{ 'just now' if mins < 1 else (mins ~ ' minute' ~ ('' if mins == 1 else 's') ~ ' ago') }}){% if meta.refreshing %} —
+  recomputing in the background; the newest annotations appear here shortly.
+  {% elif meta.stale %} — newer annotations are included at the next refresh.
+  {% endif %}
+</p>
+{% endif %}

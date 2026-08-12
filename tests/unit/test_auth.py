@@ -226,7 +226,9 @@ def test_accounts_survive_annotation_deletion(tmp_path: Path) -> None:
     assert ws.users_path.exists() and ws.annotations_path.exists()
     assert ws.users_path != ws.annotations_path
 
-    # Drop the annotations data only.
+    # Drop the annotations data only. The store is shared process-wide and holds
+    # its SQLite files open, so release it first (on Windows the files are locked).
+    AnnotatorStore.close_all()
     shutil.rmtree(ws.annotations_path)
 
     with AnnotatorStore(ws.annotations_path, ws.users_path) as store:

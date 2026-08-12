@@ -11,13 +11,17 @@ run outputs (``<run_id>.json``).
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import math
 import random
+import threading
+import time
 import uuid
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -119,6 +123,45 @@ class Workspace:
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Manifest cache
+# ---------------------------------------------------------------------------
+# Manifests are read on nearly every request (drawing an annotation item, serving
+# an image, listing datasets) and are large enough that re-parsing the JSON each
+# time dominated some endpoints. They only change when a dataset is (re)prepared,
+# so cache the parsed dict keyed by path + mtime + size: a stale entry is
+# impossible, and a fresh conversion invalidates itself.
+
+_MANIFEST_CACHE: dict[str, tuple[tuple[int, int], dict]] = {}
+_MANIFEST_LOCK = threading.Lock()
+
+
+def load_manifest_cached(path: Path | str) -> dict:
+    """:func:`load_manifest`, memoised on the file's (mtime_ns, size)."""
+    path = Path(path)
+    stat = path.stat()
+    stamp = (stat.st_mtime_ns, stat.st_size)
+    key = str(path)
+    with _MANIFEST_LOCK:
+        hit = _MANIFEST_CACHE.get(key)
+        if hit is not None and hit[0] == stamp:
+            return hit[1]
+    manifest = load_manifest(path)
+    with _MANIFEST_LOCK:
+        _MANIFEST_CACHE[key] = (stamp, manifest)
+    return manifest
+
+
+def dataset_manifest(workspace: Workspace, dataset_name: str) -> dict:
+    """The (cached) manifest of a prepared dataset in this workspace."""
+    return load_manifest_cached(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+
+
+def open_store(workspace: Workspace) -> AnnotatorStore:
+    """The process-wide annotator store for a workspace (see AnnotatorStore)."""
+    return AnnotatorStore(workspace.annotations_path, workspace.users_path)
 
 
 def torch_device_status() -> dict:
@@ -297,7 +340,7 @@ def discover_datasets(workspace: Workspace) -> list[dict]:
         caps = {"has_references": False, "has_signal_roi": False, "has_noise_roi": False}
         if prepared:
             try:
-                manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+                manifest = dataset_manifest(workspace, name)
                 tasks = annotation_tasks_in_manifest(manifest)
                 n_images = len(manifest.get("images", []))
                 caps = _capabilities_from_manifest(manifest)
@@ -717,7 +760,7 @@ def analysis_for_dataset(
         for measure in measures_meta
     }
 
-    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    manifest = dataset_manifest(workspace, dataset_name)
 
     # Tasks can come from manifest MOS *or* from contributed pairwise comparisons,
     # so a dataset with no expert ratings is still analysable once BT data exists.
@@ -916,7 +959,7 @@ def scatter_for_measure(
     if run is None:
         return {"error": "no benchmark run found for this dataset"}
 
-    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    manifest = dataset_manifest(workspace, dataset_name)
     task = task or None
     task_names, has_unnamed = _available_tasks(workspace, dataset_name, manifest)
     if not task_names and not has_unnamed:
@@ -1110,7 +1153,7 @@ def image_detail_for_dataset(
                     }
                 )
 
-    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    manifest = dataset_manifest(workspace, dataset_name)
     groups = image_groups_from_manifest(manifest)
 
     active_stem: str | None = None
@@ -1179,7 +1222,7 @@ def image_explorer_for_dataset(
             "items": [],
         }
 
-    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    manifest = dataset_manifest(workspace, dataset_name)
 
     measures_meta = list_measures()
     directions = {
@@ -1285,7 +1328,7 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
         run = _merged_run(workspace, ds["name"])
         if run is None:
             continue
-        manifest = load_manifest(dataset_registry.manifest_path(ds["name"], workspace.data_dir))
+        manifest = dataset_manifest(workspace, ds["name"])
 
         # Enumerate tasks from both manifest MOS *and* contributed annotations
         # (ratings/comparisons), so a dataset whose only human scores are
@@ -1395,7 +1438,7 @@ def mos_values_for_dataset_task(
     conversions that don't carry per-rater data.
     """
     if manifest is None:
-        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+        manifest = dataset_manifest(workspace, dataset_name)
     per_annotator = _mos_annotator_scores(workspace, dataset_name, task, manifest)
     if per_annotator:
         return composite_mos(per_annotator)
@@ -1458,7 +1501,7 @@ def bt_scores_for_dataset_task(
     Returns ``{"scores": {image_id: beta}, "se": {...}, "n_comparisons", "n_sets"}``.
     """
     if manifest is None:
-        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+        manifest = dataset_manifest(workspace, dataset_name)
     by_ref, items_by_ref = _pooled_comparisons(workspace, dataset_name, task, manifest)
 
     scores: dict[str, float] = {}
@@ -1509,7 +1552,7 @@ def human_score_sources(workspace: Workspace, dataset_name: str) -> list[dict]:
     ds = get_dataset(workspace, dataset_name)
     if ds is None or not ds["prepared"]:
         return []
-    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    manifest = dataset_manifest(workspace, dataset_name)
     # Consider MOS *and* pairwise tasks so a BT-only dataset still offers a source.
     named, _ = _available_tasks(workspace, dataset_name, manifest)
     first_task = named[0] if named else None
@@ -1576,7 +1619,7 @@ def eligible_annotation_datasets(workspace: Workspace) -> list[dict]:
         if not ds["prepared"]:
             continue
         try:
-            manifest = load_manifest(dataset_registry.manifest_path(ds["name"], workspace.data_dir))
+            manifest = dataset_manifest(workspace, ds["name"])
         except Exception:
             continue
         groups = _reference_groups(manifest)
@@ -1590,15 +1633,86 @@ def annotation_tasks_for(workspace: Workspace, dataset_name: str | None) -> list
     if not dataset_name or dataset_name == "random":
         return []
     try:
-        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+        manifest = dataset_manifest(workspace, dataset_name)
     except Exception:
         return []
     return annotation_tasks_in_manifest(manifest)
 
 
+def manifest_task_names(manifest: dict) -> list[str]:
+    """Every task a manifest names, from *both* annotation sources.
+
+    A dataset can name its quality task in per-image ``metadata.annotations``
+    (MOS studies) or in the ``human_comparisons`` block (published 2AFC studies,
+    e.g. the Alladien adapters) — or both. Reading only the first source meant a
+    comparison-only dataset looked task-less, so contributions to it were stored
+    with ``task=None`` and then displayed as a separate "overall" bucket beside
+    the manifest's own "overall_quality". Always consider both.
+    """
+    mos_tasks = annotation_tasks_in_manifest(manifest)
+    return sorted(set(mos_tasks) | set(comparison_tasks_in_manifest(manifest)))
+
+
+#: Task names that denote the same question and must never form separate buckets.
+#: Which one wins is decided per dataset by the manifest (the published name).
+TASK_SYNONYMS: tuple[frozenset[str], ...] = (
+    frozenset({"overall", "overall_quality", "overall quality", "quality"}),
+)
+
+
+def canonical_task_map(manifest: dict) -> dict[str | None, str]:
+    """``{stored task → canonical task}`` for one dataset's contributions.
+
+    Two things split a single quality question into two buckets in the analyses:
+
+    * annotations stored with ``task=None`` on a dataset that *does* name a task
+      (what happened to comparison-only datasets before ``manifest_task_names``
+      considered ``human_comparisons``), and
+    * a synonym of the manifest's own task name (``overall`` vs
+      ``overall_quality``) creeping in from an adapter or an import.
+
+    Both are resolved *towards the manifest*: it is the published name. Nothing
+    is merged when the dataset names several tasks and the intent is ambiguous.
+    """
+    names = manifest_task_names(manifest)
+    mapping: dict[str | None, str] = {}
+    if len(names) == 1:
+        # Unnamed contributions can only have meant the single declared task.
+        mapping[None] = names[0]
+    for group in TASK_SYNONYMS:
+        declared = [n for n in names if n in group]
+        if len(declared) != 1:
+            continue  # ambiguous (or unrelated) — leave well alone
+        for alias in group - {declared[0]}:
+            mapping[alias] = declared[0]
+    return mapping
+
+
+def merge_duplicate_tasks(workspace: Workspace) -> dict[str, int]:
+    """Fold split task buckets into the canonical name; ``{dataset: n_changed}``.
+
+    Runs at start-up so a deployment that already accumulated split annotations
+    heals itself, and so any future adapter that names a task differently from
+    the contributions it attracts cannot leave two half-populated leaderboards.
+    """
+    store = open_store(workspace)
+    changed: dict[str, int] = {}
+    for ds in discover_datasets(workspace):
+        if not ds["prepared"]:
+            continue
+        try:
+            manifest = dataset_manifest(workspace, ds["name"])
+        except Exception:  # noqa: BLE001,PERF203 — a broken manifest must not stop boot
+            continue
+        n = store.retag_tasks(ds["name"], canonical_task_map(manifest))
+        if n:
+            changed[ds["name"]] = n
+    return changed
+
+
 def _tasks_or_unnamed(manifest: dict) -> list[str | None]:
     """Annotation tasks for a manifest, or ``[None]`` when it declares none."""
-    tasks = annotation_tasks_in_manifest(manifest)
+    tasks = manifest_task_names(manifest)
     return list(tasks) if tasks else [None]
 
 
@@ -1610,17 +1724,13 @@ def _remaining_ranking_pool(
     Each rater ranks a given reference set (per task) at most once; completed
     sessions are keyed by ``(dataset, reference, task)``.
     """
-    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
-        done = {
-            (s.get("dataset"), s.get("reference"), s.get("task"))
-            for s in store.sessions(user_uid=user_uid)
-        }
+    done = set(open_store(workspace).user_index(user_uid)["sessions"])
     pool: dict[str, list[tuple[str, str | None]]] = {}
     for e in eligible_annotation_datasets(workspace):
         name = e["name"]
         if dataset_filter and name != dataset_filter:
             continue
-        manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+        manifest = dataset_manifest(workspace, name)
         groups = _reference_groups(manifest)
         rankable = [s for s, entries in groups.items() if len(_items_for_stem(entries)) >= 2]
         cands = [
@@ -1642,18 +1752,13 @@ def _remaining_rating_pool(
     Each rater rates a given variant (per task) at most once; ratings are keyed by
     ``(dataset, image_id, task)``.
     """
-    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
-        done = {
-            (r.get("dataset"), r.get("image_id"), r.get("task"))
-            for r in store.ratings()
-            if r.get("user_uid") == user_uid
-        }
+    done = set(open_store(workspace).user_index(user_uid)["ratings"])
     pool: dict[str, list[tuple[str, str, str | None]]] = {}
     for e in eligible_annotation_datasets(workspace):
         name = e["name"]
         if dataset_filter and name != dataset_filter:
             continue
-        manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+        manifest = dataset_manifest(workspace, name)
         cands: list[tuple[str, str, str | None]] = []
         for stem, entries in _reference_groups(manifest).items():
             items = _items_for_stem(entries)
@@ -1716,7 +1821,7 @@ def start_ranking(
 
     dataset_name = rng.choice(sorted(pool))
     stem, chosen_task = rng.choice(pool[dataset_name])
-    manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+    manifest = dataset_manifest(workspace, dataset_name)
     item_ids = _items_for_stem(_reference_groups(manifest)[stem])
 
     session = RankingSession(
@@ -1731,8 +1836,24 @@ def start_ranking(
         "session": session,
         "dataset_choice": dataset_choice,
         "task_choice": task_choice,
+        "created": time.monotonic(),
     }
+    _evict_stale_sessions(sessions)
+    # Every image in this reference set will be shown during the session, so warm
+    # them all now rather than paying the render cost pair by pair.
+    prefetch_annotation_images(workspace, dataset_name, item_ids)
     return {"error": None, "session_id": sid}
+
+
+#: Ranking sessions live in memory; drop ones abandoned this long ago (seconds).
+SESSION_TTL = 12 * 3600
+
+
+def _evict_stale_sessions(sessions: dict[str, dict]) -> None:
+    """Forget abandoned ranking sessions so the process doesn't grow unbounded."""
+    cutoff = time.monotonic() - SESSION_TTL
+    for sid in [s for s, w in sessions.items() if w.get("created", 0) < cutoff]:
+        sessions.pop(sid, None)
 
 
 def compare_view(sessions: dict[str, dict], session_id: str) -> dict | None:
@@ -1748,6 +1869,7 @@ def compare_view(sessions: dict[str, dict], session_id: str) -> dict | None:
     if session.task:
         prompt += f" for the task: {session.task.replace('_', ' ')}"
     placed = len(session.sorted_ids)
+    shown = {pair["left"], pair["right"]}
     return {
         "session_id": session_id,
         "dataset": session.dataset,
@@ -1757,6 +1879,9 @@ def compare_view(sessions: dict[str, dict], session_id: str) -> dict | None:
         "placed": placed,
         "n_items": session.n_items,
         "n_comparisons": len(session.comparisons),
+        # The rest of this reference set — any of them can come up next, and the
+        # set is small, so let the browser fetch them while the rater decides.
+        "prefetch_items": [i for i in session.items if i not in shown],
     }
 
 
@@ -1785,9 +1910,9 @@ def submit_choice(
         return {"status": "continue", "session_id": session_id}
 
     # Persist the finished ranking and immediately draw the next set.
-    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
-        store.add_session(session.result())
-        count = store.count_sessions(user_uid=session.user_uid)
+    store = open_store(workspace)
+    store.add_session(session.result())
+    count = store.count_sessions(user_uid=session.user_uid)
     sessions.pop(session_id, None)
 
     nxt = start_ranking(
@@ -1805,6 +1930,52 @@ def submit_choice(
 # ---------------------------------------------------------------------------
 
 
+# Ratings are drawn one at a time, but the browser can only prefetch an image if
+# it knows which one comes next. Each rater therefore gets a small look-ahead
+# queue: a draw serves the head and reports the rest as ``upcoming`` so the page
+# can warm both the server-side render cache and the browser cache while the
+# current image is being judged.
+RATING_LOOKAHEAD = 3
+
+_RATING_QUEUES: dict[tuple[str, str], list[tuple[str, str, str, str | None]]] = {}
+_RATING_QUEUE_LOCK = threading.Lock()
+
+
+def _rating_queue(
+    workspace: Workspace,
+    dataset_choice: str,
+    user_uid: str,
+    dataset_filter: str | None,
+    rng: random.Random,
+) -> list[tuple[str, str, str, str | None]]:
+    """Refill and return the rater's look-ahead queue of ``(dataset, image, stem, task)``.
+
+    Entries the rater has since completed are dropped, so the queue can never
+    re-offer something already rated.
+    """
+    key = (user_uid, dataset_choice)
+    done = set(open_store(workspace).user_index(user_uid)["ratings"])
+    with _RATING_QUEUE_LOCK:
+        queue = [q for q in _RATING_QUEUES.get(key, []) if (q[0], q[1], q[3]) not in done]
+
+    if not queue:
+        # Deliberately outside the lock: building the pool walks every reference
+        # group, and one rater refilling their queue must not stall everyone
+        # else's draw. Two raters refilling at once is harmless duplicate work.
+        pool = _remaining_rating_pool(workspace, user_uid, dataset_filter)
+        flat = [
+            (ds, img, stem, task)
+            for ds, cands in pool.items()
+            for img, stem, task in cands
+        ]
+        rng.shuffle(flat)
+        queue = flat[:RATING_LOOKAHEAD]
+
+    with _RATING_QUEUE_LOCK:
+        _RATING_QUEUES[key] = queue
+    return list(queue)
+
+
 def draw_rating_item(
     workspace: Workspace,
     dataset_choice: str,
@@ -1817,7 +1988,7 @@ def draw_rating_item(
     Only variants this user hasn't rated are offered. Returns ``{"error": ...}``,
     ``{"done": True, "scope": ...}`` when the user has rated everything (in the
     chosen scope), or a draw dict with ``dataset``, ``image_id`` (variant),
-    ``reference_item`` and ``task``.
+    ``reference_item``, ``task`` and ``upcoming`` (items to prefetch).
     """
     rng = rng or random.Random()
     eligible = {e["name"] for e in eligible_annotation_datasets(workspace)}
@@ -1828,18 +1999,24 @@ def draw_rating_item(
     if dataset_filter and dataset_filter not in eligible:
         return {"error": "That dataset isn't available for rating."}
 
-    pool = _remaining_rating_pool(workspace, user_uid, dataset_filter)
-    if not pool:
+    queue = _rating_queue(workspace, dataset_choice, user_uid, dataset_filter, rng)
+    if not queue:
         return _exhausted_signal(workspace, user_uid, dataset_filter, _remaining_rating_pool)
 
-    dataset_name = rng.choice(sorted(pool))
-    image_id, stem, task = rng.choice(pool[dataset_name])
+    dataset_name, image_id, stem, task = queue[0]
+    upcoming = [
+        {"dataset": ds, "items": [img, f"{_REF_PREFIX}{st}"]}
+        for ds, img, st, _ in queue[1:]
+    ]
+    for entry in upcoming:
+        prefetch_annotation_images(workspace, entry["dataset"], entry["items"])
     return {
         "error": None,
         "dataset": dataset_name,
         "image_id": image_id,
         "reference_item": f"{_REF_PREFIX}{stem}",
         "task": task,
+        "upcoming": upcoming,
     }
 
 
@@ -1854,23 +2031,23 @@ def record_rating(
 ) -> int:
     """Persist one 1-4 rating; returns the annotator's total rating count."""
     score = max(1, min(4, int(score)))
-    with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
-        store.add_rating(
-            {
-                "user_uid": user_uid,
-                "dataset": dataset,
-                "image_id": image_id,
-                "task": task,
-                "score": score,
-            }
-        )
-        return sum(1 for r in store.ratings() if r.get("user_uid") == user_uid)
+    store = open_store(workspace)
+    store.add_rating(
+        {
+            "user_uid": user_uid,
+            "dataset": dataset,
+            "image_id": image_id,
+            "task": task,
+            "score": score,
+        }
+    )
+    return store.count_ratings(user_uid=user_uid)
 
 
 def resolve_item_path(workspace: Workspace, dataset_name: str, item_id: str) -> Path | None:
     """Map an annotation item id back to its on-disk ``.npy`` (via the manifest)."""
     try:
-        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+        manifest = dataset_manifest(workspace, dataset_name)
     except Exception:
         return None
     root = _dataset_root(workspace, dataset_name)
@@ -1913,7 +2090,7 @@ def display_window_for(
     ``None`` if no reference can be resolved (caller falls back to per-image).
     """
     try:
-        manifest = load_manifest(dataset_registry.manifest_path(dataset_name, workspace.data_dir))
+        manifest = dataset_manifest(workspace, dataset_name)
     except Exception:
         return None
     root = _dataset_root(workspace, dataset_name)
@@ -1938,9 +2115,26 @@ def display_window_for(
     ref_path = (root / ref_rel).resolve()
     if root.resolve() not in ref_path.parents or not ref_path.exists():
         return None
+    return _reference_window(ref_path)
+
+
+# Display windows are a property of the reference array, which every variant in a
+# group shares — so compute it once per reference file rather than re-loading the
+# whole array for each image request.
+_WINDOW_CACHE: dict[str, tuple[float, float] | None] = {}
+
+
+def _reference_window(ref_path: Path) -> tuple[float, float] | None:
+    key = str(ref_path)
+    with _MANIFEST_LOCK:
+        if key in _WINDOW_CACHE:
+            return _WINDOW_CACHE[key]
     arr = np.load(ref_path).astype(np.float64)
     lo, hi = float(arr.min()), float(arr.max())
-    return (lo, hi) if hi > lo else None
+    window = (lo, hi) if hi > lo else None
+    with _MANIFEST_LOCK:
+        _WINDOW_CACHE[key] = window
+    return window
 
 
 def render_item_png(path: Path, window: tuple[float, float] | None = None) -> bytes:
@@ -1962,6 +2156,88 @@ def render_item_png(path: Path, window: tuple[float, float] | None = None) -> by
     buf = io.BytesIO()
     Image.fromarray(img).save(buf, format="PNG")
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Annotation image cache
+# ---------------------------------------------------------------------------
+# Serving one annotation image used to parse the manifest, load the reference
+# array to derive the display window, load the item array, rescale and PNG-encode
+# it — on *every* request, with no HTTP validators, so revisiting an image redid
+# all of it. The rendered bytes are a pure function of (dataset, item) for a given
+# manifest, so they are memoised here (bounded LRU) and tagged with an ETag the
+# browser can revalidate against.
+
+#: Byte budget for the in-memory rendered-PNG cache (override for large studies).
+IMAGE_CACHE_BYTES = int(os.environ.get("IPASC_IQA_IMAGE_CACHE_BYTES", 256 * 1024 * 1024))
+
+_IMAGE_CACHE: OrderedDict[tuple[str, str], tuple[bytes, str]] = OrderedDict()
+_IMAGE_CACHE_SIZE = 0
+_IMAGE_LOCK = threading.Lock()
+
+
+def _image_cache_get(key: tuple[str, str]) -> tuple[bytes, str] | None:
+    with _IMAGE_LOCK:
+        hit = _IMAGE_CACHE.get(key)
+        if hit is not None:
+            _IMAGE_CACHE.move_to_end(key)
+        return hit
+
+
+def _image_cache_put(key: tuple[str, str], value: tuple[bytes, str]) -> None:
+    global _IMAGE_CACHE_SIZE
+    with _IMAGE_LOCK:
+        if key in _IMAGE_CACHE:
+            _IMAGE_CACHE_SIZE -= len(_IMAGE_CACHE[key][0])
+        _IMAGE_CACHE[key] = value
+        _IMAGE_CACHE.move_to_end(key)
+        _IMAGE_CACHE_SIZE += len(value[0])
+        while _IMAGE_CACHE_SIZE > IMAGE_CACHE_BYTES and len(_IMAGE_CACHE) > 1:
+            _, evicted = _IMAGE_CACHE.popitem(last=False)
+            _IMAGE_CACHE_SIZE -= len(evicted[0])
+
+
+def annotation_image(workspace: Workspace, dataset: str, item: str) -> tuple[bytes, str] | None:
+    """Rendered PNG + ETag for one annotation item, or ``None`` if unresolvable."""
+    key = (dataset, item)
+    hit = _image_cache_get(key)
+    if hit is not None:
+        return hit
+
+    path = resolve_item_path(workspace, dataset, item)
+    if path is None or not path.exists():
+        return None
+    # Window both images of a comparison/rating to their shared reference range so
+    # they are displayed on the same dynamic range (fair subjective assessment).
+    png = render_item_png(path, window=display_window_for(workspace, dataset, item))
+    value = (png, f'"{hashlib.sha256(png).hexdigest()[:32]}"')
+    _image_cache_put(key, value)
+    return value
+
+
+# Warming runs on a small shared pool rather than a thread per draw: with tens of
+# concurrent annotators, thread-per-request would spawn unboundedly, and the work
+# is deliberately low priority — it must never compete with serving a rater the
+# image they are waiting for.
+_PREFETCH_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="img-warm")
+
+
+def prefetch_annotation_images(workspace: Workspace, dataset: str, items: list[str]) -> None:
+    """Render *items* into the image cache in the background (best effort).
+
+    Called when an annotation session starts, and for the items queued behind the
+    current rating, so the images the rater is about to be shown are already
+    encoded by the time the browser asks for them.
+    """
+
+    def _warm() -> None:
+        for item in items:
+            try:
+                annotation_image(workspace, dataset, item)
+            except Exception:  # noqa: BLE001,PERF203 — warming is best effort
+                continue
+
+    _PREFETCH_POOL.submit(_warm)
 
 
 # ---------------------------------------------------------------------------
@@ -2071,7 +2347,7 @@ def export_payload(workspace: Workspace, dataset_name: str | None = None) -> dic
         ds = get_dataset(workspace, name)
         manifest: dict = {}
         if ds and ds["prepared"]:
-            manifest = load_manifest(dataset_registry.manifest_path(name, workspace.data_dir))
+            manifest = dataset_manifest(workspace, name)
 
         measure_results = [
             {k: v for k, v in r.model_dump(mode="json").items() if k not in _EXPORT_DROP_FIELDS}

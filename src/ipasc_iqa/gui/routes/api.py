@@ -64,10 +64,16 @@ def run_job_status(request: Request, job_id: str) -> Response:
 # ---------------------------------------------------------------------------
 
 
+def _poll_url(request: Request) -> str:
+    """This same endpoint, for a fragment that wants to re-request itself."""
+    return request.url.path + (f"?{request.url.query}" if request.url.query else "")
+
+
 def _recomputing(request: Request) -> HTMLResponse:
     """Placeholder that polls this same URL until the cached value is ready."""
-    poll_url = request.url.path + (f"?{request.url.query}" if request.url.query else "")
-    return templates.TemplateResponse(request, "fragments/recomputing.html", {"poll_url": poll_url})
+    return templates.TemplateResponse(
+        request, "fragments/recomputing.html", {"poll_url": _poll_url(request)}
+    )
 
 
 @router.get("/api/scatter", response_class=HTMLResponse)
@@ -193,7 +199,7 @@ def analysis_fragment(
     return templates.TemplateResponse(
         request,
         "fragments/analysis_response.html",
-        {"result": result, "measure_options": options},
+        {"result": result, "measure_options": options, "poll_url": _poll_url(request)},
     )
 
 
@@ -213,7 +219,11 @@ def standings_fragment(request: Request, source: str = Query(default="mos")) -> 
     )
     if result is None:
         return _recomputing(request)
-    return templates.TemplateResponse(request, "fragments/standings_table.html", {"result": result})
+    return templates.TemplateResponse(
+        request,
+        "fragments/standings_table.html",
+        {"result": result, "poll_url": _poll_url(request)},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +353,7 @@ def _rate_fragment(
             "dataset_choice": dataset_choice,
             "prompt": prompt,
             "toast": toast,
+            "upcoming": draw.get("upcoming", []),
         },
     )
 
@@ -451,13 +462,19 @@ def contribute_finish(request: Request) -> Response:
     )
 
 
+# A rendered annotation image is immutable for a given (dataset, item) — a changed
+# dataset means a new conversion, so the browser may hold it for a long time.
+_IMAGE_CACHE_CONTROL = "private, max-age=604800, immutable"
+
+
 @router.get("/api/annotate/image")
 def contribute_image(request: Request, dataset: str, item: str) -> Response:
-    ws = _ws(request)
-    path = service.resolve_item_path(ws, dataset, item)
-    if path is None or not path.exists():
+    rendered = service.annotation_image(_ws(request), dataset, item)
+    if rendered is None:
         return Response(status_code=404)
-    # Window both images of a comparison/rating to their shared reference range so
-    # they are displayed on the same dynamic range (fair subjective assessment).
-    window = service.display_window_for(ws, dataset, item)
-    return Response(content=service.render_item_png(path, window=window), media_type="image/png")
+    png, etag = rendered
+    headers = {"ETag": etag, "Cache-Control": _IMAGE_CACHE_CONTROL}
+    # Revalidation: the rater has this exact image already — send no bytes.
+    if etag in [t.strip() for t in (request.headers.get("if-none-match") or "").split(",")]:
+        return Response(status_code=304, headers=headers)
+    return Response(content=png, media_type="image/png", headers=headers)

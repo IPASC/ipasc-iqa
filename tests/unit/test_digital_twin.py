@@ -194,3 +194,42 @@ def test_no_repeat_annotations_and_done_message(tmp_path: Path) -> None:
             task=d["task"], score=2,
         )
     assert len(rated) == 2 * len(RECON_ALGORITHMS)  # 2 scenes × all algorithm variants
+
+
+def test_draws_advertise_the_images_to_prefetch(tmp_path: Path) -> None:
+    """Each draw names what is coming next, so the page can warm the image cache."""
+    from ipasc_iqa.contrib.store import ROLE_ANNOTATOR, AnnotatorStore
+    from ipasc_iqa.datasets.registry import registry
+    from ipasc_iqa.gui import service
+
+    data_dir = tmp_path / "dd"
+    _build_source(data_dir / "digital_twin")
+    if "digital_twin" not in registry._classes:
+        registry.register(DigitalTwinDataset, distribution="t")
+    ws = service.Workspace.resolve(tmp_path / "ws", data_dir)
+    ws.ensure()
+    service.run_benchmark(ws, ["digital_twin"], ["PSNR"])  # prepares the dataset
+    with AnnotatorStore(ws.annotations_path) as store:
+        uid = store.create_user(
+            email="pf@x.com", name="PF", role=ROLE_ANNOTATOR, password_hash=None, approved=True
+        )["uid"]
+
+    # Ratings: the look-ahead queue reports the variants queued behind this one.
+    draw = service.draw_rating_item(ws, "digital_twin", user_uid=uid)
+    assert draw["upcoming"], draw
+    assert len(draw["upcoming"]) <= service.RATING_LOOKAHEAD - 1
+    for entry in draw["upcoming"]:
+        variant, reference = entry["items"]
+        assert entry["dataset"] == "digital_twin"
+        assert reference.startswith("__ref__")
+        assert variant != draw["image_id"]
+
+    # Rankings: the whole reference set is known up front, so everything not on
+    # screen right now is offered for prefetching.
+    sessions: dict = {}
+    res = service.start_ranking(
+        ws, sessions, user_uid=uid, dataset_choice="digital_twin", task_choice="random"
+    )
+    ctx = service.compare_view(sessions, res["session_id"])
+    session = sessions[res["session_id"]]["session"]
+    assert set(ctx["prefetch_items"]) == set(session.items) - {ctx["left_item"], ctx["right_item"]}

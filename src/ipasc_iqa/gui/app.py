@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ipasc_iqa import __version__
-from ipasc_iqa.gui import auth
+from ipasc_iqa.gui import auth, service
 from ipasc_iqa.gui.service import Workspace
 
 _HERE = Path(__file__).parent
@@ -80,6 +80,17 @@ def create_app(
     from ipasc_iqa.gui.result_cache import ResultCache
 
     app.state.result_cache = ResultCache(workspace.results_dir / "view_cache")
+
+    # Heal annotations that ended up under a duplicate/absent task name, so the
+    # same quality question is never split across two buckets (see service).
+    try:
+        merged = service.merge_duplicate_tasks(workspace)
+    except Exception as exc:  # noqa: BLE001 — never block start-up on maintenance
+        print(f"warning: task merge skipped ({exc})")
+    else:
+        for dataset, n in merged.items():
+            print(f"Merged {n} contributed annotation(s) onto the canonical task in '{dataset}'.")
+
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     @app.middleware("http")

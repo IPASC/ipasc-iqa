@@ -12,7 +12,8 @@
       <p class="empty">No datasets with rankable image variants are prepared yet.
         Run a benchmark on such a dataset first.</p>
     {% else %}
-    <form hx-post="/contribute/start" hx-target="#contribute-root" hx-swap="innerHTML">
+    <form hx-post="/contribute/start" hx-target="#contribute-root" hx-swap="innerHTML"
+          hx-indicator="#contribute-root" hx-disabled-elt="find button">
       <label class="field">
         <span class="field__label">Dataset</span>
         <select class="select" name="dataset">

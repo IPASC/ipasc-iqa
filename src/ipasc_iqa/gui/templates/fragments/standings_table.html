@@ -1,3 +1,5 @@
+{% with meta=result.cache_meta %}{% include "fragments/cache_status.html" %}{% endwith %}
+
 {% if not result.entries %}
   <p class="muted">
     {% if result.source == 'bt' %}

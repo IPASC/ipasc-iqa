@@ -22,6 +22,7 @@ tuple:
 
 - ``("session", sid)``         → a completed ranking (see :meth:`add_session`)
 - ``("rating", rid)``          → a single-stimulus rating (see :meth:`add_rating`)
+- ``("uidx", uid)``            → per-user contribution index (see :meth:`user_index`)
 - ``("meta", "results_epoch")``→ cache-invalidation counter
 - ``("schema", "version")``    → migration marker
 
@@ -29,11 +30,19 @@ Accounts are keyed by a stable **uid** (uuid hex). Annotations reference that
 uid (``user_uid``), so a user can change their name/email without breaking the
 attribution of work they already did. Login is by (lower-cased) email, resolved
 to a uid through the ``("email", …)`` index.
+
+**Instances are shared per directory pair.** Opening a ``diskcache.Cache`` is not
+free (SQLite connection + pragmas), and the web app touches the store on *every*
+request — including the auth middleware. Constructing an :class:`AnnotatorStore`
+for a pair of paths therefore returns the process-wide instance for those paths,
+and :meth:`close` is a no-op; the underlying caches are thread-safe and live for
+the process. Use :meth:`close_all` to genuinely release them (tests, CLI exit).
 """
 
 from __future__ import annotations
 
 import secrets
+import threading
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -77,20 +86,55 @@ class AnnotatorStore:
         side by side under the workspace root with independent lifecycles.
     """
 
+    #: Process-wide instances, keyed by (annotations path, users path).
+    _instances: dict[tuple[str, str], AnnotatorStore] = {}
+    _instances_lock = threading.Lock()
+
+    @staticmethod
+    def _paths(path: Path | str, users_path: Path | str | None) -> tuple[Path, Path]:
+        p = Path(path)
+        return p, (Path(users_path) if users_path is not None else p.parent / "users")
+
+    def __new__(cls, path: Path | str, users_path: Path | str | None = None) -> AnnotatorStore:
+        p, up = cls._paths(path, users_path)
+        key = (str(p.resolve()), str(up.resolve()))
+        with cls._instances_lock:
+            inst = cls._instances.get(key)
+            if inst is None:
+                inst = super().__new__(cls)
+                inst._opened = False
+                cls._instances[key] = inst
+            return inst
+
     def __init__(self, path: Path | str, users_path: Path | str | None = None) -> None:
         import diskcache
 
-        self.path = Path(path)
-        self.users_path = Path(users_path) if users_path is not None else self.path.parent / "users"
+        # __new__ hands back a shared instance; only the first call opens it.
+        if self._opened:
+            return
+        self.path, self.users_path = self._paths(path, users_path)
         self._cache = diskcache.Cache(str(self.path))
         self._users = diskcache.Cache(str(self.users_path))
+        self._index_lock = threading.Lock()
+        self._opened = True
         self._migrate()
 
     # -- lifecycle ---------------------------------------------------------
 
     def close(self) -> None:
-        self._cache.close()
-        self._users.close()
+        """No-op: the instance is shared process-wide (see :meth:`close_all`)."""
+
+    @classmethod
+    def close_all(cls) -> None:
+        """Really close every shared instance and forget them."""
+        with cls._instances_lock:
+            instances = list(cls._instances.values())
+            cls._instances.clear()
+        for inst in instances:
+            if getattr(inst, "_opened", False):
+                inst._cache.close()
+                inst._users.close()
+                inst._opened = False
 
     def __enter__(self) -> AnnotatorStore:
         return self
@@ -223,23 +267,28 @@ class AnnotatorStore:
         return user
 
     def update_user(self, uid: str, **fields: object) -> dict | None:
-        """Patch a user record, maintaining the email index. Returns the record."""
-        user = self.get_user(uid)
-        if user is None:
-            return None
-        new_email = fields.get("email")
-        if new_email is not None:
-            new_email = normalize_email(str(new_email))
-            old_email = normalize_email(user.get("email", ""))
-            if new_email != old_email:
-                if old_email:
-                    self._users.delete(("email", old_email))
-                if new_email:
-                    self._users.set(("email", new_email), uid)
-            fields["email"] = new_email
-        affects_results = "role" in fields or "approved" in fields
-        user = {**user, **fields, "updated": _now()}
-        self._users.set(("user", uid), user)
+        """Patch a user record, maintaining the email index. Returns the record.
+
+        The read-modify-write runs inside a cache transaction so two concurrent
+        edits of the same account cannot lose one another's changes.
+        """
+        with self._users.transact():
+            user = self.get_user(uid)
+            if user is None:
+                return None
+            new_email = fields.get("email")
+            if new_email is not None:
+                new_email = normalize_email(str(new_email))
+                old_email = normalize_email(user.get("email", ""))
+                if new_email != old_email:
+                    if old_email:
+                        self._users.delete(("email", old_email))
+                    if new_email:
+                        self._users.set(("email", new_email), uid)
+                fields["email"] = new_email
+            affects_results = "role" in fields or "approved" in fields
+            user = {**user, **fields, "updated": _now()}
+            self._users.set(("user", uid), user)
         if affects_results:
             self.bump_results_epoch()  # approval/role change alters which data counts
         return user
@@ -353,13 +402,71 @@ class AnnotatorStore:
     def bump_results_epoch(self) -> None:
         self._cache.incr(("meta", "results_epoch"), 1)
 
+    # -- per-user contribution index --------------------------------------
+    # Drawing the next item and showing a contribution count used to scan every
+    # session/rating in the store on each submit — O(n) SQLite reads that grew
+    # with the study. Each user instead gets one index record summarising what
+    # they have already done; writes keep it up to date, and it is rebuilt from
+    # a scan on first use (so existing deployments need no migration).
+
+    @staticmethod
+    def _blank_index() -> dict:
+        return {"sessions": {}, "ratings": {}, "n_comparisons": 0}
+
+    def _scan_user_index(self, uid: str) -> dict:
+        idx = self._blank_index()
+        for key in self._session_keys():
+            rec = self._cache.get(key)
+            if rec is None or rec.get("user_uid") != uid:
+                continue
+            idx["sessions"][(rec.get("dataset"), rec.get("reference"), rec.get("task"))] = key[1]
+            idx["n_comparisons"] += int(rec.get("n_comparisons", 0))
+        for key in self._rating_keys():
+            rec = self._cache.get(key)
+            if rec is None or rec.get("user_uid") != uid:
+                continue
+            idx["ratings"][(rec.get("dataset"), rec.get("image_id"), rec.get("task"))] = key[1]
+        return idx
+
+    def user_index(self, uid: str) -> dict:
+        """What *uid* has already contributed, as an O(1) lookup.
+
+        ``{"sessions": {(dataset, reference, task): sid},
+        "ratings": {(dataset, image_id, task): rid}, "n_comparisons": int}``.
+        """
+        idx = self._cache.get(("uidx", uid))
+        if idx is None:
+            idx = self._scan_user_index(uid)
+            self._cache.set(("uidx", uid), idx)
+        return idx
+
+    def invalidate_user_indexes(self) -> None:
+        """Drop every cached per-user index (after a bulk rewrite of records)."""
+        for key in [k for k in self._cache if isinstance(k, tuple) and k and k[0] == "uidx"]:
+            self._cache.delete(key)
+
     # -- sessions (ranking) ------------------------------------------------
 
     def add_session(self, result: dict) -> str:
-        """Persist one completed ranking; returns the generated session id."""
-        sid = uuid.uuid4().hex
-        record = {**result, "session_id": sid, "created": _now()}
-        self._cache.set(("session", sid), record)
+        """Persist one completed ranking; returns the session id.
+
+        Idempotent per ``(user, dataset, reference, task)``: re-submitting a set
+        the user already ranked (double-click, duplicate tab) returns the
+        existing id instead of storing a second, aggregate-skewing copy.
+        """
+        uid = result.get("user_uid")
+        entry = (result.get("dataset"), result.get("reference"), result.get("task"))
+        with self._index_lock:
+            idx = self.user_index(uid) if uid else None
+            if idx is not None and entry in idx["sessions"]:
+                return str(idx["sessions"][entry])
+            sid = uuid.uuid4().hex
+            record = {**result, "session_id": sid, "created": _now()}
+            self._cache.set(("session", sid), record)
+            if idx is not None:
+                idx["sessions"][entry] = sid
+                idx["n_comparisons"] += int(result.get("n_comparisons", 0))
+                self._cache.set(("uidx", uid), idx)
         self.bump_results_epoch()
         return sid
 
@@ -380,7 +487,14 @@ class AnnotatorStore:
         return out
 
     def count_sessions(self, *, user_uid: str | None = None) -> int:
-        return len(self.sessions(user_uid=user_uid))
+        if user_uid is not None:
+            return len(self.user_index(user_uid)["sessions"])
+        return len(self.sessions())
+
+    def count_ratings(self, *, user_uid: str | None = None) -> int:
+        if user_uid is not None:
+            return len(self.user_index(user_uid)["ratings"])
+        return len(self.ratings())
 
     def dataset_tasks(self, dataset: str) -> set[str | None]:
         """Distinct task values among completed sessions for a dataset.
@@ -397,10 +511,23 @@ class AnnotatorStore:
     # -- ratings (single-stimulus MOS) ------------------------------------
 
     def add_rating(self, record: dict) -> str:
-        """Persist one quantitative (1-4) rating; returns the generated id."""
-        rid = uuid.uuid4().hex
-        stored = {**record, "rating_id": rid, "created": _now()}
-        self._cache.set(("rating", rid), stored)
+        """Persist one quantitative (1-4) rating; returns the id.
+
+        Idempotent per ``(user, dataset, image_id, task)`` — see
+        :meth:`add_session`.
+        """
+        uid = record.get("user_uid")
+        entry = (record.get("dataset"), record.get("image_id"), record.get("task"))
+        with self._index_lock:
+            idx = self.user_index(uid) if uid else None
+            if idx is not None and entry in idx["ratings"]:
+                return str(idx["ratings"][entry])
+            rid = uuid.uuid4().hex
+            stored = {**record, "rating_id": rid, "created": _now()}
+            self._cache.set(("rating", rid), stored)
+            if idx is not None:
+                idx["ratings"][entry] = rid
+                self._cache.set(("uidx", uid), idx)
         self.bump_results_epoch()
         return rid
 
@@ -424,6 +551,33 @@ class AnnotatorStore:
         """Distinct task values among contributed ratings for a dataset."""
         return {r.get("task") for r in self.ratings(dataset=dataset)}
 
+    # -- task maintenance --------------------------------------------------
+
+    def retag_tasks(self, dataset: str, mapping: dict[str | None, str]) -> int:
+        """Rewrite the ``task`` of a dataset's contributions; returns how many.
+
+        Used to fold annotations that were recorded under a different (or
+        absent) task name into the dataset's canonical task, so the same
+        question does not end up split across two buckets in the analyses.
+        """
+        if not mapping:
+            return 0
+        changed = 0
+        for key in list(self._session_keys()) + list(self._rating_keys()):
+            rec = self._cache.get(key)
+            if rec is None or rec.get("dataset") != dataset:
+                continue
+            old = rec.get("task")
+            new = mapping.get(old)
+            if new is None or new == old:
+                continue
+            self._cache.set(key, {**rec, "task": new})
+            changed += 1
+        if changed:
+            self.invalidate_user_indexes()  # index keys embed the task
+            self.bump_results_epoch()
+        return changed
+
     # -- leaderboard -------------------------------------------------------
 
     def leaderboard(self) -> list[dict]:
@@ -433,33 +587,18 @@ class AnnotatorStore:
         Includes registered users with no activity; deleted users are omitted.
         Sorted by total contributions (rankings + ratings) desc, then name.
         """
-        users = {u["uid"]: u for u in self.all_users()}
-
-        def _blank() -> dict[str, int]:
-            return {"rankings": 0, "comparisons": 0, "ratings": 0}
-
-        agg: dict[str, dict[str, int]] = {
-            uid: _blank() for uid, u in users.items() if u.get("role") != ROLE_DELETED
-        }
-        for key in self._session_keys():
-            rec = self._cache.get(key)
-            if rec is None or not rec.get("user_uid"):
-                continue
-            stats = agg.setdefault(rec["user_uid"], _blank())
-            stats["rankings"] += 1
-            stats["comparisons"] += int(rec.get("n_comparisons", 0))
-        for key in self._rating_keys():
-            rec = self._cache.get(key)
-            if rec is None or not rec.get("user_uid"):
-                continue
-            agg.setdefault(rec["user_uid"], _blank())["ratings"] += 1
-
         rows = []
-        for uid, stats in agg.items():
-            user = users.get(uid) or {}
+        for user in self.all_users():
             if user.get("role") == ROLE_DELETED:
                 continue
-            name = user.get("name") or "(unknown)"
-            rows.append({"name": name, **stats})
+            idx = self.user_index(user["uid"])
+            rows.append(
+                {
+                    "name": user.get("name") or "(unknown)",
+                    "rankings": len(idx["sessions"]),
+                    "comparisons": int(idx["n_comparisons"]),
+                    "ratings": len(idx["ratings"]),
+                }
+            )
         rows.sort(key=lambda r: (-(r["rankings"] + r["ratings"]), r["name"].lower()))
         return rows

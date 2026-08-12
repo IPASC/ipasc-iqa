@@ -25,4 +25,6 @@
   {% endwith %}
 </div>
 
+{% with meta=result.cache_meta %}{% include "fragments/cache_status.html" %}{% endwith %}
+
 {% include "fragments/analysis_tables.html" %}
