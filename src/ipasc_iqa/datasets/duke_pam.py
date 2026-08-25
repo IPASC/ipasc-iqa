@@ -64,7 +64,7 @@ class DukePAMDataset(LocalDataset):
     """
 
     DATASET_NAME = "duke_pam"
-    DATASET_VERSION = "1.0.0"
+    DATASET_VERSION = "1.0.1"
     DATASET_DESCRIPTION = (
         "Duke PAM: We use 256x256 reference patches from photoacoustic-microscopy images, "
         "each paired with sparse-sampled (2x, 4x, 8x, 16x) nearest-neighbour-upscaled variants "
@@ -199,11 +199,27 @@ class DukePAMDataset(LocalDataset):
 
         manifest_entries: list[dict] = []
         n_patches = 0
+        seen_source_hashes: dict[str, Path] = {}
+        n_duplicate_sources = 0
 
         png_paths = sorted(png_dir.rglob("*.png"))
         print(f"Converting {len(png_paths)} PAM images → {PATCH}x{PATCH} patches …")
 
         for png_path in png_paths:
+            # raw_train.zip contains files with different names but identical PNG
+            # content. Keep only the first occurrence (deterministic because
+            # png_paths is sorted) so the same source image is not weighted twice.
+            source_sha = hash_file(png_path)
+            duplicate_of = seen_source_hashes.get(source_sha)
+            if duplicate_of is not None:
+                n_duplicate_sources += 1
+                print(
+                    f"  Skipping duplicate source {png_path.name!r} "
+                    f"(identical to {duplicate_of.name!r})"
+                )
+                continue
+            seen_source_hashes[source_sha] = png_path
+
             image = self._read_gray(png_path)
             h, w = image.shape
             n_rows, n_cols = h // PATCH, w // PATCH
@@ -280,6 +296,11 @@ class DukePAMDataset(LocalDataset):
         }
         manifest_path = converted_dir / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        if n_duplicate_sources:
+            print(
+                f"Skipped {n_duplicate_sources} duplicate source PNG(s); "
+                f"kept {len(seen_source_hashes)} unique source image(s)."
+            )
         print(
             f"Manifest written to {manifest_path} "
             f"({len(manifest_entries)} variants across {n_patches} reference patches)"
