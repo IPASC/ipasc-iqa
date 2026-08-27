@@ -382,10 +382,6 @@ img, svg, video, table { max-width: 100%; }
 
 /* ---------- Run progress view ---------- */
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes chip-pop {
-  from { opacity: 0; transform: scale(0.85); }
-  to   { opacity: 1; transform: scale(1); }
-}
 
 @keyframes indeterminate-bar {
   0%   { transform: translateX(-120%); }
@@ -433,15 +429,20 @@ img, svg, video, table { max-width: 100%; }
   animation: indeterminate-bar 1.2s ease-in-out infinite;
 }
 .run-progress--done .run-bar__fill { background: var(--ok); }
+.run-bar--done .run-bar__fill { background: var(--ok); }
 
 .progress-chips {
   list-style: none; margin: 0.7rem 0 0; padding: 0;
   display: flex; flex-wrap: wrap; gap: 0.45rem;
 }
 .progress-chip {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.82rem; font-weight: 500;
-  animation: chip-pop 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 .progress-chip--active {
   background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8;
