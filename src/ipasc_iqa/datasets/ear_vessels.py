@@ -3,8 +3,9 @@
 Source:
     Photoacoustic microscopy (PAM) images of ear vasculature,
     https://data.mendeley.com/datasets/dp5jgrkd6k/2 (``ear_vessel_dataset.zip``).
-    The unzipped archive holds ``train/image`` and ``test/image`` subfolders of
-    256x256 PNGs.
+    The unzipped archive holds source PNGs below ``train/image`` and ``test/image``;
+    in the published archive they are grouped in patch subfolders such as
+    ``test/image/patch_6/1.png``.
 
 This adapter turns the raw PAM PNGs into a *full-reference* IQA dataset that
 probes each measure's sensitivity to additive Gaussian noise in a PAM context.
@@ -183,17 +184,37 @@ class EarVesselsDataset(LocalDataset):
     #: Folder names the archive has used for the segmentation masks.
     _MASK_DIRS = ("groundtruth", "ground_truth")
 
+    @staticmethod
+    def _image_dir(png_path: Path) -> Path | None:
+        """Return the nearest ancestor folder named ``image``.
+
+        The archive may store source PNGs directly in ``<split>/image`` or in
+        nested patch folders such as ``<split>/image/patch_6/1.png``.
+        """
+        for parent in png_path.parents:
+            if parent.name == "image":
+                return parent
+        return None
+
     @classmethod
     def _mask_path(cls, png_path: Path) -> Path | None:
-        """The segmentation mask for a source image, or ``None`` if absent.
+        """Return the matching segmentation mask, preserving subfolders.
 
-        Built structurally — swapping the ``image`` folder for its ``groundtruth``
-        sibling — rather than by substring-replacing the path, which would also
-        rewrite the file's own name (``image_01.png``) or any ancestor directory
-        that happens to contain "image".
+        Examples
+        --------
+        ``test/image/1.png`` -> ``test/groundtruth/1.png``
+        ``test/image/patch_6/1.png`` -> ``test/groundtruth/patch_6/1.png``
+
         """
+        image_dir = cls._image_dir(png_path)
+        if image_dir is None:
+            return None
+
+        relative_path = png_path.relative_to(image_dir)
+        split_dir = image_dir.parent
+
         for folder in cls._MASK_DIRS:
-            candidate = png_path.parent.parent / folder / png_path.name
+            candidate = split_dir / folder / relative_path
             if candidate.exists():
                 return candidate
         return None
@@ -229,19 +250,40 @@ class EarVesselsDataset(LocalDataset):
         manifest_entries: list[dict] = []
         rng = np.random.default_rng(NOISE_SEED)
 
-        # Only the source images live under ``<split>/image/``; the matching
-        # ``<split>/groundtruth/`` masks are picked up per-image by ``_rois``.
-        # (The check is on the *parent* folder — ``p.parent.parent`` is the split.)
-        png_paths = sorted(p for p in png_dir.rglob("*.png") if p.parent.name == "image")
+        # Source images may be directly below ``<split>/image/`` or in nested
+        # patch folders such as ``<split>/image/patch_6/1.png``.  Select every
+        # PNG whose ancestor chain contains an ``image`` directory; masks under
+        # ``groundtruth`` / ``ground_truth`` are therefore excluded.
+        png_paths = sorted(
+            p for p in png_dir.rglob("*.png") if self._image_dir(p) is not None
+        )
         print(f"Converting {len(png_paths)} ear-vessel PAM images …")
+
+        if not png_paths:
+            raise RuntimeError(
+                f"No source PNGs found below {png_dir}. Expected paths such as "
+                "<split>/image/<file>.png or <split>/image/patch_x/<file>.png."
+            )
 
         seen: set[str] = set()
         for png_path in png_paths:
+            image_dir = self._image_dir(png_path)
+            if image_dir is None:  # defensive; png_paths already enforces this
+                continue
+
             ref = self._read_gray(png_path)[:, :, np.newaxis].astype(np.float32)
 
-            # Disambiguate ids by the split (train/test) the file lives under.
-            split = png_path.parent.parent.name
-            base = re.sub(r"[^0-9A-Za-z]+", "_", f"{split}_{png_path.stem}").strip("_")
+            # ``image_dir.parent`` is the split (train/test), independently of
+            # how many patch subfolders exist below ``image``.
+            split = image_dir.parent.name
+
+            # Preserve the path relative to ``image`` in the id so files such as
+            # patch_1/1.png and patch_6/1.png cannot collide.
+            relative_source = png_path.relative_to(image_dir).with_suffix("")
+            relative_id = "_".join(relative_source.parts)
+            base = re.sub(
+                r"[^0-9A-Za-z]+", "_", f"{split}_{relative_id}"
+            ).strip("_")
             while base in seen:
                 base += "_x"
             seen.add(base)
@@ -283,6 +325,7 @@ class EarVesselsDataset(LocalDataset):
                             "noise_pct": pct,
                             "split": split,
                             "source_file": png_path.name,
+                            "source_relative_path": png_path.relative_to(image_dir).as_posix(),
                         },
                     }
                 )
