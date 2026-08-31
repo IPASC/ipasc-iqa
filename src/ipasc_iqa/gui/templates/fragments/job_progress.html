@@ -6,41 +6,57 @@
 
 {% if progress %}
 {% for ds in progress %}
+
+{% set dataset_done = status == "done" or ds.percent >= 100 %}
+
 <section class="run-dataset">
+
 <div class="run-dataset__head">
-<span class="run-dataset__name">{{ ds.dataset }}</span>
+  <span class="run-dataset__name">{{ ds.dataset }}</span>
 
-    {% if status == "done" %}
-      {% set dataset_percent = 100 %}
-      {% set dataset_label = "✓ done" %}
+  {% if dataset_done %}
+    {% set dataset_percent = 100 %}
+    {% set dataset_label = "✓ done" %}
+  {% else %}
+    {% set dataset_percent = ds.percent %}
+    {% set dataset_label = ds.percent ~ "%" %}
+  {% endif %}
+
+  <span class="run-dataset__pct">{{ dataset_label }}</span>
+</div>
+
+<div class="run-bar{% if dataset_done %} run-bar--done{% endif %}"
+     role="progressbar"
+     aria-valuenow="{{ dataset_percent }}"
+     aria-valuemin="0"
+     aria-valuemax="100">
+  <div class="run-bar__fill"
+       style="--run-progress: {{ dataset_percent }}%;"></div>
+</div>
+
+<ul class="progress-chips">
+  {% for m in ds.measures %}
+
+  <li class="progress-chip progress-chip--{{
+      'warn' if m.issues
+      else ('done' if (status == 'done' or m.percent >= 100) else 'active')
+  }}">
+    <span class="progress-chip__name">{{ m.name }}</span>
+
+    {% if m.issues %}
+      <span class="progress-chip__count">⚠ {{ m.issues }} skipped</span>
+    {% elif status == "done" or m.percent >= 100 %}
+      <span class="progress-chip__count">✓</span>
     {% else %}
-      {% set dataset_percent = ds.percent %}
-      {% set dataset_label = ds.percent ~ "%" %}
+      <span class="progress-chip__count">{{ m.percent }}%</span>
     {% endif %}
+  </li>
 
-    <span class="run-dataset__pct">{{ dataset_label }}</span>
-  </div>
+  {% endfor %}
+</ul>
 
-  <div class="run-bar" role="progressbar" aria-valuenow="{{ dataset_percent }}"
-       aria-valuemin="0" aria-valuemax="100">
-    <div class="run-bar__fill" style="--run-progress: {{ dataset_percent }}%;"></div>
-  </div>
-
-  <ul class="progress-chips">
-    {% for m in ds.measures %}
-    <li class="progress-chip progress-chip--{{ 'warn' if m.issues else ('done' if status == 'done' else 'active') }}">
-      <span class="progress-chip__name">{{ m.name }}</span>
-      {% if m.issues %}
-        <span class="progress-chip__count">⚠ {{ m.issues }} skipped</span>
-      {% elif status == "done" %}
-        <span class="progress-chip__count">✓</span>
-      {% else %}
-        <span class="progress-chip__count">{{ m.percent }}%</span>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
 </section>
+
 {% endfor %}
 
 {% elif status == "running" %}
