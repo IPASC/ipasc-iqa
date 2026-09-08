@@ -48,6 +48,9 @@ STALE_TTL = float(os.environ.get("IPASC_IQA_RESULT_STALE_TTL", 3600))
 #: Key added to every returned value describing its freshness (read by templates).
 META_KEY = "cache_meta"
 
+# Bump when cached GUI model fields change.
+CACHE_SCHEMA_VERSION = 2
+
 
 class ResultCache:
     def __init__(self, path: Path | str, stale_ttl: float | None = None) -> None:
@@ -81,7 +84,10 @@ class ResultCache:
 
     @staticmethod
     def _sig(kind: str, params: dict) -> str:
-        return f"{kind}:{json.dumps(params, sort_keys=True, default=str)}"
+        return (
+            f"v{CACHE_SCHEMA_VERSION}:{kind}:"
+            f"{json.dumps(params, sort_keys=True, default=str)}"
+        )
 
     @classmethod
     def _key(cls, kind: str, params: dict, epoch: int) -> str:

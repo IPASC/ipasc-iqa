@@ -124,7 +124,7 @@
                 <td class="num mono">{{ '%.4g'|format(stat.median) }}</td>
                 <td class="num mono">{{ '%.4g'|format(stat.min) }}</td>
                 <td class="num mono">{{ '%.4g'|format(stat.max) }}</td>
-                <td>{{ 'higher is better' if stat.higher_is_better else 'lower is better' }}</td>
+                <td>{{ '↑ higher is better' if stat.higher_is_better else '↓ lower is better' }}</td>
               </tr>
               {% if groups %}
               <tr id="metric-detail-{{ loop.index }}" class="metric-detail-row" hidden>
@@ -322,6 +322,25 @@
         {% for task in result.tasks %}
         {% set task_index = loop.index %}
         {% set rows = task.rows | selectattr('n', 'gt', 0) | list %}
+
+        {# Keep the exact original palette (HSL hue 0..120, saturation 70%,
+           lightness 90%, no transparency), but map it monotonically to the
+           signed direction-adjusted values displayed in each column. #}
+        {% set srcc_range = namespace(min=none, max=none) %}
+        {% set krcc_range = namespace(min=none, max=none) %}
+        {% for r in rows %}
+          {% set s = r.get('srcc_agreement') %}
+          {% if s is not none %}
+            {% if srcc_range.min is none or s < srcc_range.min %}{% set srcc_range.min = s %}{% endif %}
+            {% if srcc_range.max is none or s > srcc_range.max %}{% set srcc_range.max = s %}{% endif %}
+          {% endif %}
+          {% set k = r.get('krcc_agreement') %}
+          {% if k is not none %}
+            {% if krcc_range.min is none or k < krcc_range.min %}{% set krcc_range.min = k %}{% endif %}
+            {% if krcc_range.max is none or k > krcc_range.max %}{% set krcc_range.max = k %}{% endif %}
+          {% endif %}
+        {% endfor %}
+
         <section class="task-block">
           {% if result.all_tasks | length > 1 %}
           <h3 class="task-block__title">{{ task.task }}</h3>
@@ -336,8 +355,9 @@
                 <tr>
                   <th>Measure</th>
                   <th class="num">Value</th>
-                  <th class="num">SRCC</th>
-                  <th class="num">KRCC</th>
+                  <th>Direction</th>
+                  <th class="num">Direction-adjusted SRCC</th>
+                  <th class="num">Direction-adjusted KRCC</th>
                 </tr>
               </thead>
               <tbody>
@@ -368,20 +388,32 @@
                   <td class="num mono">
                     {{ '%.3g ± %d%%'|format(row.mean, (row.std/row.mean)*100) if row.mean is not none and row.mean != 0 else '—' }}
                   </td>
-                  {% for key in ['srcc','krcc'] %}
-                    {% set val = row[key] %}
+                  <td>
+                    {% set metric_direction = row.get('higher_is_better') %}{% if metric_direction is none %}<span class="muted">—</span>{% elif metric_direction %}↑ higher is better{% else %}↓ lower is better{% endif %}
+                  </td>
+                  {% for key in ['srcc_agreement','krcc_agreement'] %}
+                    {% set val = row.get(key) %}
                     {% if val is none %}
                       <td class="num muted">—</td>
                     {% else %}
-                      {% set hue = (val|abs * 120)|round(0, 'floor')|int %}
-                      <td class="num corr-cell" style="--corr-hue: {{ hue }};">
+                      {# Exact original palette, applied to signed relative agreement:
+                         lowest displayed value -> red, highest -> green. #}
+                      {% set value_range = srcc_range if key == 'srcc_agreement' else krcc_range %}
+                      {% if value_range.min is not none and value_range.max is not none and value_range.max > value_range.min %}
+                        {% set relative = (val - value_range.min) / (value_range.max - value_range.min) %}
+                      {% else %}
+                        {% set relative = 0.5 %}
+                      {% endif %}
+                      {% set hue = (relative * 120)|round(0, 'floor')|int %}
+                      <td class="num corr-cell"
+                          style="background: hsl({{ hue }}, 70%, 90%);">
                         {{ '%+.3f'|format(val) }}
                       </td>
                     {% endif %}
                   {% endfor %}
                 </tr>
                 <tr id="{{ scatter_id }}" class="human-detail-row metric-detail-row" hidden>
-                  <td colspan="4">
+                  <td colspan="5">
                     <div class="metric-row-detail human-row-detail">
                       <div class="human-scatter-detail"></div>
                     </div>
@@ -402,10 +434,16 @@
           KRCC = Kendall's Rank-Order Correlation Coefficient
         </p>
         <p class="legend">
+          Direction-adjusted correlations account for each metric's quality direction. Positive values indicate agreement with human rankings; negative values indicate an inverse ranking.
+		</p>
+		<p class="legend">
           Cells shaded by correlation strength:
-          <span class="legend__swatch legend__swatch--weak"></span> weak
+
+          <span class="legend__swatch legend__swatch--weak" style="background: hsl(0, 70%, 90%);"></span> lower
           →
-          <span class="legend__swatch legend__swatch--strong"></span> strong.
+          <span class="legend__swatch legend__swatch--strong" style="background: hsl(120, 70%, 90%);"></span> higher agreement.
+        </p>
+        <p class="legend">
           Click a measure to show or hide its scatter plot.
         </p>
         

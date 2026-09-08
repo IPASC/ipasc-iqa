@@ -829,17 +829,36 @@ def analysis_for_dataset(
 
     rows = correlate_measures_with_annotations(run, values, measures=chosen, dataset=dataset_name)
 
-    # Annotate each row with its measure's BibTeX (for the citation icon) and the
-    # pre-computed per-dataset mean/std of its values.
+    # Keep the raw correlations untouched, but add direction-adjusted versions
+    # for the Human agreement view. Human scores are oriented as higher = better;
+    # lower-is-better IQA measures therefore require a sign flip.
     stats_by_measure = dataset_measure_stats(workspace, dataset_name)
     row_dicts = []
     for r in rows:
         d = r.as_dict()
+        higher_is_better = directions.get(r.measure, True)
+        direction = 1.0 if higher_is_better else -1.0
+
+        d["higher_is_better"] = higher_is_better
+        d["srcc_agreement"] = None if r.srcc is None else direction * r.srcc
+        d["krcc_agreement"] = None if r.krcc is None else direction * r.krcc
         d["bibtex"] = bibtex_by_measure.get(r.measure)
+
         stat = stats_by_measure.get(r.measure, {})
         d["mean"] = stat.get("mean")
         d["std"] = stat.get("std")
         row_dicts.append(d)
+
+    # Human agreement is ranked by the signed, direction-adjusted SRCC: strong
+    # positive agreement first, genuine inverse rankings last. Missing values
+    # are kept at the bottom.
+    row_dicts.sort(
+        key=lambda d: (
+            d["srcc_agreement"] is None,
+            -d["srcc_agreement"] if d["srcc_agreement"] is not None else 0.0,
+            d["measure"],
+        )
+    )
 
     return {
         "dataset": dataset_name,
@@ -990,6 +1009,10 @@ def scatter_for_measure(
     krcc = rows[0].krcc if rows else None
 
     meta = measure_registry.get(measure).metadata
+    direction = 1.0 if meta.higher_is_better else -1.0
+    srcc_agreement = None if srcc is None else direction * srcc
+    krcc_agreement = None if krcc is None else direction * krcc
+
     chart = scatter_chart(
         data,
         srcc=srcc,
@@ -1007,6 +1030,8 @@ def scatter_for_measure(
         "chart": chart,
         "srcc": srcc,
         "krcc": krcc,
+        "srcc_agreement": srcc_agreement,
+        "krcc_agreement": krcc_agreement,
         "n": len(data.xs),
         "mean": stats.get("mean"),
         "std": stats.get("std"),
@@ -1300,12 +1325,13 @@ def image_explorer_for_dataset(
 
 
 def standings(workspace: Workspace, source: str = "mos") -> dict:
-    """Rank measures by |SRCC| against a human-score endpoint, per dataset+task.
+    """Rank measures by direction-adjusted SRCC, per dataset+task.
 
     ``source`` selects the human scores to rank against: ``"mos"`` (expert
     absolute ratings) or ``"bt"`` (continuous Bradley-Terry scores from
-    contributed pairwise comparisons). Correlation rows arrive already sorted by
-    ``|srcc|`` descending, so list position is the rank.
+    contributed pairwise comparisons). Raw SRCC/KRCC are preserved, while the
+    ranking uses correlations oriented so that positive values always indicate
+    agreement with increasing human quality.
     """
     source = "bt" if source == "bt" else "mos"
     # Measure metadata for the per-row info/citation popups (same fields the
@@ -1347,10 +1373,30 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
             if not values:
                 continue
             rows = correlate_measures_with_annotations(run, values, dataset=ds["name"])
+            agreement_rows: list[dict] = []
+            for r in rows:
+                if r.srcc is None:
+                    continue
+                meta = meta_by_measure.get(r.measure, {})
+                higher_is_better = bool(meta.get("higher_is_better", True))
+                direction = 1.0 if higher_is_better else -1.0
+                agreement_rows.append(
+                    {
+                        **r.as_dict(),
+                        **meta,
+                        "srcc_agreement": direction * r.srcc,
+                        "krcc_agreement": (
+                            None if r.krcc is None else direction * r.krcc
+                        ),
+                    }
+                )
+
+            agreement_rows.sort(
+                key=lambda d: (-d["srcc_agreement"], d["measure"])
+            )
             ranked = [
-                {"rank": i + 1, **r.as_dict(), **meta_by_measure.get(r.measure, {})}
-                for i, r in enumerate(rows)
-                if r.srcc is not None
+                {"rank": i + 1, **row}
+                for i, row in enumerate(agreement_rows)
             ]
             if ranked:
                 entries.append(
