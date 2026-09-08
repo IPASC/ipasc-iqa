@@ -1,11 +1,14 @@
 {# Shared measure description block, used under the detailed-analysis scatter
    plot and inside the standings info popup so both read identically. #}
-{% macro measure_desc(name, description, measure_type, value_range, higher_is_better) %}
+{% macro measure_desc(name, description, measure_type, value_range, higher_is_better, show_standings_note=false) %}
 <div class="measure-desc">
   <p class="measure-desc__title">Description of {{ name }}:</p>
   {% if description %}<p>{{ description }}</p>{% endif %}
   <p>This is a {{ measure_type }} measure.</p>
   {% if value_range %}<p>The value range is defined between {{ value_range }}.</p>{% endif %}
   <p>{{ 'Higher' if higher_is_better else 'Lower' }} values denote a better image quality.</p>
+  {% if show_standings_note %}
+  <p>For standings, SRCC is direction-adjusted: the correlation sign is inverted for lower-is-better metrics before ranking, so higher values consistently indicate better agreement with human quality rankings.</p>
+  {% endif %}
 </div>
 {% endmacro %}

@@ -12,6 +12,9 @@
 {% else %}
   {% from "fragments/macros.html" import measure_desc %}
   {% set medals = {1: '🥇', 2: '🥈', 3: '🥉'} %}
+  <p class="legend">
+    Standings are ranked by direction-adjusted SRCC. For lower-is-better metrics, the correlation sign is inverted before ranking, so higher values consistently indicate better agreement with human quality rankings.
+  </p>
   <div class="standings-grid">
     {% for entry in result.entries %}
     <div class="standings-card">
@@ -30,7 +33,8 @@
         <li class="ranking__row ranking__row--{{ row.rank }}">
           <span class="ranking__medal">{{ medals.get(row.rank, '#' ~ row.rank) }}</span>
           <span class="ranking__group mono">{{ row.measure }}</span>
-          <span class="ranking__score" title="SRCC">{{ '%+.3f'|format(row.srcc) }}</span>
+          {% set agreement = row.get('srcc_agreement') %}
+          <span class="ranking__score" title="Direction-adjusted SRCC">{{ '%+.3f'|format(agreement) if agreement is not none else '—' }}</span>
           <span class="ranking__actions">
             <button type="button" class="info-btn" title="About {{ row.measure }}"
                     aria-label="About {{ row.measure }}">
@@ -44,7 +48,7 @@
             {% endif %}
             <template class="measure-info">
               {{ measure_desc(row.measure, row.description, row.measure_type,
-                              row.value_range, row.higher_is_better) }}
+                              row.value_range, row.higher_is_better, true) }}
             </template>
           </span>
         </li>
@@ -53,7 +57,7 @@
     </div>
     {% endfor %}
   </div>
-  <p class="legend">IQA measures ranked by |SRCC| against
-    {{ 'Bradley–Terry pairwise scores' if result.source == 'bt' else 'expert z-MOS' }}
-    (higher = better aligned with humans).</p>
+  <p class="legend">Human endpoint:
+    {{ 'Bradley–Terry pairwise scores' if result.source == 'bt' else 'expert z-MOS' }}.
+    Positive values indicate agreement with human quality rankings; negative values indicate an inverse ranking.</p>
 {% endif %}

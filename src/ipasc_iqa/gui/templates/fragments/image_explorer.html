@@ -133,7 +133,7 @@
 
             {% for cell in row['values'] %}
               {% if cell['value'] is not none %}
-              <td class="num mono image-explorer-score-cell"
+              <td class="num image-explorer-score-cell"
                   style="--score-hue: {{ cell['color_hue'] }};"
                   title="{{ cell['label'] }} · {{ row['measure'] }} · quality {{ cell['quality_percent'] }}%">
                 {{ '%.4g'|format(cell['value']) }}

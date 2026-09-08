@@ -62,15 +62,32 @@
     <polyline points="{{ c.trend }}" fill="none" stroke="#111827" stroke-width="2.4"
               stroke-linejoin="round" stroke-linecap="round"/>
 
-    <!-- label box -->
+    <!-- Correlations shown for the raw plotted metric values.
+         The direction-adjusted value is appended only when it actually differs. -->
+    {% set srcc_adjusted = s.get('srcc_agreement') %}
+    {% set krcc_adjusted = s.get('krcc_agreement') %}
+    {% set srcc_changes = (
+      s.srcc is not none and srcc_adjusted is not none
+      and ((srcc_adjusted - s.srcc)|abs > 1e-12)
+    ) %}
+    {% set krcc_changes = (
+      s.krcc is not none and krcc_adjusted is not none
+      and ((krcc_adjusted - s.krcc)|abs > 1e-12)
+    ) %}
     <g class="scatter__label">
-      <rect x="{{ c.plot.x + 6 }}" y="{{ c.plot.y + 6 }}" width="140" height="70" rx="5"
-            fill="#ffffff" fill-opacity="0.85" stroke="#94a3b8"/>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 24 }}" class="scatter__label-name">{{ s.measure }}</text>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 42 }}" class="scatter__label-stat">
-        &#961; = {{ '%.3f'|format(s.srcc) if s.srcc is not none else '—' }}</text>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 60 }}" class="scatter__label-stat">
-        &#964; = {{ '%.3f'|format(s.krcc) if s.krcc is not none else '—' }}</text>
+      <rect x="{{ c.plot.x + 6 }}" y="{{ c.plot.y + 6 }}" width="330" height="72" rx="5"
+            fill="#ffffff" fill-opacity="0.88" stroke="#94a3b8"/>
+      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 24 }}" class="scatter__label-name">
+        {{ s.measure }}{{ ' ↑' if s.higher_is_better else ' ↓' }}
+      </text>
+      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 45 }}" class="scatter__label-stat">
+        SRCC (&#961;): {{ '%+.3f'|format(s.srcc) if s.srcc is not none else '—' }}
+        {%- if srcc_changes %} → {{ '%+.3f'|format(srcc_adjusted) }} (direction-adjusted){% endif %}
+      </text>
+      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 64 }}" class="scatter__label-stat">
+        KRCC (&#964;): {{ '%+.3f'|format(s.krcc) if s.krcc is not none else '—' }}
+        {%- if krcc_changes %} → {{ '%+.3f'|format(krcc_adjusted) }} (direction-adjusted){% endif %}
+      </text>
     </g>
 
     <!-- axis labels -->
@@ -88,7 +105,7 @@
     </span>
     {% endfor %}
     <span class="scatter__legend-item muted">
-      ρ = Spearman; τ = Kendall
+      ρ = Spearman; τ = Kendall · direction-adjusted values are shown only when they differ
     </span>
   </div>
   {% endif %}
