@@ -311,10 +311,10 @@ class PhotIQADataset(LocalDataset):
         # uncommenting its name below.
         enabled_tasks = {
             "overall_quality",
-            "edge_visibility",
-            "object_homogeneity",
-            "object_intensity_(inclusions)",
-            "object_intensity_(background)",
+            # "edge_visibility",
+            # "object_homogeneity",
+            # "object_intensity_(inclusions)",
+            # "object_intensity_(background)",
         }
 
         per_image: dict[str, dict[str, dict]] = {}
