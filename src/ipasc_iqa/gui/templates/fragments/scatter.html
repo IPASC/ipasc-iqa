@@ -45,13 +45,13 @@
 
     <!-- per-image points -->
     {% for p in c.points %}
-    <circle cx="{{ p.cx }}" cy="{{ p.cy }}" r="3" fill="{{ p.color }}"
+    <circle class="scatter__point" cx="{{ p.cx }}" cy="{{ p.cy }}" r="3" fill="{{ p.color }}"
             fill-opacity="0.55" stroke="{{ p.color }}" stroke-width="0.6"/>
     {% endfor %}
 
     <!-- per-group mean ± std crosshairs -->
     {% for g in c.group_bars %}
-    <g stroke="{{ g.color }}" stroke-width="1.6">
+    <g class="scatter__group-bar" stroke="{{ g.color }}" stroke-width="1.6">
       <line x1="{{ g.cx - g.exw }}" y1="{{ g.cy }}" x2="{{ g.cx + g.exw }}" y2="{{ g.cy }}"/>
       <line x1="{{ g.cx }}" y1="{{ g.cy - g.eyh }}" x2="{{ g.cx }}" y2="{{ g.cy + g.eyh }}"/>
       <circle cx="{{ g.cx }}" cy="{{ g.cy }}" r="3.2" fill="#ffffff"/>
@@ -59,7 +59,7 @@
     {% endfor %}
 
     <!-- rank-mean trend -->
-    <polyline points="{{ c.trend }}" fill="none" stroke="#111827" stroke-width="2.4"
+    <polyline class="scatter__trend" points="{{ c.trend }}" fill="none" stroke="#111827" stroke-width="2.4"
               stroke-linejoin="round" stroke-linecap="round"/>
 
     <!-- Correlations shown for the raw plotted metric values.
@@ -74,17 +74,17 @@
       s.krcc is not none and krcc_adjusted is not none
       and ((krcc_adjusted - s.krcc)|abs > 1e-12)
     ) %}
-    <g class="scatter__label">
-      <rect x="{{ c.plot.x + 6 }}" y="{{ c.plot.y + 6 }}" width="330" height="72" rx="5"
+    <g class="scatter__label scatter__label--auto">
+      <rect x="0" y="0" width="1" height="68" rx="5"
             fill="#ffffff" fill-opacity="0.88" stroke="#94a3b8"/>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 24 }}" class="scatter__label-name">
+      <text x="8" y="18" class="scatter__label-name">
         {{ s.measure }}{{ ' ↑' if s.higher_is_better else ' ↓' }}
       </text>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 45 }}" class="scatter__label-stat">
+      <text x="8" y="39" class="scatter__label-stat">
         SRCC (&#961;): {{ '%+.3f'|format(s.srcc) if s.srcc is not none else '—' }}
         {%- if srcc_changes %} → {{ '%+.3f'|format(srcc_adjusted) }} (direction-adjusted){% endif %}
       </text>
-      <text x="{{ c.plot.x + 14 }}" y="{{ c.plot.y + 64 }}" class="scatter__label-stat">
+      <text x="8" y="58" class="scatter__label-stat">
         KRCC (&#964;): {{ '%+.3f'|format(s.krcc) if s.krcc is not none else '—' }}
         {%- if krcc_changes %} → {{ '%+.3f'|format(krcc_adjusted) }} (direction-adjusted){% endif %}
       </text>
@@ -96,6 +96,113 @@
     <text x="14" y="{{ c.plot.y + c.plot.h / 2 }}" text-anchor="middle" class="scatter__axis"
           transform="rotate(-90 14 {{ c.plot.y + c.plot.h / 2 }})">{{ c.y_label }}</text>
   </svg>
+
+  <script>
+    (() => {
+      const script = document.currentScript;
+      const root = script && script.closest(".scatter");
+      const svg = root && root.querySelector(".scatter__svg");
+      const label = svg && svg.querySelector(".scatter__label--auto");
+      if (!svg || !label) return;
+
+      const placeLabel = () => {
+        const rect = label.querySelector("rect");
+        const texts = Array.from(label.querySelectorAll("text"));
+        if (!rect || !texts.length) return;
+
+        const plot = {
+          x: {{ c.plot.x }},
+          y: {{ c.plot.y }},
+          w: {{ c.plot.w }},
+          h: {{ c.plot.h }}
+        };
+        const inset = 6;
+        const boxHeight = 68;
+        const textWidth = Math.max(...texts.map((node) => node.getComputedTextLength()));
+        const boxWidth = Math.min(plot.w - 2 * inset, Math.ceil(textWidth + 16));
+        rect.setAttribute("width", boxWidth);
+        rect.setAttribute("height", boxHeight);
+
+        const points = Array.from(svg.querySelectorAll(".scatter__point")).map((node) => ({
+          x: Number(node.getAttribute("cx")),
+          y: Number(node.getAttribute("cy"))
+        }));
+        const groupBars = Array.from(svg.querySelectorAll(".scatter__group-bar"));
+        const trend = svg.querySelector(".scatter__trend");
+        const trendPoints = trend
+          ? trend.getAttribute("points").trim().split(/\s+/).map((pair) => {
+              const [x, y] = pair.split(",").map(Number);
+              return { x, y };
+            }).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+          : [];
+
+        const candidates = [
+          { x: plot.x + inset, y: plot.y + inset },
+          { x: plot.x + plot.w - boxWidth - inset, y: plot.y + inset },
+          { x: plot.x + inset, y: plot.y + plot.h - boxHeight - inset },
+          { x: plot.x + plot.w - boxWidth - inset, y: plot.y + plot.h - boxHeight - inset },
+          { x: plot.x + (plot.w - boxWidth) / 2, y: plot.y + inset },
+          { x: plot.x + (plot.w - boxWidth) / 2, y: plot.y + plot.h - boxHeight - inset },
+          { x: plot.x + inset, y: plot.y + (plot.h - boxHeight) / 2 },
+          { x: plot.x + plot.w - boxWidth - inset, y: plot.y + (plot.h - boxHeight) / 2 }
+        ];
+
+        const expanded = (box, pad = 5) => ({
+          x: box.x - pad,
+          y: box.y - pad,
+          w: box.w + 2 * pad,
+          h: box.h + 2 * pad
+        });
+        const contains = (box, p) =>
+          p.x >= box.x && p.x <= box.x + box.w &&
+          p.y >= box.y && p.y <= box.y + box.h;
+        const intersects = (a, b) =>
+          a.x <= b.x + b.w && a.x + a.w >= b.x &&
+          a.y <= b.y + b.h && a.y + a.h >= b.y;
+
+        const segmentHitsBox = (p1, p2, box) => {
+          if (contains(box, p1) || contains(box, p2)) return true;
+          const edges = [
+            [{ x: box.x, y: box.y }, { x: box.x + box.w, y: box.y }],
+            [{ x: box.x + box.w, y: box.y }, { x: box.x + box.w, y: box.y + box.h }],
+            [{ x: box.x + box.w, y: box.y + box.h }, { x: box.x, y: box.y + box.h }],
+            [{ x: box.x, y: box.y + box.h }, { x: box.x, y: box.y }]
+          ];
+          const ccw = (a, b, c) =>
+            (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+          const crosses = (a, b, c, d) =>
+            ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
+          return edges.some(([a, b]) => crosses(p1, p2, a, b));
+        };
+
+        const score = (candidate) => {
+          const box = { ...candidate, w: boxWidth, h: boxHeight };
+          const padded = expanded(box);
+          let value = points.reduce((sum, p) => sum + (contains(padded, p) ? 1 : 0), 0);
+
+          for (const group of groupBars) {
+            const b = group.getBBox();
+            if (intersects(padded, { x: b.x, y: b.y, w: b.width, h: b.height })) value += 8;
+          }
+
+          for (let i = 1; i < trendPoints.length; i += 1) {
+            if (segmentHitsBox(trendPoints[i - 1], trendPoints[i], padded)) {
+              value += 4;
+              break;
+            }
+          }
+          return value;
+        };
+
+        const best = candidates.reduce((winner, candidate) =>
+          score(candidate) < score(winner) ? candidate : winner
+        );
+        label.setAttribute("transform", `translate(${best.x} ${best.y})`);
+      };
+
+      requestAnimationFrame(placeLabel);
+    })();
+  </script>
 
   {% if c.legend %}
   <div class="scatter__legend">
