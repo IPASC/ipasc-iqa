@@ -12,7 +12,11 @@
     <span class="field__label">Sub-task</span>
     <select name="task" class="select">
       {% for t in result.all_tasks %}
-      <option value="{{ t }}" {{ 'selected' if t == result.active_task }}>{{ t }}</option>
+      <option value="{{ t }}" {{ 'selected' if t == result.active_task }}>
+        {{ 'overall quality'
+           if t in ['all', 'overall', 'overall_quality', 'overall quality', 'quality']
+           else t.replace('_', ' ') }}
+      </option>
       {% endfor %}
     </select>
   </label>

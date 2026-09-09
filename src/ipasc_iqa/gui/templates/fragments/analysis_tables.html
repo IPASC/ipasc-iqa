@@ -295,7 +295,14 @@
         {% if result.meta %}
         <dl class="result-meta">
           <div class="result-meta__item">
-            <dt>Images{% if result.active_task %} ({{ result.active_task.replace('_', ' ') }}){% endif %}</dt>
+            <dt>
+              Images
+              {% if result.active_task %}
+                ({{ 'overall quality'
+                    if result.active_task in ['all', 'overall', 'overall_quality', 'overall quality', 'quality']
+                    else result.active_task.replace('_', ' ') }})
+              {% endif %}
+            </dt>
             <dd>{{ result.meta.n_images }}</dd>
           </div>
           <div class="result-meta__item">

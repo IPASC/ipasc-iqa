@@ -985,7 +985,12 @@ def scatter_for_measure(
         return {"error": "no expert annotations or contributed comparisons to analyse yet"}
     active_task = _resolve_active_task(task, task_names)
 
-    task_label = active_task or "all"
+    task_name = str(active_task).strip().lower() if active_task is not None else None
+    task_label = (
+        "overall quality"
+        if task_name in {None, "all", "overall", "overall_quality", "overall quality", "quality"}
+        else str(active_task).replace("_", " ")
+    )
     if source == "bt":
         human_values = bt_scores_for_dataset_task(
             workspace, dataset_name, active_task, manifest

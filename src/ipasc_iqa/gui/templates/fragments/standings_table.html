@@ -27,7 +27,13 @@
         </button>
         {% endif %}
       </h2>
-      <span class="badge">task: {{ entry.task }}</span>
+      {% set task_name = entry.task %}
+      <span class="badge">
+        task:
+        {{ 'overall quality'
+           if task_name in ['all', 'overall', 'overall_quality', 'overall quality', 'quality']
+           else task_name.replace('_', ' ') }}
+      </span>
       <ol class="ranking">
         {% for row in entry.rows[:5] %}
         <li class="ranking__row ranking__row--{{ row.rank }}">
