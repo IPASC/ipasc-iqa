@@ -38,10 +38,10 @@
 
 <div class="result-head">
     <div class="result-head__top">
-      <h2 class="result-head__title">{{ result.dataset }}</h2>
+      <h2 class="result-head__title">{{ result.dataset_display_name }}</h2>
       {% if result.bibtex %}
       <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ result.bibtex }}"
-              title="Show dataset BibTeX citation" aria-label="Citation for {{ result.dataset }}">
+              title="Show dataset BibTeX citation" aria-label="Citation for {{ result.dataset_display_name }}">
         <i class="fa-solid fa-quote-right"></i>
       </button>
       {% endif %}
@@ -187,11 +187,11 @@
                               <td class="mono image-id-cell">
                                 <button type="button"
                                         class="link-button mono image-id-link"
-                                        title="{{ row.dataset }}/{{ row.image_id }}"
+                                        title="{{ result.dataset_display_name }}/{{ row.image_id }}"
                                         hx-get="/api/analysis/image-detail?dataset={{ row.dataset | urlencode }}&image_id={{ row.image_id | urlencode }}"
                                         hx-target="#metric-image-detail"
                                         hx-swap="innerHTML">
-                                  {{ row.dataset }}/{{ row.image_id }}
+                                  {{ result.dataset_display_name }}/{{ row.image_id }}
                                 </button>
                               </td>
                               <td class="num mono">{{ '%.4g'|format(row.value) }}</td>
@@ -216,11 +216,11 @@
                               <td class="mono image-id-cell">
                                 <button type="button"
                                         class="link-button mono image-id-link"
-                                        title="{{ row.dataset }}/{{ row.image_id }}"
+                                        title="{{ result.dataset_display_name }}/{{ row.image_id }}"
                                         hx-get="/api/analysis/image-detail?dataset={{ row.dataset | urlencode }}&image_id={{ row.image_id | urlencode }}"
                                         hx-target="#metric-image-detail"
                                         hx-swap="innerHTML">
-                                  {{ row.dataset }}/{{ row.image_id }}
+                                  {{ result.dataset_display_name }}/{{ row.image_id }}
                                 </button>
                               </td>
                               <td class="num mono">{{ '%.4g'|format(row.value) }}</td>

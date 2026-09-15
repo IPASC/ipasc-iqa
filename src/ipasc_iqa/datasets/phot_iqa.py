@@ -68,6 +68,7 @@ class PhotIQADataset(LocalDataset):
     """
 
     DATASET_NAME = "phot_iqa"
+    DATASET_DISPLAY_NAME = "PhotIQA"
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = (
         "PhotIQA: 1134 reconstructed photoacoustic images from 3 algorithms, paired "

@@ -19,7 +19,7 @@
         <select class="select" name="dataset">
           <option value="random">Random</option>
           {% for d in eligible_datasets %}
-          <option value="{{ d.name }}">{{ d.name }}</option>
+          <option value="{{ d.name }}">{{ d.display_name }}</option>
           {% endfor %}
         </select>
       </label>

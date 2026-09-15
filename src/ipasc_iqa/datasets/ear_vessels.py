@@ -73,9 +73,10 @@ class EarVesselsDataset(LocalDataset):
     """
 
     DATASET_NAME = "ear_vessels"
+    DATASET_DISPLAY_NAME = "Meng et al."
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = (
-        "Ear-vessel PAM: 256x256 reference photoacoustic-microscopy images, each paired with "
+        "Ear vessel dataset: 256x256 reference photoacoustic-microscopy images, each paired with "
         "additive-Gaussian-noise variants (std = 1, 2, 5, 10, 20% of the image max) for "
         "full-reference IQA noise-sensitivity testing (Mendeley Data dp5jgrkd6k)."
     )

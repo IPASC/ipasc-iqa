@@ -84,9 +84,10 @@ class PAMMOTHDataset(LocalDataset):
     """
 
     DATASET_NAME = "pammoth"
+    DATASET_DISPLAY_NAME = "PAM3"
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = (
-        "PAMMOTH SOS: maximum-intensity projections from breast photoacoustic-tomography "
+        "PAM3 data: maximum-intensity projections from breast photoacoustic-tomography "
         "reconstructions, where the full-waveform-inversion (FWI) speed-of-sound "
         "reconstruction is the ground-truth reference and the 1SOS/2SOS/TOF "
         "reconstructions are the variants for full-reference IQA."
