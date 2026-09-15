@@ -102,6 +102,7 @@ class DatasetRegistry:
             out.append(
                 {
                     "name": name,
+                    "display_name": getattr(cls, "DATASET_DISPLAY_NAME", None) or name,
                     "version": cls.DATASET_VERSION,
                     "description": cls.DATASET_DESCRIPTION,
                     "bibtex": getattr(cls, "DATASET_BIBTEX", None),

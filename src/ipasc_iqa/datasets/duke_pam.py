@@ -64,6 +64,7 @@ class DukePAMDataset(LocalDataset):
     """
 
     DATASET_NAME = "duke_pam"
+    DATASET_DISPLAY_NAME = "Duke PAM"
     DATASET_VERSION = "1.0.1"
     DATASET_DESCRIPTION = (
         "Duke PAM: We use 256x256 reference patches from photoacoustic-microscopy images, "

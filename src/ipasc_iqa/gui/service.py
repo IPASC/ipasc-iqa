@@ -725,11 +725,19 @@ def analysis_for_dataset(
     _empty: dict = {"all_tasks": [], "active_task": None, "sources": [], "active_source": source}
 
     ds = get_dataset(workspace, dataset_name)
+    dataset_display_name = ds["display_name"] if ds is not None else dataset_name
     if ds is None:
-        return {"dataset": dataset_name, "tasks": [], "error": "dataset not found", **_empty}
+        return {
+            "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
+            "tasks": [],
+            "error": "dataset not found",
+            **_empty,
+        }
     if not ds["prepared"]:
         return {
             "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
             "tasks": [],
             "error": "dataset not downloaded yet — run a benchmark on it first",
             **_empty,
@@ -743,6 +751,7 @@ def analysis_for_dataset(
     if run is None:
         return {
             "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
             "tasks": [],
             "error": "no benchmark run found for this dataset — run a benchmark first",
             **_empty,
@@ -794,6 +803,7 @@ def analysis_for_dataset(
     if not task_names and not has_unnamed:
         return {
             "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
             "description": ds.get("description"),
             "bibtex": ds.get("bibtex"),
             "run_id": run.run_id,
@@ -862,6 +872,7 @@ def analysis_for_dataset(
 
     return {
         "dataset": dataset_name,
+        "dataset_display_name": dataset_display_name,
         "description": ds.get("description"),
         "bibtex": ds.get("bibtex"),
         "run_id": run.run_id,
@@ -1407,6 +1418,7 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
                 entries.append(
                     {
                         "dataset": ds["name"],
+                        "dataset_display_name": ds["display_name"],
                         "dataset_bibtex": ds.get("bibtex"),
                         "task": task or "overall",
                         "rows": ranked,
@@ -1675,7 +1687,13 @@ def eligible_annotation_datasets(workspace: Workspace) -> list[dict]:
             continue
         groups = _reference_groups(manifest)
         if any(len(_items_for_stem(v)) >= 2 for v in groups.values()):
-            out.append({"name": ds["name"], "tasks": ds["annotation_tasks"]})
+            out.append(
+                {
+                    "name": ds["name"],
+                    "display_name": ds["display_name"],
+                    "tasks": ds["annotation_tasks"],
+                }
+            )
     return out
 
 

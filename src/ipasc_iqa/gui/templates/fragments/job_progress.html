@@ -12,7 +12,7 @@
 <section class="run-dataset">
 
 <div class="run-dataset__head">
-  <span class="run-dataset__name">{{ ds.dataset }}</span>
+  <span class="run-dataset__name">{{ ds.dataset_display_name }}</span>
 
   {% if dataset_done %}
     {% set dataset_percent = 100 %}
@@ -97,7 +97,7 @@ Some metric calculations are already being skipped or failing.
   <ul class="run-issues">
     {% for issue in run_issues %}
     <li>
-      <strong>{{ issue.dataset }} · {{ issue.measure }}</strong>:
+      <strong>{{ issue.dataset_display_name }} · {{ issue.measure }}</strong>:
       {{ issue.count }} skipped/failed
       {% if issue.reasons %}
         <ul>

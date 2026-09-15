@@ -72,6 +72,7 @@ class DigitalTwinDataset(LocalDataset):
     """
 
     DATASET_NAME = "digital_twin"
+    DATASET_DISPLAY_NAME = "Digital Twin"
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = (
         "Digital Twin Dataset: photoacoustic reconstructions (bp, bph, fft, ittr, mb, tr) "

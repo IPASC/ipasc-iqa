@@ -12,6 +12,17 @@ import threading
 import uuid
 from collections import Counter, defaultdict
 
+from ipasc_iqa.datasets.registry import registry as dataset_registry
+
+
+def _dataset_display_name(dataset: str) -> str:
+    """Return the user-facing name while preserving the internal dataset ID."""
+    try:
+        cls = dataset_registry.get(dataset)
+    except KeyError:
+        return dataset
+    return getattr(cls, "DATASET_DISPLAY_NAME", None) or dataset
+
 
 class _JobState:
     """Thread-safe state for one background benchmark run.
@@ -106,6 +117,7 @@ class _JobState:
                 progress.append(
                     {
                         "dataset": dataset,
+                        "dataset_display_name": _dataset_display_name(dataset),
                         "percent": self._pct(ds_done, n_images * len(self._measures)),
                         "measures": measures,
                     }
@@ -117,7 +129,13 @@ class _JobState:
                 "error": self.error,
                 "message": self.message,
                 "progress": progress,
-                "run_issues": list(self.run_issues),
+                "run_issues": [
+                    {
+                        **issue,
+                        "dataset_display_name": _dataset_display_name(issue["dataset"]),
+                    }
+                    for issue in self.run_issues
+                ],
             }
         
     def record_skip(self, dataset: str, measure: str, reason: str) -> None:

@@ -26,7 +26,7 @@
           <li class="check-row">
             <label class="check">
               <input type="checkbox" name="datasets" value="{{ ds.name }}">
-              <span class="check__label">{{ ds.name }}
+              <span class="check__label">{{ ds.display_name }}
                 <small>v{{ ds.version }}</small>
                   {%- if ds.prepared %} <span class="dataset-status dataset-status--ready">Ready · {{ ds.n_images }} images{%- if ds.has_annotations %} · annotated{% endif %}</span>
                   {%- else %} <span class="dataset-status dataset-status--download">Not downloaded yet · will download before running</span>{% endif %}
@@ -35,7 +35,7 @@
             </label>
             {% if ds.bibtex %}
             <button type="button" class="cite-btn" data-bibtex="{{ ds.bibtex }}"
-                    title="Show BibTeX citation" aria-label="Show citation for {{ ds.name }}">
+                    title="Show BibTeX citation" aria-label="Show citation for {{ ds.display_name }}">
               <i class="fa-solid fa-quote-right"></i>
             </button>
             {% endif %}

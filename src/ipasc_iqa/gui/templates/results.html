@@ -20,7 +20,8 @@
       <select name="dataset" class="select">
         {% for ds in datasets %}
         <option value="{{ ds.name }}" {{ 'selected' if ds.name == selected_dataset }}>
-          {{ ds.name }}{{ '' if ds.prepared else ' (not downloaded)' }}
+          {{ ds.display_name }}{{ '' if ds.prepared else ' (not downloaded)' }}
+</option>
         </option>
         {% endfor %}
       </select>
