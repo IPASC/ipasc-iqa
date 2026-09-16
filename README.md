@@ -59,7 +59,9 @@ ipasc_iqa compare results/run_a.json results/run_b.json
 
 ---
 
-## Launching the web app
+## Web application
+
+### Launch locally
 
 The GUI is a thin [FastAPI](https://fastapi.tiangolo.com/) + HTMX layer over the same Python API
 the CLI uses. Install the `gui` extra first (`pip install -e ".[gui]"`).
@@ -69,6 +71,17 @@ ipasc_iqa-gui --workspace ./workspace --data-dir ./data --port 8000
 ```
 
 Then open <http://127.0.0.1:8000>.
+
+### Create the first administrator
+
+To create the first administrator account, use:
+
+```bash
+ipasc_iqa-gui create-admin --email admin@example.org --name "admin_name" --password "admin_password" --workspace ./workspace --data-dir ./data
+```
+
+If the user has already registered through the web interface, the same command can be used without
+`--name` and `--password` to promote the existing account.
 
 | Flag | Meaning | Default |
 |---|---|---|
@@ -81,15 +94,13 @@ Then open <http://127.0.0.1:8000>.
 The same two paths can be set via the `IPASC_IQA_WORKSPACE` and `IPASC_IQA_DATA_DIR` environment
 variables.
 
-**The four pages**
+### Main workflows
 
-- **Welcome** — entry point.
-- **Run benchmark** — pick datasets (downloaded on demand) and measures, then evaluate.
-- **Detailed analysis** — per-task tables of Spearman (SRCC) and Kendall (KRCC) rank correlation
-  between each measure and the expert mean-opinion-score. Measures a dataset cannot support are
-  disabled automatically.
-- **Standings** — IQA measures ranked by how well they correlate with expert ratings, one
-  leaderboard per dataset and quality task.
+- **Run benchmark** — select datasets and compatible IQA measures, then compute image-level metric values.
+- **Detailed analysis** — inspect metric results, compare reconstruction variants, and analyse agreement with human quality assessments.
+- **Standings** — compare IQA measures through dataset- and task-specific rankings.
+- **Contribute annotations** — contribute pairwise comparisons or absolute quality ratings.
+- **Download** — export metric results and human annotations as JSON.
 
 Because the GUI imports `ipasc_iqa` as a library, deploying it as a web service later is a matter of
 running it behind an ASGI server (e.g. `uvicorn`/`gunicorn`) and a reverse proxy.
@@ -169,10 +180,6 @@ See [`CONTRIBUTORS.md`](CONTRIBUTORS.md).
 - **Janek Gröhl** — RWTH Aachen, Germany
 
 ---
-
-## Promote first admin user on server:
-
-`ipasc_iqa-gui create-admin --email jgroehl@ukaachen.de --workspace .\workspace\ --data-dir .\data\`
 
 ## License
 
