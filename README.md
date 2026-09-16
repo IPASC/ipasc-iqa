@@ -70,6 +70,17 @@ ipasc_iqa-gui --workspace ./workspace --data-dir ./data --port 8000
 
 Then open <http://127.0.0.1:8000>.
 
+### Create the first administrator
+
+To create the first administrator account, use:
+
+```bash
+ipasc_iqa-gui create-admin --email admin@example.org --name "admin_name" --password "admin_password" --workspace ./workspace --data-dir ./data
+```
+
+If the user has already registered through the web interface, the same command can be used without
+`--name` and `--password` to promote the existing account.
+
 | Flag | Meaning | Default |
 |---|---|---|
 | `--workspace` | Where run results are written (a `results/` folder is created here). | current directory |
@@ -81,15 +92,24 @@ Then open <http://127.0.0.1:8000>.
 The same two paths can be set via the `IPASC_IQA_WORKSPACE` and `IPASC_IQA_DATA_DIR` environment
 variables.
 
-**The four pages**
+**Main web workflows**
 
-- **Welcome** — entry point.
-- **Run benchmark** — pick datasets (downloaded on demand) and measures, then evaluate.
-- **Detailed analysis** — per-task tables of Spearman (SRCC) and Kendall (KRCC) rank correlation
-  between each measure and the expert mean-opinion-score. Measures a dataset cannot support are
-  disabled automatically.
+- **Welcome** — entry point to the available workflows.
+- **Run benchmark** — select datasets and compatible IQA measures, prepare the data as needed, and
+  compute image-level metric values. Measures that a dataset cannot support are disabled
+  automatically.
+- **Detailed analysis** — inspect summary statistics and image-level metric results, explore related
+  reconstruction variants, and analyse agreement with human quality assessments through Spearman
+  (SRCC) and Kendall (KRCC) rank correlations and scatter plots. Human scores can come from expert
+  mean-opinion scores (MOS) or from Bradley–Terry scores derived from pairwise comparisons.
 - **Standings** — IQA measures ranked by how well they correlate with expert ratings, one
   leaderboard per dataset and quality task.
+- **Contribute annotations** — add human quality assessments either by ranking reconstruction
+  variants through pairwise two-alternative forced-choice (2AFC) comparisons or by assigning
+  absolute quality ratings on a 1–4 scale. Pairwise comparisons are converted into continuous
+  Bradley–Terry quality scores.
+- **Download** — export cached metric results, original expert annotations, contributed annotations,
+  and derived Bradley–Terry scores as JSON.
 
 Because the GUI imports `ipasc_iqa` as a library, deploying it as a web service later is a matter of
 running it behind an ASGI server (e.g. `uvicorn`/`gunicorn`) and a reverse proxy.
@@ -169,10 +189,6 @@ See [`CONTRIBUTORS.md`](CONTRIBUTORS.md).
 - **Janek Gröhl** — RWTH Aachen, Germany
 
 ---
-
-## Promote first admin user on server:
-
-`ipasc_iqa-gui create-admin --email jgroehl@ukaachen.de --workspace .\workspace\ --data-dir .\data\`
 
 ## License
 
