@@ -450,3 +450,60 @@ class TestCLIPIQA:
         model_ref = m._model
         m.evaluate(IMAGE)
         assert m._model is model_ref
+
+
+# ---------------------------------------------------------------------------
+# Device propagation for functional PIQ wrappers
+# ---------------------------------------------------------------------------
+
+from ipasc_iqa.measures.deep.brisque import BRISQUEMeasure  # noqa: E402
+from ipasc_iqa.measures.deep.haarpsimed import HaarPSIMedMeasure  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("measure_cls", "piq_function", "needs_reference"),
+    [
+        (BRISQUEMeasure, "brisque", False),
+        (FSIMMeasure, "fsim", True),
+        (GMSDMeasure, "gmsd", True),
+        (HaarPSIMeasure, "haarpsi", True),
+        (HaarPSIMedMeasure, "haarpsi", True),
+        (IWSSIMMeasure, "information_weighted_ssim", True),
+        (MSGMSDMeasure, "multi_scale_gmsd", True),
+        (MSSSIMMeasure, "multi_scale_ssim", True),
+        (VIFMeasure, "vif_p", True),
+    ],
+)
+def test_functional_piq_wrapper_uses_requested_device(
+    monkeypatch: pytest.MonkeyPatch,
+    measure_cls,
+    piq_function: str,
+    needs_reference: bool,
+) -> None:
+    """Verify device propagation without requiring CUDA or MPS hardware."""
+    import piq
+    import torch
+
+    # The meta device lets the test observe tensor placement without requiring
+    # an accelerator. Returning a CPU scalar avoids calling item() on meta.
+    monkeypatch.setattr(
+        "ipasc_iqa.core.device.resolve",
+        lambda preference="auto": preference,
+    )
+
+    def fake_piq_function(*args, **kwargs):
+        tensor_args = [arg for arg in args if isinstance(arg, torch.Tensor)]
+        assert tensor_args
+        assert all(tensor.device.type == "meta" for tensor in tensor_args)
+
+        scale_weights = kwargs.get("scale_weights")
+        if scale_weights is not None:
+            assert scale_weights.device.type == "meta"
+
+        return torch.tensor(0.5)
+
+    monkeypatch.setattr(piq, piq_function, fake_piq_function)
+
+    measure = measure_cls(device="meta")
+    kwargs = {"reference": REFERENCE} if needs_reference else {}
+    assert measure.evaluate(IMAGE, **kwargs) == 0.5

@@ -67,14 +67,17 @@ class BRISQUEMeasure(BaseMeasure):
         t_min, t_max = float(t.min()), float(t.max())
         if t_max > t_min:
             t = (t - t_min) / (t_max - t_min)
-        t = t.clamp(0.0, 1.0)
+        t = t.clamp(0.0, 1.0).to(self.device)
 
         # Adaptive kernel size: odd integer scaled to the shorter spatial dimension.
         # At 256×256 this matches the piq default of kernel_size=7, sigma=7/6.
-        h, w = image.shape[0], image.shape[1]
-        ks = max(1, int(np.ceil(min(h, w) / 41)))
-        if ks % 2 == 0:
-            ks += 1  # kernel_size must be odd
-        kernel_sigma = float(ks) / 6.0
+        # h, w = image.shape[0], image.shape[1]
+        # ks = max(1, int(np.ceil(min(h, w) / 41)))
+        # if ks % 2 == 0:
+        #     ks += 1  # kernel_size must be odd
+        # kernel_sigma = float(ks) / 6.0
+
+        ks=7
+        kernel_sigma=7 / 6
 
         return float(brisque(t, kernel_size=ks, kernel_sigma=kernel_sigma).item())
