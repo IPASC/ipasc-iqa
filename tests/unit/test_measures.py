@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from ipasc_iqa.measures.classical.cnr import CNRMeasure
+from ipasc_iqa.measures.classical.mae import MAEMeasure
 from ipasc_iqa.measures.classical.psnr import PSNRMeasure
 from ipasc_iqa.measures.classical.snr import SNRMeasure
 from ipasc_iqa.measures.classical.ssim import SSIMMeasure
@@ -16,6 +17,23 @@ IMAGE = rng.random((256, 256, 1), dtype=np.float32).astype(np.float32)
 REFERENCE = rng.random((256, 256, 1), dtype=np.float32).astype(np.float32)
 SIGNAL_ROI = (IMAGE[:, :, 0] > 0.7)[:, :, np.newaxis].astype(bool)
 NOISE_ROI = (IMAGE[:, :, 0] < 0.2)[:, :, np.newaxis].astype(bool)
+
+
+class TestMAE:
+    def test_uses_mean_absolute_error(self) -> None:
+        image = np.array([0.0, 0.0, 0.0, 4.0], dtype=np.float32)
+        reference = np.zeros_like(image)
+
+        # Mean absolute error is 1.0; the previous median implementation
+        # returned 0.0 for this deliberately asymmetric example.
+        assert MAEMeasure().evaluate(image, reference=reference) == 1.0
+
+    def test_identical_images_is_zero(self) -> None:
+        assert MAEMeasure().evaluate(IMAGE, reference=IMAGE) == 0.0
+
+    def test_requires_reference(self) -> None:
+        with pytest.raises(ValueError, match="requires a reference"):
+            MAEMeasure().evaluate(IMAGE)
 
 
 class TestPSNR:
