@@ -1,7 +1,7 @@
 # Adding a dataset
 
-Datasets are **adapter-driven**: only datasets that have a registered adapter class are offered in
-the CLI and GUI, and selecting one downloads and converts it on demand. An adapter is a small Python
+Datasets are **adapter-driven**: only datasets that have a registered adapter class are offered in 
+and GUI, and selecting one downloads and converts it on demand. An adapter is a small Python 
 class that knows how to fetch a specific dataset and lay it out in the framework's on-disk **data
 contract**. This keeps raw published data (any format) separate from the normalized form the
 framework consumes.
@@ -58,8 +58,9 @@ If your dataset has expert quality ratings, embed them into each image entry's `
 }
 ```
 
-Correlation uses `zscore_mos`. Different datasets may expose different task names — all of them are
-shown automatically.
+When individual annotator ratings are available, they are z-normalised per annotator and combined into 
+a composite MOS. Otherwise, correlation uses the pre-computed zscore_mos. Different datasets may expose 
+different task names — all of them are shown automatically.
 
 ---
 
@@ -89,8 +90,10 @@ _SOURCE_URL = "https://example.org/example_pa.zip"
 
 class ExampleDataset(LocalDataset):
     DATASET_NAME = "example_pa"
+    DATASET_DISPLAY_NAME = "Example PA"
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = "Example paired reconstruction/reference photoacoustic dataset."
+    DATASET_BIBTEX = "..."
 
     def _prepare(self) -> None:
         # self.root is the managed directory for this dataset; self._download is set
