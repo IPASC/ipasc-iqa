@@ -325,39 +325,61 @@ def _format_value_range(value_range: tuple[float, float] | None) -> str | None:
 
 
 def discover_datasets(workspace: Workspace) -> list[dict]:
-    """List datasets that have a registered adapter.
-
-    Datasets already downloaded/converted report their image count, annotation
-    tasks, and capabilities (references / ROI masks); others are still listed (so
-    they can be selected to trigger a download).
-    """
     out: list[dict] = []
+
     for spec in dataset_registry.list_datasets():
         name = spec["name"]
         prepared = dataset_registry.is_prepared(name, workspace.data_dir)
+
         tasks: list[str] = []
         n_images: int | None = None
-        caps = {"has_references": False, "has_signal_roi": False, "has_noise_roi": False}
+        n_unique_images: int | None = None
+        n_duplicate_images = 0
+
+        caps = {
+            "has_references": False,
+            "has_signal_roi": False,
+            "has_noise_roi": False,
+        }
+
         if prepared:
             try:
                 manifest = dataset_manifest(workspace, name)
-                tasks = annotation_tasks_in_manifest(manifest)
-                n_images = len(manifest.get("images", []))
+
+                tasks = sorted(
+                    set(annotation_tasks_in_manifest(manifest))
+                    | set(comparison_tasks_in_manifest(manifest))
+                )
+
+                images = manifest.get("images", [])
+                n_images = len(images)
+
+                hashes = [
+                    entry.get("sha256")
+                    for entry in images
+                    if entry.get("sha256")
+                ]
+                n_unique_images = len(set(hashes)) + (n_images - len(hashes))
+                n_duplicate_images = n_images - n_unique_images
+
                 caps = _capabilities_from_manifest(manifest)
             except Exception:
                 prepared = False
+
         out.append(
             {
                 **spec,
                 "prepared": prepared,
                 "n_images": n_images,
+                "n_unique_images": n_unique_images,
+                "n_duplicate_images": n_duplicate_images,
                 "annotation_tasks": tasks,
                 "has_annotations": bool(tasks),
                 **caps,
             }
         )
-    return out
 
+    return out
 
 def measure_options(
     workspace: Workspace,
@@ -1705,7 +1727,7 @@ def annotation_tasks_for(workspace: Workspace, dataset_name: str | None) -> list
         manifest = dataset_manifest(workspace, dataset_name)
     except Exception:
         return []
-    return annotation_tasks_in_manifest(manifest)
+    return manifest_task_names(manifest)
 
 
 def manifest_task_names(manifest: dict) -> list[str]:
