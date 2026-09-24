@@ -506,6 +506,7 @@ def run_benchmark(
     on_progress: Callable[[str, str], None] | None = None,
     on_plan: Callable[[dict[str, int], list[str]], None] | None = None,
     on_skip: Callable[[str, str, str], None] | None = None,
+    on_dataset_error: Callable[[str, str], None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
 
@@ -520,10 +521,18 @@ def run_benchmark(
     workspace.ensure()
     ensure_writable_model_cache(workspace)
 
-    datasets = [
-        dataset_registry.instantiate(name, workspace.data_dir, download=True)
-        for name in dataset_names
-    ]
+    datasets = []
+    for name in dataset_names:
+        try:
+            dataset = dataset_registry.instantiate(name, workspace.data_dir, download=True)
+        except Exception as exc:  # noqa: BLE001
+            if on_dataset_error is not None:
+                on_dataset_error(name, str(exc))
+            continue
+        datasets.append(dataset)
+
+    if not datasets:
+        raise RuntimeError("None of the selected datasets could be prepared.")
 
     measures = [measure_registry.instantiate(m, device=device) for m in measure_names]
 
@@ -544,14 +553,19 @@ def run_benchmark(
         )
         # Pre-compute per-dataset mean/std over the merged per-image results and
         # persist them, so reporting doesn't have to recompute from scratch.
-        for name in dataset_names:
-            _write_dataset_stats(workspace, name, store.records_for_dataset(name))
+        for ds in datasets:
+            _write_dataset_stats(workspace, ds.name, store.records_for_dataset(ds.name))
 
     # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
 
-    save_last_selection(workspace, dataset_names, measure_names, run_id=run.run_id)
+    save_last_selection(
+        workspace,
+        [ds.name for ds in datasets],
+        measure_names,
+        run_id=run.run_id,
+    )
 
     # New measure values → invalidate cached analysis/standings/scatter views.
     with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:

@@ -2,7 +2,7 @@
 
 <div id="run-container" class="run-progress" hx-get="/api/run/{{ job_id }}/status" hx-trigger="every 1.5s" hx-target="this" hx-swap="outerHTML"> {% elif status == "error" %} <div id="run-container" class="run-progress"> {% else %} <div id="run-container" class="run-progress run-progress--done"> {% endif %}
 
-<div class="run-progress__header"> {% if status == "running" %} <span class="progress-spinner"></span> Benchmark running {% elif status == "done" %} {% if run_issues %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete with warnings {% else %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting… {% endif %} {% else %} <span class="progress-err">✗</span> Run failed {% endif %} </div>
+<div class="run-progress__header"> {% if status == "running" %} <span class="progress-spinner"></span> Benchmark running {% elif status == "done" %} {% if run_issues or dataset_errors %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete with warnings {% else %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting… {% endif %} {% else %} <span class="progress-err">✗</span> Run failed {% endif %} </div>
 
 {% if progress %}
 {% for ds in progress %}
@@ -72,6 +72,31 @@
 Dataset download or preparation may take a few minutes on the first run.
 </p>
 </section>
+{% endif %}
+
+{% if dataset_errors %}
+<div class="notice notice--warn" style="margin-top:1rem">
+  <strong>Some datasets could not be prepared.</strong>
+  <p style="margin:0.35rem 0 0">
+    {% if status == "done" %}
+      The run continued with the other selected datasets.
+    {% else %}
+      These datasets were skipped during download or preparation.
+    {% endif %}
+  </p>
+  <ul class="run-issues">
+    {% for issue in dataset_errors %}
+    <li>
+      <strong>{{ issue.dataset_display_name }}</strong>: {{ issue.reason }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if status == "done" %}
+    <a href="/results" class="btn btn--primary" style="margin-top:0.75rem;display:inline-block">
+      View results
+    </a>
+  {% endif %}
+</div>
 {% endif %}
 
 {% if run_issues %}

@@ -38,6 +38,7 @@ class _JobState:
         "error",
         "message",
         "run_issues",
+        "dataset_errors",
         "_n_images",
         "_measures",
         "_done",
@@ -52,6 +53,7 @@ class _JobState:
         self._n_images: dict[str, int] = {}  # dataset -> image count (the denominator)
         self.message: str = "Preparing/downloading datasets..."
         self.run_issues: list[dict] = []
+        self.dataset_errors: list[dict] = []
         self._measures: list[str] = []  # measure names, in selection order
         self._done: dict[tuple[str, str], int] = {}  # (dataset, measure) -> pairs done
         self._lock = threading.Lock()
@@ -81,6 +83,10 @@ class _JobState:
         with self._lock:
             self.error = error
             self.status = "error"
+
+    def record_dataset_error(self, dataset: str, reason: str) -> None:
+        with self._lock:
+            self.dataset_errors.append({"dataset": dataset, "reason": reason})
 
     # ------------------------------------------------------------------
     # Readers (called from route handlers — any thread)
@@ -135,6 +141,13 @@ class _JobState:
                         "dataset_display_name": _dataset_display_name(issue["dataset"]),
                     }
                     for issue in self.run_issues
+                ],
+                "dataset_errors": [
+                    {
+                        **issue,
+                        "dataset_display_name": _dataset_display_name(issue["dataset"]),
+                    }
+                    for issue in self.dataset_errors
                 ],
             }
         
@@ -226,6 +239,7 @@ def launch_run(
                 on_progress=job.record_progress,
                 on_plan=job.set_plan,
                 on_skip=job.record_skip,
+                on_dataset_error=job.record_dataset_error,
             )
             job.finish(run_id, _summarize_run_issues(ws, run_id))
         except Exception as exc:  # noqa: BLE001
