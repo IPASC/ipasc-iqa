@@ -8,12 +8,13 @@ Source:
     SOS) and ``FWI`` (full-waveform-inversion SOS) — across multiple wavelengths
     and three projection planes (``axial``, ``sagittal``, ``frontal``).
 
-    The archive ``pammoth_soundspeed_iqa_subset.zip`` mirrors the acquisition
-    layout::
+    The full public PAM3 archive is downloaded from Zenodo. Complete sets of
+    3D PA reconstructions are converted to cropped 2D MIPs in::
 
         pammoth_soundspeed_iqa_subset/<volunteer>/<scan>/PA/<method>/rec_<wl>_<plane>.npy
 
-    where each ``.npy`` is a single 2D maximum-intensity projection (float32).
+    where each ``.npy`` is a cropped 2D maximum-intensity projection (float32).
+    The original archive and extracted source are kept for reuse.
 
 This adapter turns the MIPs into a *full-reference* IQA dataset. The **FWI**
 reconstruction is treated as the ground-truth reference; the other three SOS
@@ -38,22 +39,31 @@ Arrays are stored as float32 of shape ``(H, W, 1)``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import time
+import urllib.error
 import urllib.request
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+import scipy.io as sio
 
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
 
-# Mocked Zenodo location — the archive is not yet published. Until the design is
-# confirmed with collaborators, place the zip in the dataset root manually.
-ZENODO_BASE = "https://zenodo.org/records/0000000/files"
-RAW_ZIP = "pammoth_soundspeed_iqa_subset.zip"
+# Pinned Zenodo version, ensuring reproducible data source.
+ZENODO_BASE = "https://zenodo.org/records/20612980/files"
+RAW_ZIP = "PAM3SystemIntroductionImagesVisualization.zip"
+RAW_ZIP_MD5 = "ca9566c4538e30f74e397f8a48f77e96"
 UNPACKED_DIR = "pammoth_soundspeed_iqa_subset"
+RECONSTRUCTIONS_DIR = "reconstructions"
+REQUIRED_SUBFOLDERS = ("1SOS", "2SOS", "FWI", "TOF")
+PLANES = ("sagittal", "frontal", "axial")
+VOLUME_KEY = "p0_rec"
 
 REFERENCE_TYPE = "ground_truth"
 REFERENCE_METHOD = "FWI"  # full-waveform-inversion SOS = ground truth
@@ -69,16 +79,16 @@ _SLICE_OFFSET_RE = re.compile(r"_[+-]\d+\.npy$")
 class PAMMOTHDataset(LocalDataset):
     """PAMMOTH speed-of-sound full-reference IQA dataset (no human ratings).
 
-    Each cropped 2D slice is reconstructed with four SOS strategies. FWI is the
+    Each cropped 2D MIP is reconstructed with four SOS strategies. FWI is the
     reference; ``1SOS``/``2SOS``/``TOF`` are the variants scored against it.
 
     Parameters
     ----------
     root:
-        Directory holding ``pammoth_soundspeed_iqa_subset.zip`` (or its unzipped
-        contents); converted in place.
+        Directory holding the official PAM3 ZIP, extracted reconstructions,
+        and generated MIPs; converted in place.
     download:
-        If True, fetch the archive from Zenodo when it is missing (URL mocked).
+        If True, fetch the official archive from Zenodo when missing.
     force_convert:
         Re-run the conversion even if ``converted/`` already exists.
     """
@@ -94,9 +104,12 @@ class PAMMOTHDataset(LocalDataset):
     )
     DATASET_BIBTEX = (
         "@misc{pammoth_soundspeed_iqa,\n"
-        "  title        = {PAMMOTH speed-of-sound reconstruction IQA subset},\n"
-        "  howpublished = {Zenodo (to appear)},\n"
-        "  note         = {Download URL mocked pending publication}\n"
+        "  title        = {Photoacoustic and ultrasound tomography images of phantom and "
+        "in-vivo data acquired with the PAM3 scanner},\n"
+        "  author       = {Dantuma, Maura and Lucka, Felix and De Santi, Bruno and "
+        "Bosman, Esther and Manohar, Srirang},\n"
+        "  year         = {2026},\n"
+        "  doi          = {10.5281/zenodo.20612980}\n"
         "}"
     )
 
@@ -125,35 +138,188 @@ class PAMMOTHDataset(LocalDataset):
             self.root = converted_dir  # already prepared
             return
 
-        slice_dir = self._ensure_unzipped()
+        slice_dir = self._ensure_mips()
         self._convert(slice_dir, converted_dir)
         self.root = converted_dir
 
     def _manifest_path(self) -> Path:
         return self.root / "manifest.json"
 
-    def _ensure_unzipped(self) -> Path:
-        """Return the directory holding the unzipped slices, fetching as needed."""
-        import shutil
+    @staticmethod
+    def _md5(path: Path) -> str:
+        digest = hashlib.md5()  # noqa: S324 - checksum published by Zenodo
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
-        self.root.mkdir(parents=True, exist_ok=True)
-        zip_path = self.root / RAW_ZIP
-        slice_root = self.root / UNPACKED_DIR
+    @classmethod
+    def _download_archive(cls, url: str, target: Path, *, retries: int = 5) -> None:
+        """Download with retries and HTTP Range resume, retaining partial data.
 
-        if not slice_root.exists():
-            if not zip_path.exists():
-                if not self._download:
-                    raise FileNotFoundError(
-                        f"{zip_path} not found and download=False. "
-                        f"Place {RAW_ZIP} there or allow downloading."
+        If the server ignores Range, restart from byte zero rather than append
+        a full response to an incomplete ZIP. Never delete a partial download
+        after a transient network failure.
+        """
+        partial = target.with_name(target.name + ".part")
+        for attempt in range(retries):
+            offset = partial.stat().st_size if partial.exists() else 0
+            headers = {"User-Agent": "ipasc-iqa/1.0"}
+            if offset:
+                headers["Range"] = f"bytes={offset}-"
+            request = urllib.request.Request(url, headers=headers)
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+                    status = response.status
+                    content_range = response.headers.get("Content-Range", "")
+                    if offset and status == 206:
+                        match = re.match(r"bytes (\d+)-(\d+)/(\d+|\*)", content_range)
+                        if not match or int(match.group(1)) != offset:
+                            raise OSError(f"Unexpected Content-Range: {content_range!r}")
+                        mode = "ab"
+                        total = int(match.group(3)) if match.group(3) != "*" else None
+                    elif status == 200:
+                        # Zenodo (or an intermediary) may ignore Range requests.
+                        # Replace the incomplete file only when a full response starts.
+                        mode = "wb"
+                        length = response.headers.get("Content-Length")
+                        total = int(length) if length is not None else None
+                    else:
+                        raise OSError(f"Unexpected HTTP status {status} for download")
+                    with partial.open(mode) as output:
+                        while True:
+                            chunk = response.read(8 * 1024 * 1024)
+                            if not chunk:
+                                break
+                            output.write(chunk)
+                    size = partial.stat().st_size
+                    if total is not None and size != total:
+                        raise OSError(f"Incomplete download: {size} of {total} bytes")
+                print("  -> download complete, checking MD5 ...")
+                if cls._md5(partial) != RAW_ZIP_MD5:
+                    raise ValueError(
+                        "PAM3 ZIP failed MD5 verification; partial file retained "
+                        f"at {partial}. Remove it before retrying if corrupted."
                     )
-                url = f"{ZENODO_BASE}/{RAW_ZIP}?download=1"
-                print(f"Downloading {RAW_ZIP} from Zenodo (mocked URL) …")
-                urllib.request.urlretrieve(url, zip_path)  # noqa: S310 — known Zenodo URL
-                print(f"  → saved to {zip_path}")
-            print(f"Extracting {RAW_ZIP} → {slice_root} …")
-            shutil.unpack_archive(str(zip_path), str(self.root))
+                partial.replace(target)
+                return
+            except (OSError, urllib.error.URLError, TimeoutError) as exc:
+                if attempt == retries - 1:
+                    raise RuntimeError(
+                        f"PAM3 download interrupted after {retries} attempts. "
+                        f"Saved {partial.stat().st_size if partial.exists() else 0} "
+                        f"bytes in {partial}; retry the run to resume."
+                    ) from exc
+                print(f"  -> download interrupted ({exc}); retrying ({attempt + 1}/{retries}) ...")
+                time.sleep(min(2 ** attempt, 12))
 
+    def _ensure_reconstructions(self) -> Path:
+        """Download and unpack the official archive unless already extracted."""
+        self.root.mkdir(parents=True, exist_ok=True)
+        existing = self._find_reconstructions()
+        if existing is not None:
+            return existing
+
+        zip_path = self.root / RAW_ZIP
+        if not zip_path.exists():
+            if not self._download:
+                raise FileNotFoundError(
+                    f"No extracted reconstructions or {RAW_ZIP} found in {self.root}, "
+                    "and download=False."
+                )
+            url = f"{ZENODO_BASE}/{RAW_ZIP}?download=1"
+            print(f"Downloading {RAW_ZIP} (~11.8 GB) from Zenodo ...")
+            self._download_archive(url, zip_path)
+            print(f"  -> saved to {zip_path}")
+        elif self._md5(zip_path) != RAW_ZIP_MD5:
+            raise ValueError(
+                f"Existing archive {zip_path} does not match Zenodo's checksum. "
+                "Remove it and retry."
+            )
+
+        print(f"Extracting {RAW_ZIP} into {self.root} ...")
+        with zipfile.ZipFile(zip_path) as archive:
+            archive.extractall(self.root)
+        found = self._find_reconstructions()
+        if found is None:
+            raise FileNotFoundError(
+                f"No '{RECONSTRUCTIONS_DIR}' directory found inside {RAW_ZIP}"
+            )
+        return found
+
+    def _find_reconstructions(self) -> Path | None:
+        for candidate in sorted(self.root.rglob(RECONSTRUCTIONS_DIR)):
+            if candidate.is_dir() and any(candidate.rglob("PA")):
+                return candidate
+        return None
+
+    @staticmethod
+    def _complete_sets(reconstructions: Path) -> list[tuple[Path, list[str]]]:
+        matches: list[tuple[Path, list[str]]] = []
+        for pa_dir in sorted(reconstructions.rglob("PA")):
+            if not pa_dir.is_dir():
+                continue
+            common: set[str] | None = None
+            for method in REQUIRED_SUBFOLDERS:
+                method_dir = pa_dir / method
+                if not method_dir.is_dir():
+                    common = set()
+                    break
+                names = {f.name for f in method_dir.glob("*.mat")}
+                common = names if common is None else common & names
+                if not common:
+                    break
+            if common:
+                # Matches the original script: only common filenames are used.
+                matches.append((pa_dir, sorted(common)))
+        return matches
+
+    @staticmethod
+    def _mip(volume: np.ndarray, plane: str) -> np.ndarray:
+        axis = {"sagittal": 0, "frontal": 1, "axial": 2}[plane]
+        projection = np.max(volume, axis=axis)
+        return projection[150:-150, 150:].T
+
+    def _ensure_mips(self) -> Path:
+        """Generate precisely the MIPs exported by the source scripts."""
+        slice_root = self.root / UNPACKED_DIR
+        # A completed MIP export can be reused without reading the large MATs.
+        done = slice_root / ".complete"
+        if done.exists():
+            return slice_root
+
+        reconstructions = self._ensure_reconstructions()
+        matches = self._complete_sets(reconstructions)
+        if not matches:
+            raise ValueError(f"No complete PA reconstruction sets in {reconstructions}")
+
+        count = 0
+        print(f"Generating PAM3 MIPs from {len(matches)} complete PA folder(s) ...")
+        for pa_dir, shared in matches:
+            relative = pa_dir.relative_to(reconstructions)
+            # Layout required by the existing converter: <volunteer>/<scan>/PA.
+            if len(relative.parts) != 3 or relative.parts[-1] != "PA":
+                print(f"Skipping unsupported PA folder layout: {relative}")
+                continue
+            for filename in shared:
+                stem = Path(filename).stem
+                for method in REQUIRED_SUBFOLDERS:
+                    source = pa_dir / method / filename
+                    volume = np.asarray(sio.loadmat(source)[VOLUME_KEY])
+                    if volume.ndim != 3:
+                        raise ValueError(f"Expected 3D p0_rec in {source}, got {volume.shape}")
+                    out_dir = slice_root / relative / method
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    for plane in PLANES:
+                        mip = self._mip(volume, plane)
+                        if not mip.size:
+                            raise ValueError(f"Empty {plane} crop from {source}")
+                        np.save(out_dir / f"{stem}_{plane}.npy", mip)
+                        count += 1
+        if not count:
+            raise ValueError("No MIPs generated from the discovered PA folders")
+        done.write_text(f"{count} MIPs\n", encoding="utf-8")
+        print(f"Generated {count} MIPs in {slice_root}")
         return slice_root
 
     # ------------------------------------------------------------------
@@ -246,8 +412,9 @@ class PAMMOTHDataset(LocalDataset):
             "dataset_version": self.DATASET_VERSION,
             "description": self.DATASET_DESCRIPTION,
             "citation": (
-                "PAMMOTH speed-of-sound reconstruction IQA subset. "
-                "Zenodo (to appear). Download URL mocked pending publication."
+                "Dantuma et al., Photoacoustic and ultrasound tomography images "
+                "of phantom and in-vivo data acquired with the PAM3 scanner, "
+                "Zenodo, 2026. doi:10.5281/zenodo.20612980."
             ),
             "license": "CC-BY-4.0",
             "created": datetime.now(UTC).isoformat(),
