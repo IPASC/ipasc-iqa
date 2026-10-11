@@ -503,10 +503,11 @@ def run_benchmark(
     *,
     reference_preference: list[str] | None = None,
     device: str = "auto",
-    on_progress: Callable[[str, str], None] | None = None,
+    on_progress: Callable[[str, str, str], None] | None = None,
     on_plan: Callable[[dict[str, int], list[str]], None] | None = None,
     on_skip: Callable[[str, str, str], None] | None = None,
     on_dataset_error: Callable[[str, str], None] | None = None,
+    on_dataset_preparation: Callable[..., None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
 
@@ -516,20 +517,37 @@ def run_benchmark(
 
     ``on_plan`` is called once the datasets are prepared with
     ``({dataset: n_images}, [measure_name, ...])`` so a caller can size a progress
-    display; ``on_progress(dataset, measure)`` then fires once per evaluated pair.
+    display; ``on_progress(dataset, measure, outcome)`` fires after each pair is processed;
+    outcome is ``computed``, ``cached``, or ``skipped``.
     """
     workspace.ensure()
     ensure_writable_model_cache(workspace)
 
     datasets = []
     for name in dataset_names:
+        already_prepared = dataset_registry.is_prepared(name, workspace.data_dir)
+        if on_dataset_preparation is not None:
+            on_dataset_preparation(name, "preparing", "Already available locally" if already_prepared else "Preparing dataset")
         try:
-            dataset = dataset_registry.instantiate(name, workspace.data_dir, download=True)
+            dataset = dataset_registry.instantiate(
+                name, workspace.data_dir, download=True,
+                on_preparation_progress=(
+                    (lambda stage, detail, attempt=None, max_attempts=None, downloaded=None, total=None, dataset_name=name:
+                        on_dataset_preparation(dataset_name, "preparing", detail, stage=stage, attempt=attempt,
+                                               max_attempts=max_attempts, downloaded=downloaded, total=total))
+                    if on_dataset_preparation is not None else None
+                ),
+            )
         except Exception as exc:  # noqa: BLE001
+            if on_dataset_preparation is not None:
+                on_dataset_preparation(name, "failed", str(exc))
             if on_dataset_error is not None:
                 on_dataset_error(name, str(exc))
             continue
         datasets.append(dataset)
+        if on_dataset_preparation is not None:
+            on_dataset_preparation(name, "cached" if already_prepared else "ready",
+                                   "Already available locally" if already_prepared else "Preparation complete")
 
     if not datasets:
         raise RuntimeError("None of the selected datasets could be prepared.")

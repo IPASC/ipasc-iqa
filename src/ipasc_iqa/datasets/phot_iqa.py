@@ -40,6 +40,7 @@ import numpy as np
 
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 
 ZENODO_BASE = "https://zenodo.org/records/19920440/files"
 NORMALISED_IMAGES_ZIP = "normalised_images.zip"
@@ -117,6 +118,7 @@ class PhotIQADataset(LocalDataset):
         if self._download:
             self._download_sources()
 
+        report_preparation("converting", "Converting images")
         self._convert(converted_dir)
         # Re-point root to converted layout
         self.root = converted_dir
@@ -140,6 +142,7 @@ class PhotIQADataset(LocalDataset):
                 continue
             url = f"{ZENODO_BASE}/{fname}?download=1"
             print(f"Downloading {fname} from Zenodo …")
+            report_preparation("downloading", "Downloading source archive")
             urllib.request.urlretrieve(url, dest)  # noqa: S310 — known Zenodo URL
             print(f"  → saved to {dest}")
 
@@ -163,6 +166,7 @@ class PhotIQADataset(LocalDataset):
 
         if not ref_dir.exists() or not alg_dir.exists():
             self._unzip_sources(src_root)
+            report_preparation("converting", "Converting images")
             ref_dir = src_root / "normalised_images" / "reference"
             alg_dir = src_root / "normalised_images" / "algorithms"
 
@@ -343,6 +347,7 @@ class PhotIQADataset(LocalDataset):
                 continue
             print(f"Extracting {fname} …")
             dest = root / "normalised_images" if "normalised" in fname else root
+            report_preparation("extracting", "Extracting source archive")
             shutil.unpack_archive(str(zip_path), str(dest if "normalised" in fname else root))
 
     @staticmethod

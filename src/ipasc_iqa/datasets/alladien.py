@@ -70,6 +70,7 @@ import numpy as np
 from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 
 # Mocked Zenodo location — the perceptual-study archive is not yet published.
 # Until then, place ``alladien_<name>.zip`` in the dataset root manually (this is
@@ -179,6 +180,7 @@ class AlladienDataset(LocalDataset):
             return
 
         src_root = self._ensure_unzipped()
+        report_preparation("converting", "Converting images")
         self._convert(src_root, converted_dir)
         self.root = converted_dir
 
@@ -200,9 +202,11 @@ class AlladienDataset(LocalDataset):
                     )
                 url = f"{ZENODO_BASE}/{self.RAW_ZIP}?download=1"
                 print(f"Downloading {self.RAW_ZIP} from Zenodo (mocked URL)")
+                report_preparation("downloading", "Downloading source archive")
                 urllib.request.urlretrieve(url, zip_path)  # noqa: S310 — known Zenodo URL
                 print(f"  -> saved to {zip_path}")
             print(f"Extracting {self.RAW_ZIP} -> {self.root}")
+            report_preparation("extracting", "Extracting source archive")
             shutil.unpack_archive(str(zip_path), str(self.root))
 
         return self.root

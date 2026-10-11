@@ -64,6 +64,30 @@ different task names. All of them are shown automatically.
 
 ---
 
+### Reporting preparation progress (recommended)
+
+The GUI can display preparation stages per dataset. Import the shared helper
+`from ipasc_iqa.datasets.progress import report_preparation` and call it **immediately
+before** the corresponding operation:
+
+```python
+report_preparation("downloading", "Downloading source archive")
+# download ...
+report_preparation("extracting", "Extracting source archive")
+# unpack ...
+report_preparation("converting", "Converting images")
+# convert and write manifest ...
+```
+
+Stages are `downloading`, `extracting`, and `converting`. A call is a no-op outside
+a GUI job, so command-line usage is unaffected. The registry scopes notifications
+to the adapter being instantiated. Do not emit a stage for work that is skipped;
+the GUI itself marks an existing prepared dataset as **Cached**, and a completed
+preparation as **Ready**. Reporting the stage is enough: byte counts and retry
+numbers are optional, only if the adapter actually tracks them.
+
+---
+
 ## 2. Write the adapter
 
 Subclass [`LocalDataset`](../../src/ipasc_iqa/datasets/local.py), declare the registry metadata, and
@@ -83,6 +107,7 @@ from pathlib import Path
 import numpy as np
 
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 from ipasc_iqa.io.manifest import generate_manifest
 
 _SOURCE_URL = "https://example.org/example_pa.zip"
@@ -104,6 +129,7 @@ class ExampleDataset(LocalDataset):
         if self._download:
             self._download_sources()
 
+        report_preparation("converting", "Converting images")
         self._convert_to_contract()
 
     # -- helpers -----------------------------------------------------------
@@ -112,8 +138,10 @@ class ExampleDataset(LocalDataset):
         self.root.mkdir(parents=True, exist_ok=True)
         archive = self.root / "source.zip"
         if not archive.exists():
+            report_preparation("downloading", "Downloading source archive")
             urllib.request.urlretrieve(_SOURCE_URL, archive)  # noqa: S310
         import shutil
+        report_preparation("extracting", "Extracting source archive")
         shutil.unpack_archive(str(archive), str(self.root / "raw"))
 
     def _convert_to_contract(self) -> None:

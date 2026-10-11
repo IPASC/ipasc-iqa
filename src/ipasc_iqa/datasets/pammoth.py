@@ -54,6 +54,7 @@ import scipy.io as sio
 
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 
 # Pinned Zenodo version, ensuring reproducible data source.
 ZENODO_BASE = "https://zenodo.org/records/20612980/files"
@@ -139,6 +140,7 @@ class PAMMOTHDataset(LocalDataset):
             return
 
         slice_dir = self._ensure_mips()
+        report_preparation("converting", "Converting MIPs to benchmark images")
         self._convert(slice_dir, converted_dir)
         self.root = converted_dir
 
@@ -163,6 +165,7 @@ class PAMMOTHDataset(LocalDataset):
         """
         partial = target.with_name(target.name + ".part")
         for attempt in range(retries):
+            report_preparation("downloading", f"Downloading PAM3 archive (attempt {attempt + 1}/{retries})")
             offset = partial.stat().st_size if partial.exists() else 0
             headers = {"User-Agent": "ipasc-iqa/1.0"}
             if offset:
@@ -237,6 +240,7 @@ class PAMMOTHDataset(LocalDataset):
                 "Remove it and retry."
             )
 
+        report_preparation("extracting", "Extracting PAM3 source archive")
         print(f"Extracting {RAW_ZIP} into {self.root} ...")
         with zipfile.ZipFile(zip_path) as archive:
             archive.extractall(self.root)
@@ -293,6 +297,7 @@ class PAMMOTHDataset(LocalDataset):
         if not matches:
             raise ValueError(f"No complete PA reconstruction sets in {reconstructions}")
 
+        report_preparation("converting", "Generating MIPs from 3D reconstructions")
         count = 0
         print(f"Generating PAM3 MIPs from {len(matches)} complete PA folder(s) ...")
         for pa_dir, shared in matches:
