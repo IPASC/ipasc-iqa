@@ -59,6 +59,30 @@ ipasc_iqa compare results/run_a.json results/run_b.json
 
 ---
 
+## Datasets
+
+The framework includes adapters for the datasets below. The descriptions refer to **the images and annotations used by this benchmark**, which may be a subset of the original data. Available datasets are downloaded and converted automatically when selected, unless already prepared locally.
+
+| Dataset | Data used in this benchmark | Existing quality labels | Reference used for FR-IQA | Availability |
+|---|---|---|---|---|
+| **[PhotIQA](https://doi.org/10.5281/zenodo.13325196)** | Photoacoustic reconstructions from three algorithms | **Yes** — expert quality ratings | Measured ground truth | **Available** |
+| **[Digital Twin](https://zenodo.org/records/15388429)** | Reconstructions of simulated photoacoustic data from six algorithms | No | Simulated initial pressure | **Available** |
+| **[Duke PAM](https://zenodo.org/records/4042171)** | PAM vascular-image patches with synthetic sparse-sampling variants | No | Original fully sampled patch | **Available** |
+| **[Meng et al.](https://doi.org/10.17632/dp5jgrkd6k.2)** | Mouse-ear vessel PAM images with five levels of synthetic Gaussian noise | No | Original clean image | **Available** |
+| **[PAM3](https://doi.org/10.5281/zenodo.20612979)** | Cropped 2D MIPs of breast photoacoustic reconstructions using different speed-of-sound strategies (1SOS, 2SOS, TOF, FWI) | No | FWI reconstruction (pseudo-reference) | **Available** |
+| **Davoudi et al.** | Mouse optoacoustic reconstructions at different sparse-sampling levels | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+| **OADAT** | Forearm optoacoustic reconstructions with sparse-sampling and limited-view degradations | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+| **EFA** | Handheld phantom and in-vivo wrist/hand photoacoustic reconstructions | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+| **PHIRE** | In-vivo mouse photoacoustic cross-sections reconstructed using different numbers of frames | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+
+**Quality labels** indicate human image-quality assessments supplied with the dataset, rather than quality ordering implied by synthetic degradations. For the pending sub-studies, labels will become available when the corresponding data are released. **References** are the images actually used by the adapters for full-reference measures; a reference image is not necessarily a physical ground truth.
+
+**Pending datasets:** Davoudi, OADAT, EFA and PHIRE are four sub-studies of the Alladien *et al.* perceptual-quality dataset. Their download links are placeholders until the accompanying article and data are released. For now, selecting one of these datasets without locally prepared source data causes it to be **skipped**, while other selected datasets can continue to run.
+
+For details on the dataset adapter interface, see [Adding a dataset](docs/guides/adding-a-dataset.md).
+
+---
+
 ## Web application
 
 ### Launch locally
