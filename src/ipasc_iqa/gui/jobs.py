@@ -39,6 +39,7 @@ class _JobState:
         "message",
         "run_issues",
         "dataset_errors",
+        "dataset_skips",
         "preparation",
         "_n_images",
         "_measures",
@@ -57,6 +58,7 @@ class _JobState:
         self.message: str = "Preparing/downloading datasets..."
         self.run_issues: list[dict] = []
         self.dataset_errors: list[dict] = []
+        self.dataset_skips: list[dict] = []
         self.preparation: dict[str, dict] = {}
         self._measures: list[str] = []  # measure names, in selection order
         self._done: dict[tuple[str, str], int] = {}  # (dataset, measure) -> pairs done
@@ -114,6 +116,10 @@ class _JobState:
     def record_dataset_error(self, dataset: str, reason: str) -> None:
         with self._lock:
             self.dataset_errors.append({"dataset": dataset, "reason": reason})
+
+    def record_dataset_unavailable(self, dataset: str, reason: str) -> None:
+        with self._lock:
+            self.dataset_skips.append({"dataset": dataset, "reason": reason})
 
     # ------------------------------------------------------------------
     # Readers (called from route handlers — any thread)
@@ -177,6 +183,10 @@ class _JobState:
                         "dataset_display_name": _dataset_display_name(issue["dataset"]),
                     }
                     for issue in self.run_issues
+                ],
+                "dataset_skips": [
+                    {**issue, "dataset_display_name": _dataset_display_name(issue["dataset"])}
+                    for issue in self.dataset_skips
                 ],
                 "dataset_errors": [
                     {
@@ -277,6 +287,7 @@ def launch_run(
                 on_plan=job.set_plan,
                 on_skip=job.record_skip,
                 on_dataset_error=job.record_dataset_error,
+                on_dataset_unavailable=job.record_dataset_unavailable,
                 on_dataset_preparation=job.update_preparation,
             )
             job.finish(run_id, _summarize_run_issues(ws, run_id))

@@ -507,6 +507,7 @@ def run_benchmark(
     on_plan: Callable[[dict[str, int], list[str]], None] | None = None,
     on_skip: Callable[[str, str, str], None] | None = None,
     on_dataset_error: Callable[[str, str], None] | None = None,
+    on_dataset_unavailable: Callable[[str, str], None] | None = None,
     on_dataset_preparation: Callable[..., None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
@@ -523,6 +524,8 @@ def run_benchmark(
     workspace.ensure()
     ensure_writable_model_cache(workspace)
 
+    from ipasc_iqa.datasets.alladien import DatasetNotPublicError
+
     datasets = []
     for name in dataset_names:
         already_prepared = dataset_registry.is_prepared(name, workspace.data_dir)
@@ -538,6 +541,12 @@ def run_benchmark(
                     if on_dataset_preparation is not None else None
                 ),
             )
+        except DatasetNotPublicError as exc:
+            if on_dataset_preparation is not None:
+                on_dataset_preparation(name, "skipped", str(exc))
+            if on_dataset_unavailable is not None:
+                on_dataset_unavailable(name, str(exc))
+            continue
         except Exception as exc:  # noqa: BLE001
             if on_dataset_preparation is not None:
                 on_dataset_preparation(name, "failed", str(exc))

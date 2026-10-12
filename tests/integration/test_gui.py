@@ -273,7 +273,7 @@ def test_standings_ranks_measures(client: TestClient) -> None:
     assert frag.status_code == 200
     # Measures (not algorithms) are ranked; both tasks appear.
     assert "PSNR" in frag.text or "SSIM" in frag.text
-    assert "overall_quality" in frag.text
+    assert "overall quality" in frag.text
     # Each ranked measure carries an info button + its description template,
     # and a citation button (PSNR has a bibtex).
     assert "info-btn" in frag.text
@@ -354,7 +354,7 @@ def test_standings_endpoint_switch(client: TestClient) -> None:
 
     # MOS ranks measures against z-MOS by default.
     mos = client.get("/api/standings")
-    assert "overall_quality" in mos.text and "z-MOS" in mos.text
+    assert "overall quality" in mos.text and "z-MOS" in mos.text
 
     # BT has nothing until pairwise comparisons are contributed.
     bt_empty = client.get("/api/standings", params={"source": "bt"})
@@ -362,7 +362,7 @@ def test_standings_endpoint_switch(client: TestClient) -> None:
 
     _seed_bt_comparisons(client)
     bt = client.get("/api/standings", params={"source": "bt"})
-    assert "overall_quality" in bt.text
+    assert "overall quality" in bt.text
     assert "Bradley" in bt.text and ("PSNR" in bt.text or "SSIM" in bt.text)
 
 

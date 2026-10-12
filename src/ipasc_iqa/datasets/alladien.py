@@ -72,10 +72,21 @@ from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
 from ipasc_iqa.datasets.progress import report_preparation
 
-# Mocked Zenodo location — the perceptual-study archive is not yet published.
-# Until then, place ``alladien_<name>.zip`` in the dataset root manually (this is
-# what the bundled ``data/<name>/`` directories already do).
+# Source archive URL (currently a placeholder until the study is published).
+# Public availability is declared by SOURCE_PUBLICLY_AVAILABLE, not inferred
+# from the URL or hosting provider. Local archives remain supported.
 ZENODO_BASE = "https://zenodo.org/records/0000000/files"
+
+UNRELEASED_MESSAGE = (
+    "The dataset and/or its associated human quality annotations "
+    "are not yet publicly available. They will be released "
+    "following publication of the associated article."
+)
+
+
+class DatasetNotPublicError(RuntimeError):
+    """Dataset source is intentionally unpublished, not a download failure."""
+
 
 REFERENCE_TYPE = "pseudo_reference"
 ANNOTATION_TASK = "overall_quality"
@@ -149,6 +160,8 @@ class AlladienDataset(LocalDataset):
     SUBFOLDER: str = ""
     #: Archive name expected in the dataset root.
     RAW_ZIP: str = ""
+    #: Explicit publication status; set True when the official archive is released.
+    SOURCE_PUBLICLY_AVAILABLE: bool = False
     #: If set, downscale each image so its longest edge is at most this many
     #: pixels (aspect ratio preserved). ``None`` keeps the native resolution.
     MAX_LONG_EDGE: int | None = None
@@ -200,8 +213,10 @@ class AlladienDataset(LocalDataset):
                         f"{zip_path} not found and download=False. "
                         f"Place {self.RAW_ZIP} there or allow downloading."
                     )
+                if not self.SOURCE_PUBLICLY_AVAILABLE:
+                    raise DatasetNotPublicError(UNRELEASED_MESSAGE)
                 url = f"{ZENODO_BASE}/{self.RAW_ZIP}?download=1"
-                print(f"Downloading {self.RAW_ZIP} from Zenodo (mocked URL)")
+                print(f"Downloading {self.RAW_ZIP} from the official source")
                 report_preparation("downloading", "Downloading source archive")
                 urllib.request.urlretrieve(url, zip_path)  # noqa: S310 — known Zenodo URL
                 print(f"  -> saved to {zip_path}")

@@ -13,6 +13,7 @@
       <strong>{{ item.dataset_display_name }}</strong> —
       {% if item.state == "cached" %}<span class="progress-ok">✓ Cached</span>
       {% elif item.state == "ready" %}<span class="progress-ok">✓ Ready</span>
+      {% elif item.state == "skipped" %}<span class="muted">Skipped — Not yet publicly available</span>
       {% elif item.state == "failed" %}<span class="progress-err">✗ Failed</span>
       {% elif item.state == "queued" %}Queued
       {% else %}<span class="progress-spinner"></span> {{ item.stage | replace('_', ' ') | title if item.stage else 'Preparing' }}{% endif %}
@@ -106,6 +107,17 @@
 Dataset download or preparation may take a few minutes on the first run.
 </p>
 </section>
+{% endif %}
+
+{% if dataset_skips %}
+<div class="notice" style="margin-top:1rem">
+  <strong>Some selected datasets are not yet publicly available.</strong>
+  <ul class="run-issues">
+  {% for issue in dataset_skips %}
+    <li><strong>{{ issue.dataset_display_name }}</strong>: {{ issue.reason }}</li>
+  {% endfor %}
+  </ul>
+</div>
 {% endif %}
 
 {% if dataset_errors %}
