@@ -12,6 +12,17 @@ import threading
 import uuid
 from collections import Counter, defaultdict
 
+from ipasc_iqa.datasets.registry import registry as dataset_registry
+
+
+def _dataset_display_name(dataset: str) -> str:
+    """Return the user-facing name while preserving the internal dataset ID."""
+    try:
+        cls = dataset_registry.get(dataset)
+    except KeyError:
+        return dataset
+    return getattr(cls, "DATASET_DISPLAY_NAME", None) or dataset
+
 
 class _JobState:
     """Thread-safe state for one background benchmark run.
@@ -27,9 +38,13 @@ class _JobState:
         "error",
         "message",
         "run_issues",
+        "dataset_errors",
+        "preparation",
         "_n_images",
         "_measures",
         "_done",
+        "_outcomes",
+        "_last_outcome",
         "_lock",
     )
 
@@ -41,8 +56,12 @@ class _JobState:
         self._n_images: dict[str, int] = {}  # dataset -> image count (the denominator)
         self.message: str = "Preparing/downloading datasets..."
         self.run_issues: list[dict] = []
+        self.dataset_errors: list[dict] = []
+        self.preparation: dict[str, dict] = {}
         self._measures: list[str] = []  # measure names, in selection order
         self._done: dict[tuple[str, str], int] = {}  # (dataset, measure) -> pairs done
+        self._outcomes: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
+        self._last_outcome: dict[str, tuple[str, str]] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -55,10 +74,15 @@ class _JobState:
             self._measures = list(measure_names)
             self.message = "Computing metrics..."
 
-    def record_progress(self, dataset: str, measure: str) -> None:
+    def record_progress(self, dataset: str, measure: str, outcome: str) -> None:
+        """Record a finished image/measure pair and its actual cache outcome."""
+        if outcome not in {"computed", "cached", "skipped"}:
+            raise ValueError(f"Unknown metric outcome: {outcome}")
         with self._lock:
             key = (dataset, measure)
             self._done[key] = self._done.get(key, 0) + 1
+            self._outcomes[key][outcome] += 1
+            self._last_outcome[dataset] = (measure, outcome)
 
     def finish(self, run_id: str, run_issues: list[dict] | None = None) -> None:
         with self._lock:
@@ -70,6 +94,26 @@ class _JobState:
         with self._lock:
             self.error = error
             self.status = "error"
+
+    def init_preparation(self, dataset_names: list[str]) -> None:
+        with self._lock:
+            self.preparation = {
+                name: {"dataset": name, "dataset_display_name": _dataset_display_name(name),
+                       "state": "queued", "detail": "Waiting", "stage": None,
+                       "attempt": None, "max_attempts": None, "downloaded": None, "total": None}
+                for name in dataset_names
+            }
+
+    def update_preparation(self, dataset: str, state: str, detail: str, **kwargs) -> None:
+        with self._lock:
+            item = self.preparation.get(dataset)
+            if item is None:
+                return
+            item.update(state=state, detail=detail, **kwargs)
+
+    def record_dataset_error(self, dataset: str, reason: str) -> None:
+        with self._lock:
+            self.dataset_errors.append({"dataset": dataset, "reason": reason})
 
     # ------------------------------------------------------------------
     # Readers (called from route handlers — any thread)
@@ -99,6 +143,9 @@ class _JobState:
                         "total": n_images,
                         "percent": self._pct(self._done.get((dataset, m), 0), n_images),
                         "issues": issue_counts.get((dataset, m), 0),
+                        "computed": self._outcomes[(dataset, m)]["computed"],
+                        "cached": self._outcomes[(dataset, m)]["cached"],
+                        "skipped": self._outcomes[(dataset, m)]["skipped"],
                     }
                     for m in self._measures
                 ]
@@ -106,8 +153,14 @@ class _JobState:
                 progress.append(
                     {
                         "dataset": dataset,
+                        "dataset_display_name": _dataset_display_name(dataset),
                         "percent": self._pct(ds_done, n_images * len(self._measures)),
                         "measures": measures,
+                        "computed": sum(m["computed"] for m in measures),
+                        "cached": sum(m["cached"] for m in measures),
+                        "skipped": sum(m["skipped"] for m in measures),
+                        "last_measure": self._last_outcome.get(dataset, (None, None))[0],
+                        "last_outcome": self._last_outcome.get(dataset, (None, None))[1],
                     }
                 )
             return {
@@ -117,7 +170,21 @@ class _JobState:
                 "error": self.error,
                 "message": self.message,
                 "progress": progress,
-                "run_issues": list(self.run_issues),
+                "preparation": [dict(item) for item in self.preparation.values()],
+                "run_issues": [
+                    {
+                        **issue,
+                        "dataset_display_name": _dataset_display_name(issue["dataset"]),
+                    }
+                    for issue in self.run_issues
+                ],
+                "dataset_errors": [
+                    {
+                        **issue,
+                        "dataset_display_name": _dataset_display_name(issue["dataset"]),
+                    }
+                    for issue in self.dataset_errors
+                ],
             }
         
     def record_skip(self, dataset: str, measure: str, reason: str) -> None:
@@ -196,6 +263,7 @@ def launch_run(
     job_id = uuid.uuid4().hex[:12]
     job = _JobState(job_id)
     jobs[job_id] = job
+    job.init_preparation(dataset_names)
 
     def _run() -> None:
         try:
@@ -208,6 +276,8 @@ def launch_run(
                 on_progress=job.record_progress,
                 on_plan=job.set_plan,
                 on_skip=job.record_skip,
+                on_dataset_error=job.record_dataset_error,
+                on_dataset_preparation=job.update_preparation,
             )
             job.finish(run_id, _summarize_run_issues(ws, run_id))
         except Exception as exc:  # noqa: BLE001

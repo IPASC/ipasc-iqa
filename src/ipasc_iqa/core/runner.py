@@ -91,7 +91,7 @@ def run_evaluation(
     output_path: Path | None = None,
     cache: ResultStore | None = None,
     progress: bool = True,
-    on_progress: Callable[[str, str], None] | None = None,
+    on_progress: Callable[[str, str, str], None] | None = None,
     on_skip=None,    
 ) -> RunResults:
     from ipasc_iqa import __version__
@@ -136,11 +136,11 @@ def run_evaluation(
     for ds in datasets:
         for record in ds:
             for measure in measures:
-                pbar.update(1)
-                # Report one processed (dataset, measure) unit — including cached
-                # and skipped pairs — so progress reaches 100% regardless of cache.
-                if on_progress is not None:
-                    on_progress(ds.name, measure.metadata.name)
+                def report_outcome(outcome: str) -> None:
+                    # Advance only once this image/measure pair has actually finished.
+                    pbar.update(1)
+                    if on_progress is not None:
+                        on_progress(ds.name, measure.metadata.name, outcome)
 
                 # Check ROI requirements
                 if measure.metadata.requires_signal_roi and record.signal_roi is None:
@@ -151,6 +151,7 @@ def run_evaluation(
                         reason="signal_roi required but not available",
                     )
                     skipped.append(skip)
+                    report_outcome("skipped")
                     if on_skip is not None:
                         on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
@@ -163,6 +164,7 @@ def run_evaluation(
                         reason="noise_roi required but not available",
                     )
                     skipped.append(skip)
+                    report_outcome("skipped")
                     if on_skip is not None:
                         on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
@@ -182,6 +184,7 @@ def run_evaluation(
                         reason="no reference of accepted type available",
                     )
                     skipped.append(skip)
+                    report_outcome("skipped")
                     if on_skip is not None:
                         on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
@@ -204,6 +207,7 @@ def run_evaluation(
                     if cached is not None:
                         cached.from_cache = True
                         results.append(cached)
+                        report_outcome("cached")
                         continue
 
                 t0 = time.perf_counter()
@@ -223,6 +227,7 @@ def run_evaluation(
                         reason=f"evaluation error: {exc}",
                     )
                     skipped.append(skip)
+                    report_outcome("skipped")
                     if on_skip is not None:
                         on_skip(skip.dataset, skip.measure, skip.reason)
                     continue
@@ -253,6 +258,7 @@ def run_evaluation(
                 if cache is not None:
                     cache.set(cache_key, record_out)
                 results.append(record_out)
+                report_outcome("computed")
 
     pbar.close()
     finished = datetime.now(UTC)

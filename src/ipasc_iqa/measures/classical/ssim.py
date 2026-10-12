@@ -67,5 +67,5 @@ class SSIMMeasure(BaseMeasure):
         else:
             channel_axis = None
 
-        score = structural_similarity(img, ref, data_range=data_range, channel_axis=channel_axis)
+        score = structural_similarity(img, ref, data_range=data_range, channel_axis=channel_axis, gaussian_weights=True, sigma=1.5, use_sample_covariance=False,)
         return float(score)

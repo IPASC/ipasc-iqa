@@ -66,9 +66,11 @@ class FSIMMeasure(BaseMeasure):
         ),
     )
 
-    def __init__(self, chromatic: bool = False, device=None) -> None:
+    def __init__(self, chromatic: bool = False, device: str = "auto") -> None:
         # chromatic enters the cache key so changing it invalidates cached results.
-        super().__init__(chromatic=chromatic)
+        super().__init__(device=device, chromatic=chromatic)
+        if self.device == "mps":
+            self.device = "cpu"
         self._chromatic = chromatic
 
     def evaluate(
@@ -98,7 +100,7 @@ class FSIMMeasure(BaseMeasure):
         def to_tensor(arr: np.ndarray) -> torch.Tensor:
             t = torch.from_numpy(arr.astype(np.float32))
             t = ((t - data_min) / data_range).clamp(0.0, 1.0)
-            return t.permute(2, 0, 1).unsqueeze(0)  # (1, C, H, W)
+            return t.permute(2, 0, 1).unsqueeze(0).to(self.device)  # (1, C, H, W)
 
         img_t = to_tensor(image)
         ref_t = to_tensor(reference)

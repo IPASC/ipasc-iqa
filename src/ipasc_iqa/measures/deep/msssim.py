@@ -66,10 +66,19 @@ class MSSSIMMeasure(BaseMeasure):
         ),
     )
 
-    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device=None) -> None:
+    def __init__(
+        self,
+        kernel_size: int = 11,
+        kernel_sigma: float = 1.5,
+        device: str = "auto",
+    ) -> None:
         # Pass hyperparameters to super() so config_canonical_json() picks them
         # up and they contribute to the cache key.
-        super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
+        super().__init__(
+            device=device,
+            kernel_size=kernel_size,
+            kernel_sigma=kernel_sigma,
+        )
         self._kernel_size = kernel_size
         self._kernel_sigma = kernel_sigma
 
@@ -90,7 +99,7 @@ class MSSSIMMeasure(BaseMeasure):
         t = (t - data_min) / data_range
         t = t.clamp(0.0, 1.0)
         # (H, W, C) → (C, H, W) → (1, C, H, W)
-        return t.permute(2, 0, 1).unsqueeze(0)
+        return t.permute(2, 0, 1).unsqueeze(0).to(self.device)
 
     def _adaptive_scale_weights(self, min_dim: int) -> Any:
         """Return a weight tensor with as many scales as the image can support.
@@ -110,7 +119,11 @@ class MSSSIMMeasure(BaseMeasure):
             n = min(5, int(np.floor(np.log2(min_dim / self._kernel_size))) + 1)
             n = max(1, n)
 
-        weights = torch.tensor(_WANG_WEIGHTS[:n], dtype=torch.float32)
+        weights = torch.tensor(
+            _WANG_WEIGHTS[:n],
+            dtype=torch.float32,
+            device=self.device,
+        )
         return weights / weights.sum()  # renormalise so scores stay in [0, 1]
 
     # ------------------------------------------------------------------

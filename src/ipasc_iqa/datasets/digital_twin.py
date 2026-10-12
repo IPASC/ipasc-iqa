@@ -47,6 +47,7 @@ from scipy.stats import linregress
 
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 
 ZENODO_BASE = "https://zenodo.org/records/15388429/files"
 DATA_ZIP = "data.zip"
@@ -72,6 +73,7 @@ class DigitalTwinDataset(LocalDataset):
     """
 
     DATASET_NAME = "digital_twin"
+    DATASET_DISPLAY_NAME = "Digital Twin"
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = (
         "Digital Twin Dataset: photoacoustic reconstructions (bp, bph, fft, ittr, mb, tr) "
@@ -121,6 +123,7 @@ class DigitalTwinDataset(LocalDataset):
             return
 
         data_root = self._ensure_unzipped()
+        report_preparation("converting", "Converting images")
         self._convert(data_root, converted_dir)
         self.root = converted_dir
 
@@ -146,10 +149,12 @@ class DigitalTwinDataset(LocalDataset):
                     )
                 url = f"{ZENODO_BASE}/{DATA_ZIP}?download=1"
                 print(f"Downloading {DATA_ZIP} (~2.9 GB) from Zenodo …")
+                report_preparation("downloading", "Downloading source archive")
                 urllib.request.urlretrieve(url, zip_path)  # noqa: S310 — known Zenodo URL
                 print(f"  → saved to {zip_path}")
             print(f"Extracting {DATA_ZIP} → {data_root} …")
             data_root.mkdir(parents=True, exist_ok=True)
+            report_preparation("extracting", "Extracting source archive")
             shutil.unpack_archive(str(zip_path), str(data_root))
 
         return data_root

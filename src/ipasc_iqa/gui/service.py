@@ -325,39 +325,61 @@ def _format_value_range(value_range: tuple[float, float] | None) -> str | None:
 
 
 def discover_datasets(workspace: Workspace) -> list[dict]:
-    """List datasets that have a registered adapter.
-
-    Datasets already downloaded/converted report their image count, annotation
-    tasks, and capabilities (references / ROI masks); others are still listed (so
-    they can be selected to trigger a download).
-    """
     out: list[dict] = []
+
     for spec in dataset_registry.list_datasets():
         name = spec["name"]
         prepared = dataset_registry.is_prepared(name, workspace.data_dir)
+
         tasks: list[str] = []
         n_images: int | None = None
-        caps = {"has_references": False, "has_signal_roi": False, "has_noise_roi": False}
+        n_unique_images: int | None = None
+        n_duplicate_images = 0
+
+        caps = {
+            "has_references": False,
+            "has_signal_roi": False,
+            "has_noise_roi": False,
+        }
+
         if prepared:
             try:
                 manifest = dataset_manifest(workspace, name)
-                tasks = annotation_tasks_in_manifest(manifest)
-                n_images = len(manifest.get("images", []))
+
+                tasks = sorted(
+                    set(annotation_tasks_in_manifest(manifest))
+                    | set(comparison_tasks_in_manifest(manifest))
+                )
+
+                images = manifest.get("images", [])
+                n_images = len(images)
+
+                hashes = [
+                    entry.get("sha256")
+                    for entry in images
+                    if entry.get("sha256")
+                ]
+                n_unique_images = len(set(hashes)) + (n_images - len(hashes))
+                n_duplicate_images = n_images - n_unique_images
+
                 caps = _capabilities_from_manifest(manifest)
             except Exception:
                 prepared = False
+
         out.append(
             {
                 **spec,
                 "prepared": prepared,
                 "n_images": n_images,
+                "n_unique_images": n_unique_images,
+                "n_duplicate_images": n_duplicate_images,
                 "annotation_tasks": tasks,
                 "has_annotations": bool(tasks),
                 **caps,
             }
         )
-    return out
 
+    return out
 
 def measure_options(
     workspace: Workspace,
@@ -481,9 +503,11 @@ def run_benchmark(
     *,
     reference_preference: list[str] | None = None,
     device: str = "auto",
-    on_progress: Callable[[str, str], None] | None = None,
+    on_progress: Callable[[str, str, str], None] | None = None,
     on_plan: Callable[[dict[str, int], list[str]], None] | None = None,
     on_skip: Callable[[str, str, str], None] | None = None,
+    on_dataset_error: Callable[[str, str], None] | None = None,
+    on_dataset_preparation: Callable[..., None] | None = None,
 ) -> str:
     """Download/prepare datasets as needed, run evaluation, persist results.
 
@@ -493,15 +517,40 @@ def run_benchmark(
 
     ``on_plan`` is called once the datasets are prepared with
     ``({dataset: n_images}, [measure_name, ...])`` so a caller can size a progress
-    display; ``on_progress(dataset, measure)`` then fires once per evaluated pair.
+    display; ``on_progress(dataset, measure, outcome)`` fires after each pair is processed;
+    outcome is ``computed``, ``cached``, or ``skipped``.
     """
     workspace.ensure()
     ensure_writable_model_cache(workspace)
 
-    datasets = [
-        dataset_registry.instantiate(name, workspace.data_dir, download=True)
-        for name in dataset_names
-    ]
+    datasets = []
+    for name in dataset_names:
+        already_prepared = dataset_registry.is_prepared(name, workspace.data_dir)
+        if on_dataset_preparation is not None:
+            on_dataset_preparation(name, "preparing", "Already available locally" if already_prepared else "Preparing dataset")
+        try:
+            dataset = dataset_registry.instantiate(
+                name, workspace.data_dir, download=True,
+                on_preparation_progress=(
+                    (lambda stage, detail, attempt=None, max_attempts=None, downloaded=None, total=None, dataset_name=name:
+                        on_dataset_preparation(dataset_name, "preparing", detail, stage=stage, attempt=attempt,
+                                               max_attempts=max_attempts, downloaded=downloaded, total=total))
+                    if on_dataset_preparation is not None else None
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            if on_dataset_preparation is not None:
+                on_dataset_preparation(name, "failed", str(exc))
+            if on_dataset_error is not None:
+                on_dataset_error(name, str(exc))
+            continue
+        datasets.append(dataset)
+        if on_dataset_preparation is not None:
+            on_dataset_preparation(name, "cached" if already_prepared else "ready",
+                                   "Already available locally" if already_prepared else "Preparation complete")
+
+    if not datasets:
+        raise RuntimeError("None of the selected datasets could be prepared.")
 
     measures = [measure_registry.instantiate(m, device=device) for m in measure_names]
 
@@ -522,14 +571,19 @@ def run_benchmark(
         )
         # Pre-compute per-dataset mean/std over the merged per-image results and
         # persist them, so reporting doesn't have to recompute from scratch.
-        for name in dataset_names:
-            _write_dataset_stats(workspace, name, store.records_for_dataset(name))
+        for ds in datasets:
+            _write_dataset_stats(workspace, ds.name, store.records_for_dataset(ds.name))
 
     # Keep a per-run audit file alongside the merged store.
     out_path = workspace.results_dir / f"{run.run_id}.json"
     out_path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
 
-    save_last_selection(workspace, dataset_names, measure_names, run_id=run.run_id)
+    save_last_selection(
+        workspace,
+        [ds.name for ds in datasets],
+        measure_names,
+        run_id=run.run_id,
+    )
 
     # New measure values → invalidate cached analysis/standings/scatter views.
     with AnnotatorStore(workspace.annotations_path, workspace.users_path) as store:
@@ -725,11 +779,19 @@ def analysis_for_dataset(
     _empty: dict = {"all_tasks": [], "active_task": None, "sources": [], "active_source": source}
 
     ds = get_dataset(workspace, dataset_name)
+    dataset_display_name = ds["display_name"] if ds is not None else dataset_name
     if ds is None:
-        return {"dataset": dataset_name, "tasks": [], "error": "dataset not found", **_empty}
+        return {
+            "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
+            "tasks": [],
+            "error": "dataset not found",
+            **_empty,
+        }
     if not ds["prepared"]:
         return {
             "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
             "tasks": [],
             "error": "dataset not downloaded yet — run a benchmark on it first",
             **_empty,
@@ -743,6 +805,7 @@ def analysis_for_dataset(
     if run is None:
         return {
             "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
             "tasks": [],
             "error": "no benchmark run found for this dataset — run a benchmark first",
             **_empty,
@@ -794,6 +857,7 @@ def analysis_for_dataset(
     if not task_names and not has_unnamed:
         return {
             "dataset": dataset_name,
+            "dataset_display_name": dataset_display_name,
             "description": ds.get("description"),
             "bibtex": ds.get("bibtex"),
             "run_id": run.run_id,
@@ -862,6 +926,7 @@ def analysis_for_dataset(
 
     return {
         "dataset": dataset_name,
+        "dataset_display_name": dataset_display_name,
         "description": ds.get("description"),
         "bibtex": ds.get("bibtex"),
         "run_id": run.run_id,
@@ -985,7 +1050,12 @@ def scatter_for_measure(
         return {"error": "no expert annotations or contributed comparisons to analyse yet"}
     active_task = _resolve_active_task(task, task_names)
 
-    task_label = active_task or "all"
+    task_name = str(active_task).strip().lower() if active_task is not None else None
+    task_label = (
+        "overall quality"
+        if task_name in {None, "all", "overall", "overall_quality", "overall quality", "quality"}
+        else str(active_task).replace("_", " ")
+    )
     if source == "bt":
         human_values = bt_scores_for_dataset_task(
             workspace, dataset_name, active_task, manifest
@@ -1402,6 +1472,7 @@ def standings(workspace: Workspace, source: str = "mos") -> dict:
                 entries.append(
                     {
                         "dataset": ds["name"],
+                        "dataset_display_name": ds["display_name"],
                         "dataset_bibtex": ds.get("bibtex"),
                         "task": task or "overall",
                         "rows": ranked,
@@ -1670,7 +1741,13 @@ def eligible_annotation_datasets(workspace: Workspace) -> list[dict]:
             continue
         groups = _reference_groups(manifest)
         if any(len(_items_for_stem(v)) >= 2 for v in groups.values()):
-            out.append({"name": ds["name"], "tasks": ds["annotation_tasks"]})
+            out.append(
+                {
+                    "name": ds["name"],
+                    "display_name": ds["display_name"],
+                    "tasks": ds["annotation_tasks"],
+                }
+            )
     return out
 
 
@@ -1682,7 +1759,7 @@ def annotation_tasks_for(workspace: Workspace, dataset_name: str | None) -> list
         manifest = dataset_manifest(workspace, dataset_name)
     except Exception:
         return []
-    return annotation_tasks_in_manifest(manifest)
+    return manifest_task_names(manifest)
 
 
 def manifest_task_names(manifest: dict) -> list[str]:

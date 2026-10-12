@@ -19,15 +19,21 @@
     {% for entry in result.entries %}
     <div class="standings-card">
       <h2 class="standings-card__title">
-        {{ entry.dataset }}
+        {{ entry.dataset_display_name }}
         {% if entry.dataset_bibtex %}
         <button type="button" class="cite-btn cite-btn--inline" data-bibtex="{{ entry.dataset_bibtex }}"
-                title="Show dataset BibTeX citation" aria-label="Citation for {{ entry.dataset }}">
+                title="Show dataset BibTeX citation" aria-label="Citation for {{ entry.dataset_display_name }}">
           <i class="fa-solid fa-quote-right"></i>
         </button>
         {% endif %}
       </h2>
-      <span class="badge">task: {{ entry.task }}</span>
+      {% set task_name = entry.task %}
+      <span class="badge">
+        task:
+        {{ 'overall quality'
+           if task_name in ['all', 'overall', 'overall_quality', 'overall quality', 'quality']
+           else task_name.replace('_', ' ') }}
+      </span>
       <ol class="ranking">
         {% for row in entry.rows[:5] %}
         <li class="ranking__row ranking__row--{{ row.rank }}">

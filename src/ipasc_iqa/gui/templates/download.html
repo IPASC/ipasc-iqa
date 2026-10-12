@@ -18,7 +18,7 @@
       <select class="select" name="dataset">
         <option value="all">All datasets</option>
         {% for ds in datasets %}
-        <option value="{{ ds.name }}">{{ ds.name }}</option>
+        <option value="{{ ds.name }}">{{ ds.display_name }}</option>
         {% endfor %}
       </select>
     </label>

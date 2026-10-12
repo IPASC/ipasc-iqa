@@ -70,6 +70,7 @@ import numpy as np
 from ipasc_iqa.contrib.bradley_terry import fit_bradley_terry
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 
 # Mocked Zenodo location — the perceptual-study archive is not yet published.
 # Until then, place ``alladien_<name>.zip`` in the dataset root manually (this is
@@ -179,6 +180,7 @@ class AlladienDataset(LocalDataset):
             return
 
         src_root = self._ensure_unzipped()
+        report_preparation("converting", "Converting images")
         self._convert(src_root, converted_dir)
         self.root = converted_dir
 
@@ -200,9 +202,11 @@ class AlladienDataset(LocalDataset):
                     )
                 url = f"{ZENODO_BASE}/{self.RAW_ZIP}?download=1"
                 print(f"Downloading {self.RAW_ZIP} from Zenodo (mocked URL)")
+                report_preparation("downloading", "Downloading source archive")
                 urllib.request.urlretrieve(url, zip_path)  # noqa: S310 — known Zenodo URL
                 print(f"  -> saved to {zip_path}")
             print(f"Extracting {self.RAW_ZIP} -> {self.root}")
+            report_preparation("extracting", "Extracting source archive")
             shutil.unpack_archive(str(zip_path), str(self.root))
 
         return self.root
@@ -398,6 +402,7 @@ class DavoudiDataset(AlladienDataset):
     """Davoudi sparse-sampling sub-study (CSV ``source`` = "Sparse Sampling")."""
 
     DATASET_NAME = "davoudi"
+    DATASET_DISPLAY_NAME = "Davoudi et al."
     SOURCE = "Sparse Sampling"
     SUBFOLDER = "Davoudi"
     RAW_ZIP = "alladien_davoudi.zip"
@@ -405,7 +410,8 @@ class DavoudiDataset(AlladienDataset):
         "Alladien 2AFC sub-study (Davoudi sparse sampling): cross-sectional mouse "
         "optoacoustic reconstructions at varying sampling densities (16/32/64/128/256 "
         "and full), ranked by crowd pairwise comparisons. The most-preferred (full) "
-        "reconstruction is the per-scene pseudo-reference."
+        "reconstruction is the per-scene pseudo-reference. "
+        "Source data: Davoudi et al. (2019) "
     )
     DATASET_BIBTEX = (
         "@article{davoudi2019deep,\n"
@@ -432,6 +438,7 @@ class OADATDataset(AlladienDataset):
     """OADAT forearm sub-study (CSV ``source`` = "OADAT")."""
 
     DATASET_NAME = "oadat"
+    DATASET_DISPLAY_NAME = "OADAT"
     SOURCE = "OADAT"
     SUBFOLDER = "OADAT"
     RAW_ZIP = "alladien_oadat.zip"
@@ -461,6 +468,7 @@ class EFADataset(AlladienDataset):
     """EFA handheld-probe sub-study (CSV ``source`` = "EFA")."""
 
     DATASET_NAME = "efa"
+    DATASET_DISPLAY_NAME = "EFA"
     SOURCE = "EFA"
     SUBFOLDER = "EFA"
     RAW_ZIP = "alladien_efa.zip"
@@ -484,6 +492,7 @@ class PHIREDataset(AlladienDataset):
     """PHIRE in-vivo mouse sub-study (CSV ``source`` = "PHIRE")."""
 
     DATASET_NAME = "phire"
+    DATASET_DISPLAY_NAME = "PHIRE"
     SOURCE = "PHIRE"
     SUBFOLDER = "PHIRE"
     RAW_ZIP = "alladien_phire.zip"

@@ -47,6 +47,7 @@ ipasc_iqa-gui = "ipasc_iqa.gui.server:main"
 [project.entry-points."ipasc_iqa.measures"]
 psnr = "ipasc_iqa.measures.classical.psnr:PSNRMeasure"
 ssim = "ipasc_iqa.measures.classical.ssim:SSIMMeasure"
+s3im = "ipasc_iqa.measures.classical.s3im:S3IMMeasure"
 cnr  = "ipasc_iqa.measures.classical.cnr:CNRMeasure"
 snr  = "ipasc_iqa.measures.classical.snr:SNRMeasure"
 mse  = "ipasc_iqa.measures.classical.mse:MSEMeasure"

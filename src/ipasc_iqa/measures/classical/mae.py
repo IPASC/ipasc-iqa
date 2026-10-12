@@ -1,4 +1,4 @@
-"""Median absolute error."""
+"""Mean absolute error."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 class MAEMeasure(BaseMeasure):
     metadata = MeasureMetadata(
         name="MAE",
-        version="1.0.0",
+        version="2.0.0",
         measure_type=MeasureType.FULL_REFERENCE,
         requires_signal_roi=False,
         requires_noise_roi=False,
         accepted_reference_types=None,
         higher_is_better=False,
         value_range=(0.0, float("inf")),
-        description=("Median Absolute Error: median(abs(signal - reference)). "),
+        description="Mean Absolute Error: mean(abs(image - reference)).",
     )
 
     def evaluate(
@@ -29,8 +29,10 @@ class MAEMeasure(BaseMeasure):
         signal_roi: np.ndarray | None = None,
         noise_roi: np.ndarray | None = None,
     ) -> float:
+        if reference is None:
+            raise ValueError("MAE requires a reference image.")
 
         img = image.astype(np.float64)
         ref = reference.astype(np.float64)
 
-        return float(np.median(np.abs(img - ref)))
+        return float(np.mean(np.abs(img - ref)))

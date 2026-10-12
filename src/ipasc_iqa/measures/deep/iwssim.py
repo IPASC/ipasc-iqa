@@ -64,14 +64,26 @@ class IWSSIMMeasure(BaseMeasure):
             "Information-Weighted Structural Similarity (IW-SSIM). "
             "Computed via piq.information_weighted_ssim — no reference implementation "
             "exists in scipy or scikit-image. "
-            "Minimum recommended image size: 32×32. "
+            "With the default five scales and kernel_size=11, images must be at least 161×161. "
         ),
     )
 
-    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5, device=None) -> None:
+    def __init__(
+        self,
+        kernel_size: int = 11,
+        kernel_sigma: float = 1.5,
+        device: str = "auto",
+    ) -> None:
         # Pass hyperparameters to super() so config_canonical_json() picks them
         # up and they contribute to the cache key.
-        super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
+        super().__init__(
+            device=device,
+            kernel_size=kernel_size,
+            kernel_sigma=kernel_sigma,
+        )
+        if self.device == "mps":
+                    self.device = "cpu"
+                    
         self._kernel_size = kernel_size
         self._kernel_sigma = kernel_sigma
 
@@ -92,7 +104,7 @@ class IWSSIMMeasure(BaseMeasure):
         t = (t - data_min) / data_range
         t = t.clamp(0.0, 1.0)
         # (H, W, C) → (C, H, W) → (1, C, H, W)
-        return t.permute(2, 0, 1).unsqueeze(0)
+        return t.permute(2, 0, 1).unsqueeze(0).to(self.device)
 
     # ------------------------------------------------------------------
     # BaseMeasure interface

@@ -59,7 +59,33 @@ ipasc_iqa compare results/run_a.json results/run_b.json
 
 ---
 
-## Launching the web app
+## Datasets
+
+The framework includes adapters for the datasets below. The descriptions refer to **the images and annotations used by this benchmark**, which may be a subset of the original data. Available datasets are downloaded and converted automatically when selected, unless already prepared locally.
+
+| Dataset | Data used in this benchmark | Existing quality labels | Reference used for FR-IQA | Availability |
+|---|---|---|---|---|
+| **[PhotIQA](https://doi.org/10.5281/zenodo.13325196)** | Photoacoustic reconstructions from three algorithms | **Yes** — expert quality ratings | Measured ground truth | **Available** |
+| **[Digital Twin](https://zenodo.org/records/15388429)** | Reconstructions of simulated photoacoustic data from six algorithms | No | Simulated initial pressure | **Available** |
+| **[Duke PAM](https://zenodo.org/records/4042171)** | PAM vascular-image patches with synthetic sparse-sampling variants | No | Original fully sampled patch | **Available** |
+| **[Meng et al.](https://doi.org/10.17632/dp5jgrkd6k.2)** | Mouse-ear vessel PAM images with five levels of synthetic Gaussian noise | No | Original clean image | **Available** |
+| **[PAM3](https://doi.org/10.5281/zenodo.20612979)** | Cropped 2D MIPs of breast photoacoustic reconstructions using different speed-of-sound strategies (1SOS, 2SOS, TOF, FWI) | No | FWI reconstruction (pseudo-reference) | **Available** |
+| **Davoudi et al.** | Mouse optoacoustic reconstructions at different sparse-sampling levels | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+| **OADAT** | Forearm optoacoustic reconstructions with sparse-sampling and limited-view degradations | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+| **EFA** | Handheld phantom and in-vivo wrist/hand photoacoustic reconstructions | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+| **PHIRE** | In-vivo mouse photoacoustic cross-sections reconstructed using different numbers of frames | **Yes** — human pairwise preferences | Highest-ranked reconstruction per scene (pseudo-reference) | **Pending release** |
+
+**Quality labels** indicate human image-quality assessments supplied with the dataset, rather than quality ordering implied by synthetic degradations. For the pending sub-studies, labels will become available when the corresponding data are released. **References** are the images actually used by the adapters for full-reference measures; a reference image is not necessarily a physical ground truth.
+
+**Pending datasets:** Davoudi, OADAT, EFA and PHIRE are four sub-studies of the Alladien *et al.* perceptual-quality dataset. Their download links are placeholders until the accompanying article and data are released. For now, selecting one of these datasets without locally prepared source data causes it to be **skipped**, while other selected datasets can continue to run.
+
+For details on the dataset adapter interface, see [Adding a dataset](docs/guides/adding-a-dataset.md).
+
+---
+
+## Web application
+
+### Launch locally
 
 The GUI is a thin [FastAPI](https://fastapi.tiangolo.com/) + HTMX layer over the same Python API
 the CLI uses. Install the `gui` extra first (`pip install -e ".[gui]"`).
@@ -69,6 +95,17 @@ ipasc_iqa-gui --workspace ./workspace --data-dir ./data --port 8000
 ```
 
 Then open <http://127.0.0.1:8000>.
+
+### Create the first administrator
+
+To create the first administrator account, use:
+
+```bash
+ipasc_iqa-gui create-admin --email admin@example.org --name "admin_name" --password "admin_password" --workspace ./workspace --data-dir ./data
+```
+
+If the user has already registered through the web interface, the same command can be used without
+`--name` and `--password` to promote the existing account.
 
 | Flag | Meaning | Default |
 |---|---|---|
@@ -81,15 +118,13 @@ Then open <http://127.0.0.1:8000>.
 The same two paths can be set via the `IPASC_IQA_WORKSPACE` and `IPASC_IQA_DATA_DIR` environment
 variables.
 
-**The four pages**
+### Main workflows
 
-- **Welcome** — entry point.
-- **Run benchmark** — pick datasets (downloaded on demand) and measures, then evaluate.
-- **Detailed analysis** — per-task tables of Spearman (SRCC) and Kendall (KRCC) rank correlation
-  between each measure and the expert mean-opinion-score. Measures a dataset cannot support are
-  disabled automatically.
-- **Standings** — IQA measures ranked by how well they correlate with expert ratings, one
-  leaderboard per dataset and quality task.
+- **Run benchmark** — select datasets and compatible IQA measures, then compute image-level metric values.
+- **Detailed analysis** — inspect metric results, compare reconstruction variants, and analyse agreement with human quality assessments.
+- **Standings** — compare IQA measures through dataset- and task-specific rankings.
+- **Contribute annotations** — contribute pairwise comparisons or absolute quality ratings.
+- **Download** — export metric results and human annotations as JSON.
 
 Because the GUI imports `ipasc_iqa` as a library, deploying it as a web service later is a matter of
 running it behind an ASGI server (e.g. `uvicorn`/`gunicorn`) and a reverse proxy.
@@ -169,10 +204,6 @@ See [`CONTRIBUTORS.md`](CONTRIBUTORS.md).
 - **Janek Gröhl** — RWTH Aachen, Germany
 
 ---
-
-## Promote first admin user on server:
-
-`ipasc_iqa-gui create-admin --email jgroehl@ukaachen.de --workspace .\workspace\ --data-dir .\data\`
 
 ## License
 

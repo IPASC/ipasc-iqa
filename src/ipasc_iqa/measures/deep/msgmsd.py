@@ -87,7 +87,11 @@ class MSGMSDMeasure(BaseMeasure):
             n = min(4, int(np.floor(np.log2(min_dim / _MIN_DIM_PER_SCALE))) + 1)
             n = max(1, n)
 
-        weights = torch.tensor(_MS_GMSD_WEIGHTS[:n], dtype=torch.float32)
+        weights = torch.tensor(
+            _MS_GMSD_WEIGHTS[:n],
+            dtype=torch.float32,
+            device=self.device,
+        )
         return weights / weights.sum()
 
     def evaluate(
@@ -117,7 +121,7 @@ class MSGMSDMeasure(BaseMeasure):
         def to_tensor(arr: np.ndarray) -> torch.Tensor:
             t = torch.from_numpy(arr.astype(np.float32))
             t = ((t - data_min) / data_range).clamp(0.0, 1.0)
-            return t.permute(2, 0, 1).unsqueeze(0)  # (1, C, H, W)
+            return t.permute(2, 0, 1).unsqueeze(0).to(self.device)  # (1, C, H, W)
 
         img_t = to_tensor(image)
         ref_t = to_tensor(reference)

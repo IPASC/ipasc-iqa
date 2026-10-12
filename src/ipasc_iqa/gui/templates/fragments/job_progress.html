@@ -2,7 +2,34 @@
 
 <div id="run-container" class="run-progress" hx-get="/api/run/{{ job_id }}/status" hx-trigger="every 1.5s" hx-target="this" hx-swap="outerHTML"> {% elif status == "error" %} <div id="run-container" class="run-progress"> {% else %} <div id="run-container" class="run-progress run-progress--done"> {% endif %}
 
-<div class="run-progress__header"> {% if status == "running" %} <span class="progress-spinner"></span> Benchmark running {% elif status == "done" %} {% if run_issues %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete with warnings {% else %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting… {% endif %} {% else %} <span class="progress-err">✗</span> Run failed {% endif %} </div>
+<div class="run-progress__header"> {% if status == "running" %} <span class="progress-spinner"></span> Benchmark running {% elif status == "done" %} {% if run_issues or dataset_errors %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete with warnings {% else %} <span class="progress-ok">✓</span> Run <strong>{{ run_id }}</strong> complete — redirecting… {% endif %} {% else %} <span class="progress-err">✗</span> Run failed {% endif %} </div>
+
+{% if preparation %}
+<section class="run-dataset" aria-label="Dataset preparation status">
+  <div class="run-dataset__head"><strong>Dataset preparation</strong></div>
+  <ul class="run-issues" style="margin-top:0.5rem">
+  {% for item in preparation %}
+    <li style="margin-bottom:0.65rem">
+      <strong>{{ item.dataset_display_name }}</strong> —
+      {% if item.state == "cached" %}<span class="progress-ok">✓ Cached</span>
+      {% elif item.state == "ready" %}<span class="progress-ok">✓ Ready</span>
+      {% elif item.state == "failed" %}<span class="progress-err">✗ Failed</span>
+      {% elif item.state == "queued" %}Queued
+      {% else %}<span class="progress-spinner"></span> {{ item.stage | replace('_', ' ') | title if item.stage else 'Preparing' }}{% endif %}
+      <div class="muted" style="margin-top:0.15rem">{{ item.detail }}
+      {% if item.attempt and item.state == "preparing" %} — attempt {{ item.attempt }}{% if item.max_attempts %} of {{ item.max_attempts }}{% endif %}{% endif %}
+      {% if item.downloaded is not none and item.state == "preparing" %}
+        — {{ '%.1f' | format(item.downloaded / 1000000) }} MB{% if item.total %} / {{ '%.1f' | format(item.total / 1000000) }} MB ({{ (item.downloaded * 100 / item.total) | round | int }}%){% endif %}
+      {% endif %}
+      </div>
+      {% if item.state == "preparing" and item.stage == "downloading" and item.total %}
+        <div class="run-bar" role="progressbar" aria-label="{{ item.dataset_display_name }} download" aria-valuenow="{{ (item.downloaded * 100 / item.total) | round | int }}" aria-valuemin="0" aria-valuemax="100"><div class="run-bar__fill" style="--run-progress: {{ (item.downloaded * 100 / item.total) | round | int }}%;"></div></div>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 {% if progress %}
 {% for ds in progress %}
@@ -12,7 +39,7 @@
 <section class="run-dataset">
 
 <div class="run-dataset__head">
-  <span class="run-dataset__name">{{ ds.dataset }}</span>
+  <span class="run-dataset__name">{{ ds.dataset_display_name }}</span>
 
   {% if dataset_done %}
     {% set dataset_percent = 100 %}
@@ -32,6 +59,13 @@
      aria-valuemax="100">
   <div class="run-bar__fill"
        style="--run-progress: {{ dataset_percent }}%;"></div>
+</div>
+
+<div class="muted" style="font-size:0.82rem; margin:0.4rem 0 0.65rem" aria-live="polite">
+  {{ ds.computed }} computed · {{ ds.cached }} from cache{% if ds.skipped %} · {{ ds.skipped }} skipped{% endif %}
+  {% if status == "running" and ds.last_outcome %}
+    <span style="margin-left:0.5rem">· Latest: {{ ds.last_measure }} — {{ 'cache hit' if ds.last_outcome == 'cached' else ('calculated' if ds.last_outcome == 'computed' else 'skipped') }}</span>
+  {% endif %}
 </div>
 
 <ul class="progress-chips">
@@ -59,7 +93,7 @@
 
 {% endfor %}
 
-{% elif status == "running" %}
+{% elif status == "running" and not preparation %}
 <section class="run-dataset">
 <div class="run-dataset__head">
 <span class="run-dataset__name">{{ message or "Preparing/downloading datasets..." }}</span>
@@ -72,6 +106,31 @@
 Dataset download or preparation may take a few minutes on the first run.
 </p>
 </section>
+{% endif %}
+
+{% if dataset_errors %}
+<div class="notice notice--warn" style="margin-top:1rem">
+  <strong>Some datasets could not be prepared.</strong>
+  <p style="margin:0.35rem 0 0">
+    {% if status == "done" %}
+      The run continued with the other selected datasets.
+    {% else %}
+      These datasets were skipped during download or preparation.
+    {% endif %}
+  </p>
+  <ul class="run-issues">
+    {% for issue in dataset_errors %}
+    <li>
+      <strong>{{ issue.dataset_display_name }}</strong>: {{ issue.reason }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if status == "done" %}
+    <a href="/results" class="btn btn--primary" style="margin-top:0.75rem;display:inline-block">
+      View results
+    </a>
+  {% endif %}
+</div>
 {% endif %}
 
 {% if run_issues %}
@@ -97,7 +156,7 @@ Some metric calculations are already being skipped or failing.
   <ul class="run-issues">
     {% for issue in run_issues %}
     <li>
-      <strong>{{ issue.dataset }} · {{ issue.measure }}</strong>:
+      <strong>{{ issue.dataset_display_name }} · {{ issue.measure }}</strong>:
       {{ issue.count }} skipped/failed
       {% if issue.reasons %}
         <ul>

@@ -46,6 +46,7 @@ import numpy as np
 
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 
 DOWNLOAD_URL = (
     "https://data.mendeley.com/public-files/datasets/dp5jgrkd6k/files/"
@@ -73,9 +74,10 @@ class EarVesselsDataset(LocalDataset):
     """
 
     DATASET_NAME = "ear_vessels"
+    DATASET_DISPLAY_NAME = "Meng et al."
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = (
-        "Ear-vessel PAM: 256x256 reference photoacoustic-microscopy images, each paired with "
+        "Ear vessel dataset: 256x256 reference photoacoustic-microscopy images, each paired with "
         "additive-Gaussian-noise variants (std = 1, 2, 5, 10, 20% of the image max) for "
         "full-reference IQA noise-sensitivity testing (Mendeley Data dp5jgrkd6k)."
     )
@@ -114,6 +116,7 @@ class EarVesselsDataset(LocalDataset):
             return
 
         png_dir = self._ensure_unzipped()
+        report_preparation("converting", "Converting images")
         self._convert(png_dir, converted_dir)
         self.root = converted_dir
 
@@ -136,10 +139,12 @@ class EarVesselsDataset(LocalDataset):
                         f"Place {RAW_ZIP} there or allow downloading."
                     )
                 print(f"Downloading {RAW_ZIP} from Mendeley Data …")
+                report_preparation("downloading", "Downloading source archive")
                 self._download_file(DOWNLOAD_URL, zip_path)
                 print(f"  → saved to {zip_path}")
             print(f"Extracting {RAW_ZIP} → {png_root} …")
             png_root.mkdir(parents=True, exist_ok=True)
+            report_preparation("extracting", "Extracting source archive")
             shutil.unpack_archive(str(zip_path), str(png_root))
 
         return png_root

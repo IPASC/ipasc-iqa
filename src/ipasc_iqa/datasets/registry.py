@@ -15,12 +15,14 @@ accepts a ``download`` keyword.
 from __future__ import annotations
 
 import importlib.metadata
+import inspect
 import warnings
 from pathlib import Path
 
 import platformdirs
 
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import preparation_progress
 
 _ENTRY_POINT_GROUP = "ipasc_iqa.datasets"
 
@@ -102,6 +104,7 @@ class DatasetRegistry:
             out.append(
                 {
                     "name": name,
+                    "display_name": getattr(cls, "DATASET_DISPLAY_NAME", None) or name,
                     "version": cls.DATASET_VERSION,
                     "description": cls.DATASET_DESCRIPTION,
                     "bibtex": getattr(cls, "DATASET_BIBTEX", None),
@@ -128,13 +131,18 @@ class DatasetRegistry:
         return self.get(name).prepared_manifest_path(self.root_for(name, data_dir))
 
     def instantiate(
-        self, name: str, data_dir: Path | None = None, *, download: bool = True
+        self, name: str, data_dir: Path | None = None, *, download: bool = True,
+        on_preparation_progress=None,
     ) -> LocalDataset:
         """Instantiate the adapter, downloading/converting on demand."""
         cls = self.get(name)
         root = self.root_for(name, data_dir)
         root.mkdir(parents=True, exist_ok=True)
-        return cls(root, download=download)
+        kwargs = {"download": download}
+        if on_preparation_progress is not None and "on_preparation_progress" in inspect.signature(cls).parameters:
+            kwargs["on_preparation_progress"] = on_preparation_progress
+        with preparation_progress(on_preparation_progress):
+            return cls(root, **kwargs)
 
 
 registry = DatasetRegistry()

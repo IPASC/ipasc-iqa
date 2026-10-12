@@ -1,7 +1,7 @@
 # Adding a dataset
 
-Datasets are **adapter-driven**: only datasets that have a registered adapter class are offered in
-the CLI and GUI, and selecting one downloads and converts it on demand. An adapter is a small Python
+Datasets are **adapter-driven**: only datasets that have a registered adapter class are offered in 
+and GUI, and selecting one downloads and converts it on demand. An adapter is a small Python 
 class that knows how to fetch a specific dataset and lay it out in the framework's on-disk **data
 contract**. This keeps raw published data (any format) separate from the normalized form the
 framework consumes.
@@ -58,8 +58,33 @@ If your dataset has expert quality ratings, embed them into each image entry's `
 }
 ```
 
-Correlation uses `zscore_mos`. Different datasets may expose different task names — all of them are
-shown automatically.
+When individual annotator ratings are available, they are z-normalised per annotator and combined into 
+a composite MOS. Otherwise, correlation uses the pre-computed zscore_mos. Different datasets may expose 
+different task names. All of them are shown automatically.
+
+---
+
+### Reporting preparation progress (recommended)
+
+The GUI can display preparation stages per dataset. Import the shared helper
+`from ipasc_iqa.datasets.progress import report_preparation` and call it **immediately
+before** the corresponding operation:
+
+```python
+report_preparation("downloading", "Downloading source archive")
+# download ...
+report_preparation("extracting", "Extracting source archive")
+# unpack ...
+report_preparation("converting", "Converting images")
+# convert and write manifest ...
+```
+
+Stages are `downloading`, `extracting`, and `converting`. A call is a no-op outside
+a GUI job, so command-line usage is unaffected. The registry scopes notifications
+to the adapter being instantiated. Do not emit a stage for work that is skipped;
+the GUI itself marks an existing prepared dataset as **Cached**, and a completed
+preparation as **Ready**. Reporting the stage is enough: byte counts and retry
+numbers are optional, only if the adapter actually tracks them.
 
 ---
 
@@ -82,6 +107,7 @@ from pathlib import Path
 import numpy as np
 
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 from ipasc_iqa.io.manifest import generate_manifest
 
 _SOURCE_URL = "https://example.org/example_pa.zip"
@@ -89,8 +115,10 @@ _SOURCE_URL = "https://example.org/example_pa.zip"
 
 class ExampleDataset(LocalDataset):
     DATASET_NAME = "example_pa"
+    DATASET_DISPLAY_NAME = "Example PA"
     DATASET_VERSION = "1.0.0"
     DATASET_DESCRIPTION = "Example paired reconstruction/reference photoacoustic dataset."
+    DATASET_BIBTEX = "..."
 
     def _prepare(self) -> None:
         # self.root is the managed directory for this dataset; self._download is set
@@ -101,6 +129,7 @@ class ExampleDataset(LocalDataset):
         if self._download:
             self._download_sources()
 
+        report_preparation("converting", "Converting images")
         self._convert_to_contract()
 
     # -- helpers -----------------------------------------------------------
@@ -109,8 +138,10 @@ class ExampleDataset(LocalDataset):
         self.root.mkdir(parents=True, exist_ok=True)
         archive = self.root / "source.zip"
         if not archive.exists():
+            report_preparation("downloading", "Downloading source archive")
             urllib.request.urlretrieve(_SOURCE_URL, archive)  # noqa: S310
         import shutil
+        report_preparation("extracting", "Extracting source archive")
         shutil.unpack_archive(str(archive), str(self.root / "raw"))
 
     def _convert_to_contract(self) -> None:

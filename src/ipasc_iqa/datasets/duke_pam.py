@@ -39,6 +39,7 @@ import numpy as np
 
 from ipasc_iqa.core.roi import hash_file
 from ipasc_iqa.datasets.local import LocalDataset
+from ipasc_iqa.datasets.progress import report_preparation
 
 ZENODO_BASE = "https://zenodo.org/records/4042171/files"
 RAW_ZIP = "raw_train.zip"
@@ -64,6 +65,7 @@ class DukePAMDataset(LocalDataset):
     """
 
     DATASET_NAME = "duke_pam"
+    DATASET_DISPLAY_NAME = "Duke PAM"
     DATASET_VERSION = "1.0.1"
     DATASET_DESCRIPTION = (
         "Duke PAM: We use 256x256 reference patches from photoacoustic-microscopy images, "
@@ -112,6 +114,7 @@ class DukePAMDataset(LocalDataset):
             return
 
         png_dir = self._ensure_unzipped()
+        report_preparation("converting", "Converting images")
         self._convert(png_dir, converted_dir)
         self.root = converted_dir
 
@@ -135,10 +138,12 @@ class DukePAMDataset(LocalDataset):
                     )
                 url = f"{ZENODO_BASE}/{RAW_ZIP}?download=1"
                 print(f"Downloading {RAW_ZIP} from Zenodo …")
+                report_preparation("downloading", "Downloading source archive")
                 urllib.request.urlretrieve(url, zip_path)  # noqa: S310 — known Zenodo URL
                 print(f"  → saved to {zip_path}")
             print(f"Extracting {RAW_ZIP} → {png_root} …")
             png_root.mkdir(parents=True, exist_ok=True)
+            report_preparation("extracting", "Extracting source archive")
             shutil.unpack_archive(str(zip_path), str(png_root))
 
         return png_root

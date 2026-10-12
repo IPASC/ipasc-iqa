@@ -76,7 +76,7 @@ class HaarPSIMedMeasure(BaseMeasure):
         def to_tensor(arr: np.ndarray) -> torch.Tensor:
             t = torch.from_numpy(arr.astype(np.float32))
             t = ((t - data_min) / data_range).clamp(0.0, 1.0)
-            return t.permute(2, 0, 1).unsqueeze(0)  # (1, C, H, W)
+            return t.permute(2, 0, 1).unsqueeze(0).to(self.device)  # (1, C, H, W)
 
         with torch.no_grad():
             score = haarpsi(to_tensor(image), to_tensor(reference), data_range=1.0, c=5, alpha=4.9)

@@ -2,7 +2,7 @@
 
 # Writing a custom IQA measure
 
-IQA measures are the one pluggable axis of `ipasc_iqa`. A measure is a Python class that subclasses
+IQA measures are one of the pluggable components of `ipasc_iqa`. A measure is a Python class that subclasses
 `BaseMeasure`, declares its requirements via a `MeasureMetadata`, and implements `evaluate()`. It is
 discovered at runtime through a Python **entry point**, so it can live in this repository *or* in
 your own separate package — the framework records which distribution provided each measure, in every
@@ -22,7 +22,7 @@ from ipasc_iqa.core.measure import MeasureType
 
 @dataclass(frozen=True)
 class MeasureMetadata:
-    name: str                                # canonical, lowercase, no spaces
+    name: str                                # canonical unique name used in the registry and results
     version: str                             # semver of THIS measure's algorithm
     measure_type: MeasureType                     # does it need a reference image?
     requires_signal_roi: bool                # does it need a signal ROI mask?
@@ -31,6 +31,7 @@ class MeasureMetadata:
     higher_is_better: bool = True
     value_range: tuple[float, float] | None = None
     citation: str | None = None
+    bibtex: str | None = None
     description: str = ""
 ```
 
@@ -76,30 +77,30 @@ from ipasc_iqa.core.measure import BaseMeasure, MeasureMetadata, MeasureType
 
 
 class MAEMeasure(BaseMeasure):
-  metadata = MeasureMetadata(
-    name="mae",
-    version="1.0.0",
-    measure_type=MeasureType.FULL_REFERENCE,
-    requires_signal_roi=False,
-    requires_noise_roi=False,
-    accepted_reference_types=None,  # accepts any reference type
-    higher_is_better=False,  # lower error is better
-    value_range=(0.0, float("inf")),
-    description="Mean absolute error between image and reference.",
-  )
+    metadata = MeasureMetadata(
+        name="MAE",
+        version="1.0.0",
+        measure_type=MeasureType.FULL_REFERENCE,
+        requires_signal_roi=False,
+        requires_noise_roi=False,
+        accepted_reference_types=None,  # accepts any reference type
+        higher_is_better=False,  # lower error is better
+        value_range=(0.0, float("inf")),
+        description="Mean absolute error between image and reference.",
+    )
 
-  def evaluate(
-          self,
-          image: np.ndarray,
-          *,
-          reference: np.ndarray | None = None,
-          reference_type: str | None = None,
-          signal_roi: np.ndarray | None = None,
-          noise_roi: np.ndarray | None = None,
-  ) -> float:
-    if reference is None:
-      raise ValueError("MAE requires a reference image.")
-    return float(np.mean(np.abs(image.astype(np.float64) - reference.astype(np.float64))))
+    def evaluate(
+        self,
+        image: np.ndarray,
+        *,
+        reference: np.ndarray | None = None,
+        reference_type: str | None = None,
+        signal_roi: np.ndarray | None = None,
+        noise_roi: np.ndarray | None = None,
+    ) -> float:
+        if reference is None:
+            raise ValueError("MAE requires a reference image.")
+        return float(np.mean(np.abs(image.astype(np.float64) - reference.astype(np.float64))))
 ```
 
 For a real-world template, read the bundled
@@ -116,12 +117,11 @@ references; their design decisions are worth following exactly:
 #### Defer all heavy imports to first use
 
 Do **not** import `torch` or a deep-learning library at module top level. Import inside the method
-that needs them. This lets `from ipasc_iqa.measures.deep.lpips import LPIPSMeasure` succeed even
-when `ipasc_iqa[deep]` is not installed, and means registry discovery never triggers a slow or
-failing import.
+that needs them. This keeps module imports and registry discovery lightweight and avoids loading
+deep-learning libraries before the measure is actually used.
 
 ```python
-# wrong — breaks base install
+# wrong — performs heavy imports during module loading
 import torch
 import lpips
 
@@ -134,16 +134,16 @@ class LPIPSMeasure(BaseMeasure):
         try:
             import lpips
         except ImportError as exc:
-            raise ImportError("Requires ipasc_iqa[deep]") from exc
+            raise ImportError("LPIPS requires PyTorch-based metric dependencies.") from exc
         import torch
         ...
 ```
 
 #### Lazy model initialisation
 
-Pretrained deep models download weights (tens to hundreds of MB) on first construction.
-Loading in `__init__` would trigger a download for every `ipasc_iqa list measures` call.
-Use a `None` sentinel and load on the first `evaluate()` call instead:
+Pretrained deep models may download weights (tens to hundreds of MB) on first construction.
+Loading them in `__init__` would trigger this as soon as the measure is instantiated, even before
+its first evaluation. Use a `None` sentinel and load on the first `evaluate()` call instead:
 
 ```python
 def __init__(self, device: str = "auto", net: str = "alex") -> None:
@@ -203,8 +203,8 @@ per-image normalisation which would wash out those differences:
 data_min   = float(reference.min())
 data_range = float(reference.max()) - data_min or 1.0
 # apply the same transform to both
-img_t = (img_t - data_min) / data_range   # result in [0, 1] for ref
-ref_t = (ref_t - data_min) / data_range   # values outside range are clamped
+img_t = ((img_t - data_min) / data_range).clamp(0.0, 1.0)
+ref_t = ((ref_t - data_min) / data_range).clamp(0.0, 1.0)
 ```
 
 Use the library's built-in rescaling flag when available (`normalize=True` in the lpips
@@ -220,24 +220,33 @@ with torch.no_grad():
 #### Functional measures need no lazy model — but still defer imports
 
 Some `piq` measures (MS-SSIM, IW-SSIM, BRISQUE, …) are pure functions with no
-pretrained weights to download.  You still **must** defer the `piq` / `torch`
-imports to first use so that the base install (which omits `torch`) can import
-your class without error, but you do **not** need the `_model = None` sentinel or
-a `_get_model()` method.  Keep the import inside `evaluate()`:
+pretrained weights to download. You should still defer the `piq` / `torch`
+imports to first use to keep module imports and registry discovery lightweight,
+but you do **not** need the `_model = None` sentinel or a `_get_model()` method.
+Keep the import inside `evaluate()`:
 
 ```python
 class MSSSIMMeasure(BaseMeasure):
     # No __init__ override needed unless you expose hyperparameters.
     # If you do, pass them to super() for the cache key:
-    def __init__(self, kernel_size: int = 11, kernel_sigma: float = 1.5) -> None:
-        super().__init__(kernel_size=kernel_size, kernel_sigma=kernel_sigma)
+    def __init__(
+        self,
+        kernel_size: int = 11,
+        kernel_sigma: float = 1.5,
+        device: str = "auto",
+    ) -> None:
+        super().__init__(
+            device=device,
+            kernel_size=kernel_size,
+            kernel_sigma=kernel_sigma,
+        )
         self._kernel_size = kernel_size
 
     def evaluate(self, image, *, reference=None, **_):
         try:
             from piq import multi_scale_ssim
         except ImportError as exc:
-            raise ImportError("Requires ipasc_iqa[deep]") from exc
+            raise ImportError("MS-SSIM requires PyTorch-based metric dependencies.") from exc
         import torch
         # ... build tensors, call function, return float
 ```
@@ -269,77 +278,57 @@ is the entry-point name; the value is `module.path:ClassName`:
 
 ```toml
 [project.entry-points."ipasc_iqa.measures"]
-psnr  = "ipasc_iqa.measures.classical.psnr:PSNRMeasure"
-ssim  = "ipasc_iqa.measures.classical.ssim:SSIMMeasure"
-cnr   = "ipasc_iqa.measures.classical.cnr:CNRMeasure"
-snr   = "ipasc_iqa.measures.classical.snr:SNRMeasure"
-mae   = "ipasc_iqa.measures.classical.mae:MAEMeasure"
-lpips = "ipasc_iqa.measures.deep.lpips:LPIPSMeasure"   # <- new deep measure
-dists = "ipasc_iqa.measures.deep.dists:DISTSMeasure"   # <- new deep measure
+mae = "ipasc_iqa.measures.classical.mae:MAEMeasure"
 ```
 
-For deep measures, also add the extra dependency to the `deep` group:
-
-```toml
-[project.optional-dependencies]
-deep = ["torch>=2.2", "torchvision>=0.17", "lpips>=0.1.4", "DISTS-pytorch>=0.1"]
-```
+PyTorch and the libraries used by the bundled deep measures are part of the default installation.
+If a new measure needs an additional library, add it to the project's dependencies.
 
 Re-install so the entry point is picked up, and confirm it is discovered:
 
 ```bash
-pip install -e ".[dev,gui,deep]"
-ipasc_iqa list measures        # 'lpips' should appear in the table
+pip install -e ".[dev,gui]"
+ipasc_iqa list measures        # 'MAE' should appear in the table
 ```
 
 ---
 
 ## 4. Add a test
 
-Add a unit test under `tests/unit/` mirroring `tests/unit/test_measures.py`.  For deep measures,
-guard the entire test class with `pytest.importorskip` so the suite stays green without
-`ipasc_iqa[deep]`:
+Add a unit test under `tests/unit/`, following the patterns in `tests/unit/test_measures.py`:
 
 ```python
 import numpy as np
 import pytest
 
-pytest.importorskip("torch",  reason="requires ipasc_iqa[deep]")
-pytest.importorskip("lpips",  reason="requires ipasc_iqa[deep]")
+from ipasc_iqa.measures.classical.mae import MAEMeasure
 
-from ipasc_iqa.measures.deep.lpips import LPIPSMeasure
+IMG = np.array([[[0.0], [0.0]], [[0.0], [4.0]]], dtype=np.float32)
+REF = np.zeros((2, 2, 1), dtype=np.float32)
 
-rng = np.random.default_rng(42)
-IMG = rng.random((32, 32, 1), dtype=np.float32).astype(np.float32)
-REF = rng.random((32, 32, 1), dtype=np.float32).astype(np.float32)
+class TestMAE:
+    def test_returns_mean_absolute_error(self):
+        assert MAEMeasure(device="cpu").evaluate(IMG, reference=REF) == pytest.approx(1.0)
 
-class TestLPIPS:
-    def test_returns_non_negative_float(self):
-        v = LPIPSMeasure(device="cpu").evaluate(IMG, reference=REF)
-        assert isinstance(v, float) and v >= 0.0
-
-    def test_identical_images_near_zero(self):
-        assert LPIPSMeasure(device="cpu").evaluate(IMG, reference=IMG) < 0.01
+    def test_identical_images_are_zero(self):
+        assert MAEMeasure(device="cpu").evaluate(IMG, reference=IMG) == pytest.approx(0.0)
 
     def test_requires_reference(self):
         with pytest.raises(ValueError):
-            LPIPSMeasure(device="cpu").evaluate(IMG)
+            MAEMeasure(device="cpu").evaluate(IMG)
 ```
-
-`pytest.importorskip` at module level causes pytest to **skip** (not fail) the whole module
-when the packages are absent, keeping CI green on the base install.
 
 ---
 
 ## 5. Open the pull request
 
 ```bash
-git checkout -b add-lpips-measure
+git checkout -b add-my-measure
 ruff check .          # lint must pass
 pytest                # tests must pass
 git add -A
-git commit -m "Add LPIPS deep measure"
-git push -u origin add-lpips-measure
+git commit -m "Add custom IQA measure"
+git push -u origin add-my-measure
 gh pr create --fill   # or open the PR on GitHub
 ```
 
@@ -359,5 +348,5 @@ declaring the same entry-point group in *its* `pyproject.toml`:
 my_metric = "your_package.metrics:MyMeasure"
 ```
 
-Once your package is installed alongside `ipasc_iqa`, `ipasc_iqa list measures` shows it, and result
-files record your distribution's name and version next to every value it produced.
+Once your package is installed alongside `ipasc_iqa`, `ipasc_iqa list measures` shows it. Result
+files record the measure version and the name of the distribution that provided it.
