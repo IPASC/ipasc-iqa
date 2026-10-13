@@ -1,4 +1,4 @@
-# ipasc_iqa
+# IPASC IQA
 
 **A benchmarking framework for Image Quality Assessment (IQA) of photoacoustic image reconstructions.**
 
@@ -6,8 +6,6 @@
 expert quality ratings, and ships a command-line interface plus a browser-based GUI. It is
 reproducibility-first (every result records dataset, file hashes, and measure versions) and
 ecosystem-friendly (third-party measures and datasets plug in via Python entry points).
-
-See [`docs/IMPLEMENTATION_ROADMAP.md`](docs/IMPLEMENTATION_ROADMAP.md) for the full design.
 
 ---
 
@@ -24,9 +22,6 @@ NumPy 2.x is currently not part of the tested environment for deep metrics.
 Use numpy>=1.26,<2 unless you are testing newer torch builds explicitly.
 You can verify that the environment is correctly configured with:
 ```bash
-ipasc_iqa doctor              # check core dependencies
-ipasc_iqa doctor --gui        # also check GUI dependencies
-ipasc_iqa doctor --deep       # also check deep-metric dependencies
 ipasc_iqa doctor --gui --deep # check the full installation
 ```
 
@@ -63,7 +58,7 @@ ipasc_iqa compare results/run_a.json results/run_b.json
 
 The framework includes adapters for the datasets below. The descriptions refer to **the images and annotations used by this benchmark**, which may be a subset of the original data. Available datasets are downloaded and converted automatically when selected, unless already prepared locally.
 
-| Dataset | Data used in this benchmark | Existing quality labels | Reference used for FR-IQA | Availability |
+| Dataset | Data used in this benchmark | Existing quality labels | Reference used for FR-IQA | Benchmark data availability |
 |---|---|---|---|---|
 | **[PhotIQA](https://doi.org/10.5281/zenodo.13325196)** | Photoacoustic reconstructions from three algorithms | **Yes** — expert quality ratings | Measured ground truth | **Available** |
 | **[Digital Twin](https://zenodo.org/records/15388429)** | Reconstructions of simulated photoacoustic data from six algorithms | No | Simulated initial pressure | **Available** |
@@ -77,7 +72,7 @@ The framework includes adapters for the datasets below. The descriptions refer t
 
 **Quality labels** indicate human image-quality assessments supplied with the dataset, rather than quality ordering implied by synthetic degradations. For the pending sub-studies, labels will become available when the corresponding data are released. **References** are the images actually used by the adapters for full-reference measures; a reference image is not necessarily a physical ground truth.
 
-**Pending datasets:** Davoudi, OADAT, EFA and PHIRE are four sub-studies of the Alladien *et al.* perceptual-quality dataset. Their download links are placeholders until the accompanying article and data are released. For now, selecting one of these datasets without locally prepared source data causes it to be **skipped**, while other selected datasets can continue to run.
+**Data availability**: Davoudi, OADAT, EFA and PHIRE are included in the perceptual-quality dataset assembled by Alladien et al. Although some of the original datasets are already publicly available, the specific subsets and associated human quality annotations used in this benchmark will be released following publication of the accompanying article. Until then, these adapters are skipped unless the required data are available locally.
 
 For details on the dataset adapter interface, see [Adding a dataset](docs/guides/adding-a-dataset.md).
 
