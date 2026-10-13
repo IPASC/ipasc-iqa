@@ -1,4 +1,4 @@
-# ipasc_iqa
+# IPASC IQA
 
 **A benchmarking framework for Image Quality Assessment (IQA) of photoacoustic image reconstructions.**
 
@@ -6,8 +6,6 @@
 expert quality ratings, and ships a command-line interface plus a browser-based GUI. It is
 reproducibility-first (every result records dataset, file hashes, and measure versions) and
 ecosystem-friendly (third-party measures and datasets plug in via Python entry points).
-
-See [`docs/IMPLEMENTATION_ROADMAP.md`](docs/IMPLEMENTATION_ROADMAP.md) for the full design.
 
 ---
 
