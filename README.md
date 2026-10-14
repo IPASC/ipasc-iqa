@@ -13,30 +13,31 @@ ecosystem-friendly (third-party measures and datasets plug in via Python entry p
 
 Requires **Python ≥ 3.12**.
 
-```bash
-pip install ipasc_iqa            # core (CLI + classical measures + PyTorch-based measures)
-pip install "ipasc_iqa[gui]"     # + the web GUI 
-```
-
-NumPy 2.x is currently not part of the tested environment for deep metrics.
-Use numpy>=1.26,<2 unless you are testing newer torch builds explicitly.
-You can verify that the environment is correctly configured with:
-```bash
-ipasc_iqa doctor --gui --deep # check the full installation
-```
-
-Working from a checkout (recommended for development):
+Clone the repository and install the package from source:
 
 ```bash
 git clone https://github.com/IPASC/ipasc-iqa.git
 cd ipasc-iqa
 python -m venv .venv
-# Windows:  .\.venv\Scripts\activate
+# Windows:  .venv\Scripts\activate
 # macOS/Linux:  source .venv/bin/activate
+pip install -e ".[gui]"
+```
+
+For development, install the additional dependencies:
+
+```bash
 pip install -e ".[dev,gui]"
 ```
 
----
+NumPy 2.x is currently not part of the tested environment for deep metrics.
+Use `numpy>=1.26,<2` unless you are testing newer torch builds explicitly.
+
+You can verify that the environment is correctly configured with:
+
+```bash
+ipasc_iqa doctor --gui --deep # check the full installation
+```
 
 ## Quick start (CLI)
 
